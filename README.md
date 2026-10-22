@@ -1,11 +1,21 @@
-# proyecto-compartido
+# Plataforma de cotizaciones para obra
 
-Proyecto en equipo. Dante trabaja con Claude Code y su compañero con Codex.
+Recibe las cotizaciones de los proveedores, las lee automáticamente, las ordena
+en una plantilla Excel y arma el cuadro comparativo. El especialista de costos
+revisa y decide.
 
-Para unirse: acepta la invitación de GitHub y descarga el proyecto con
+- Plan del proyecto: [docs/PLAN.md](docs/PLAN.md)
+- Reglas de trabajo (para nosotros y para las IAs): [AGENTS.md](AGENTS.md)
+
+## Equipo
+
+Dante trabaja con Claude Code y su compañero con Codex, al mismo tiempo, sobre
+este mismo repositorio.
+
+## Cómo unirse
+
+Acepta la invitación de GitHub y descarga el proyecto con:
 
 ```bash
 gh repo clone DanteRojas-stpy/proyecto-compartido
 ```
-
-Las reglas de trabajo están en [AGENTS.md](AGENTS.md).
