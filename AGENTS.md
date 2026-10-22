@@ -1,42 +1,21 @@
-# Instrucciones para agentes de IA (Codex, Claude Code y otros)
+# Reglas de trabajo (para Codex y Claude Code)
 
-Este repositorio lo trabajan dos personas al mismo tiempo, cada una con su propio
-agente de IA. Estas reglas aplican a todos los agentes por igual.
+Somos dos ingenieros civiles trabajando en este proyecto al mismo tiempo,
+cada uno con su asistente de IA. Explícanos todo en español y en palabras
+simples, sin jerga de programación.
 
-## Flujo de trabajo con Git
+## Reglas
 
-- **Nunca hagas commit ni push directo a `main`.** Todo cambio entra por Pull Request.
-- Antes de empezar una tarea, actualiza desde `main`:
-  `git checkout main && git pull origin main`
-- Crea una rama por tarea con el formato `<persona>/<descripcion-corta>`,
-  por ejemplo `dante/login-usuarios` o `companero/arreglar-estilos`.
-- Haz commits pequeños y con mensajes claros en español, en modo imperativo:
-  `Agrega validación al formulario de registro`.
-- Antes de abrir el PR, trae los últimos cambios de `main` a tu rama y resuelve
-  los conflictos que aparezcan.
-- Abre el PR con `gh pr create` y describe qué cambió y cómo probarlo.
-- No reescribas el historial de ramas compartidas (`push --force` prohibido
-  sobre `main` o sobre la rama de la otra persona).
+1. **No cambies `main` directamente.** `main` es la versión aprobada.
+2. Antes de empezar, descarga lo último: `git pull origin main`
+3. Trabaja en una copia propia (rama) con el nombre `persona/tarea`,
+   por ejemplo `dante/metrados`.
+4. Al terminar, súbela y abre un Pull Request para que el otro lo revise.
+5. Nunca borres ni sobrescribas el trabajo del otro.
+6. No subas contraseñas ni datos privados.
 
-## Coordinación
+## Sobre el proyecto
 
-- Las tareas se reparten con **GitHub Issues**. Trabaja solo en lo que esté
-  asignado a tu persona.
-- Si necesitas modificar un archivo que la otra persona está tocando en un PR
-  abierto, coméntalo en ese PR antes de hacerlo.
-- Mantén este archivo actualizado cuando se acuerden nuevas convenciones.
-
-## Proyecto
-
-<!-- Completar cuando se defina el proyecto -->
-- Descripción: _por definir_
-- Lenguaje / framework: _por definir_
-- Cómo instalar dependencias: _por definir_
-- Cómo correr el proyecto: _por definir_
-- Cómo correr los tests: _por definir_
-
-## Estilo de código
-
-- Sigue el estilo del código que ya existe en el archivo que estás editando.
-- No agregues dependencias nuevas sin mencionarlo en el PR.
-- No subas secretos (contraseñas, API keys, archivos `.env`).
+<!-- Completar cuando se defina -->
+- De qué trata: _por definir_
+- Herramientas que usamos: _por definir_

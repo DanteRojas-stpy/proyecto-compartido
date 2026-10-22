@@ -16,6 +16,13 @@ venv/
 .claude/settings.local.json
 CLAUDE.local.md
 
+# Archivos temporales de AutoCAD / Office
+*.bak
+*.dwl
+*.dwl2
+*.sv$
+~$*
+
 # Sistema / editores
 .DS_Store
 Thumbs.db

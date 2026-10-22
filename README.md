@@ -1,20 +1,11 @@
 # proyecto-compartido
 
-Proyecto colaborativo trabajado en paralelo con Claude Code y Codex.
+Proyecto en equipo. Dante trabaja con Claude Code y su compañero con Codex.
 
-## Cómo unirse (para el colaborador)
+Para unirse: acepta la invitación de GitHub y descarga el proyecto con
 
-1. Acepta la invitación que llega a tu correo o en https://github.com/notifications
-2. Clona el repositorio:
+```bash
+gh repo clone DanteRojas-stpy/proyecto-compartido
+```
 
-   ```bash
-   gh repo clone DanteRojas-stpy/proyecto-compartido
-   ```
-
-3. Crea tu rama y trabaja:
-
-   ```bash
-   git checkout -b tu-nombre/tu-tarea
-   ```
-
-Las reglas de trabajo para personas y agentes de IA están en [AGENTS.md](AGENTS.md).
+Las reglas de trabajo están en [AGENTS.md](AGENTS.md).
