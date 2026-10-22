@@ -14,8 +14,14 @@ este mismo repositorio.
 
 ## Cómo unirse
 
-Acepta la invitación de GitHub y descarga el proyecto con:
+1. Acepta la invitación de GitHub.
+2. Pega esto en tu asistente (Codex, Antigravity o Claude Code):
 
-```bash
-gh repo clone DanteRojas-stpy/proyecto-compartido
-```
+   > Instala Git y GitHub CLI con winget si faltan, inicia sesión con
+   > `gh auth login --web`, clona `DanteRojas-stpy/proyecto-compartido` en
+   > mi carpeta Documentos y ejecuta `scripts\unirse.cmd` dentro del proyecto.
+   > Luego explícame AGENTS.md en español simple.
+
+   Si ya tienes el proyecto descargado, basta con hacer doble clic en
+   `scripts\unirse.cmd`. Prepara todo solo: Git, sesión de GitHub, Python,
+   librerías y tu asistente de IA.

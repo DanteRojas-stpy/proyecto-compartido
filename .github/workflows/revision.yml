@@ -1,0 +1,22 @@
+name: Revision automatica
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar librerias
+        run: pip install -r requirements.txt
+      - name: Revisar que el codigo no tenga errores de sintaxis
+        run: python -m compileall -q app tests
+      - name: Correr pruebas
+        run: python -m pytest -q

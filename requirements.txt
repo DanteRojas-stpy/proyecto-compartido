@@ -1,0 +1,6 @@
+anthropic
+openpyxl
+pydantic
+python-dotenv
+streamlit
+pytest
