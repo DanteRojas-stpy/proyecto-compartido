@@ -36,10 +36,26 @@ en palabras simples, sin jerga de programación.
 
 ## Sobre el proyecto
 
-- De qué trata: plataforma que recibe cotizaciones de proveedores para una
-  partida de obra, las lee automáticamente, las homologa en una plantilla Excel
-  y genera el cuadro comparativo. El especialista de costos revisa y decide.
+- De qué trata: plataforma que recibe cotizaciones de proveedores para obra,
+  las lee automáticamente, las homologa y llena la matriz comparativa.
 - Plan completo: [docs/PLAN.md](docs/PLAN.md). Léelo antes de empezar una tarea.
+
+### Alcance (respétalo)
+
+- **Entrada (proceso 1):** itemizado de partidas, matriz de procura,
+  proveedores para la cotización y plantilla Excel de la matriz comparativa.
+- **Se desarrolla:** 4 recepción de cotizaciones, 5 lectura automática de
+  documentos, 6 homologación de propuestas, 9 generación del cuadro comparativo.
+- **No se desarrolla:** 2 búsqueda de proveedores, 3 contacto con proveedores,
+  7 detección de información faltante, 8 solicitud de aclaraciones,
+  10 revisión del especialista, 11 decisión final. No programes nada para
+  estos procesos sin que el equipo lo pida.
+- La matriz comparativa se llena en **la plantilla del usuario**, no en una
+  nuestra. Los datos que no están en la cotización quedan vacíos: nunca se
+  inventan ni se adivinan.
 - Herramientas: Python, Streamlit, API de Claude, openpyxl.
-- Carpetas: `app/` (código), `plantillas/` (Excel), `ejemplos/` (cotizaciones
-  de prueba), `docs/` (documentos), `scripts/` (utilidades).
+- Módulos de `app/`: `entradas/` (1), `recepcion/` (4), `lectura/` (5),
+  `homologacion/` (6), `comparativo/` (9), `pantallas/` (interfaz) y
+  `modelo.py` (formato común de datos que comparten todos los módulos).
+- Otras carpetas: `plantillas/` (Excel), `ejemplos/` (caso de prueba),
+  `docs/` (documentos), `scripts/` (utilidades), `tests/` (pruebas).
