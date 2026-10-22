@@ -16,6 +16,10 @@ simples, sin jerga de programación.
 
 ## Sobre el proyecto
 
-<!-- Completar cuando se defina -->
-- De qué trata: _por definir_
-- Herramientas que usamos: _por definir_
+- De qué trata: plataforma que recibe cotizaciones de proveedores para una
+  partida de obra, las lee automáticamente, las homologa en una plantilla Excel
+  y genera el cuadro comparativo. El especialista de costos revisa y decide.
+- Plan completo: [docs/PLAN.md](docs/PLAN.md). Léelo antes de empezar una tarea.
+- Herramientas: Python, Streamlit, API de Claude, openpyxl.
+- Las cotizaciones de ejemplo pueden tener datos sensibles: no las subas sin
+  borrar nombres, RUC y contactos.
