@@ -1,0 +1,23 @@
+# Secretos
+.env
+.env.*
+!.env.example
+
+# Dependencias y builds
+node_modules/
+dist/
+build/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Configuración local de agentes
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Sistema / editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
