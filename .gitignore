@@ -28,3 +28,8 @@ CLAUDE.local.md
 Thumbs.db
 .vscode/
 .idea/
+
+# Archivos reales de cotizaciones: viven en Supabase Storage, nunca en el repositorio
+datos_reales/
+storage/
+cotizaciones_reales/

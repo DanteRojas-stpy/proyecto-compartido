@@ -42,20 +42,32 @@ en palabras simples, sin jerga de programación.
 
 ### Alcance (respétalo)
 
-- **Entrada (proceso 1):** itemizado de partidas, matriz de procura,
-  proveedores para la cotización y plantilla Excel de la matriz comparativa.
-- **Se desarrolla:** 4 recepción de cotizaciones, 5 lectura automática de
-  documentos, 6 homologación de propuestas, 9 generación del cuadro comparativo.
-- **No se desarrolla:** 2 búsqueda de proveedores, 3 contacto con proveedores,
+- **Entrada (proceso 1):** itemizado, matriz de procura, proveedores, plantilla
+  Excel de la matriz comparativa, ruta crítica y vigencias.
+- **Lo hace la app:** 3 envío de solicitudes y seguimiento por correo,
+  4 recepción de cotizaciones, 5 lectura automática, 6 homologación,
   7 detección de información faltante, 8 solicitud de aclaraciones,
-  10 revisión del especialista, 11 decisión final. No programes nada para
-  estos procesos sin que el equipo lo pida.
+  9 cuadro comparativo.
+- **Lo decide el especialista:** 2 selección de proveedores, 10 revisión y
+  11 decisión final. La app le muestra la información y registra su decisión.
+- **Reglas del contexto (CONTEXTO_COSTFLOW.md):**
+  - La ruta crítica tiene seguimiento y notificación más exigentes.
+  - La app alerta cuando una propuesta está por vencer.
+  - Cada cotización tiene versión (preliminar, corregida o final). Nunca se
+    compara un documento desactualizado.
+  - La IA no asume equivalencias técnicas sin evidencia o aprobación del
+    especialista.
+  - La IA interpreta y propone. Quien decide es el especialista.
 - La matriz comparativa se llena en **la plantilla del usuario**, no en una
   nuestra. Los datos que no están en la cotización quedan vacíos: nunca se
   inventan ni se adivinan.
-- Herramientas: Python, Streamlit, API de Claude, openpyxl.
-- Módulos de `app/`: `entradas/` (1), `recepcion/` (4), `lectura/` (5),
-  `homologacion/` (6), `comparativo/` (9), `pantallas/` (interfaz) y
-  `modelo.py` (formato común de datos que comparten todos los módulos).
-- Otras carpetas: `plantillas/` (Excel), `ejemplos/` (caso de prueba),
-  `docs/` (documentos), `scripts/` (utilidades), `tests/` (pruebas).
+- **Arquitectura:** n8n orquesta los flujos (`n8n/`). La IA interpreta
+  (`prompts/`, `app/lectura/`). PostgreSQL/Supabase guarda estados y trazabilidad
+  (`db/`). Supabase Storage guarda los archivos. Gmail API maneja el correo.
+  Excel es la entrada y la salida.
+- **Módulos de `app/`:** `entradas/` (1), `correo/` (3), `recepcion/` (4),
+  `lectura/` (5), `homologacion/` (6), `aclaraciones/` (7 y 8),
+  `comparativo/` (9), `pantallas/` (interfaz) y `modelo.py` (formato común).
+- **Otras carpetas:** `n8n/` (flujos), `db/` (esquema), `prompts/` (instrucciones
+  de la IA), `plantillas/` (Excel), `ejemplos/` (caso de prueba), `docs/`,
+  `scripts/`, `tests/`.
