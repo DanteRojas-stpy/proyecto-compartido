@@ -18,8 +18,9 @@ los resultados al especialista. Un cambio de diseño no debe tocar la lógica de
    `service_role` y la contraseña de PostgreSQL nunca van aquí.
 4. En Supabase Auth, agrega `http://localhost:8000` a las URL permitidas para el
    desarrollo local.
-5. Desde esta carpeta, ejecuta `python -m http.server 8000`.
-6. Abre `http://localhost:8000`.
+5. En Windows, ejecuta `scripts\iniciar_frontend.cmd`. En otros sistemas,
+   ejecuta `python -m http.server 8000` desde `frontend/`.
+6. Abre `http://localhost:8000` si el navegador no se abre automáticamente.
 
 El formulario crea una solicitud en estado `borrador`, registra sus proveedores,
 sube los Excel al bucket privado `solicitudes` y cambia el estado a `lista` al
