@@ -1,4 +1,4 @@
-# Plan: CostFlow, agente de IA para cotizaciones de obra
+﻿# Plan: CostFlow, agente de IA para cotizaciones de obra
 
 Contexto completo y reglas del MVP: [CONTEXTO_COSTFLOW.md](CONTEXTO_COSTFLOW.md).
 Este documento resume el plan de desarrollo.
@@ -54,7 +54,7 @@ y comparar) y **deja al especialista las decisiones técnicas**.
 | IA | API de Claude | Interpreta correos y documentos, detecta consultas |
 | Datos | PostgreSQL / Supabase | Estados, versiones y trazabilidad |
 | Archivos | Supabase Storage | Cotizaciones y adjuntos |
-| Pantallas | Streamlit | Interfaz para el especialista |
+| Interfaz | HTML y JavaScript (rontend/) | Pantallas para el especialista |
 | Modelo de datos | pydantic (`app/modelo.py`) | Formato común entre módulos |
 
 **Regla central:** n8n orquesta, la IA interpreta y propone, y PostgreSQL guarda
@@ -99,7 +99,7 @@ Primero se acuerda el formato común de datos en `app/modelo.py`. Después:
 | Homologación | `app/homologacion/` | 6 |
 | Aclaraciones | `app/aclaraciones/` | 7 y 8 |
 | Comparativo | `app/comparativo/` | 9 |
-| Pantallas | `app/pantallas/` | 10 y 11 |
+| Interfaz | `frontend/` | 10 y 11 |
 | Flujos | `n8n/` | orquestación |
 | Base de datos | `db/` | esquema |
 | Instrucciones de IA | `prompts/` | prompts |

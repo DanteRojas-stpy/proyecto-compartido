@@ -67,7 +67,7 @@ en palabras simples, sin jerga de programación.
   Excel es la entrada y la salida.
 - **Módulos de `app/`:** `entradas/` (1), `correo/` (3), `recepcion/` (4),
   `lectura/` (5), `homologacion/` (6), `aclaraciones/` (7 y 8),
-  `comparativo/` (9), `pantallas/` (interfaz) y `modelo.py` (formato común).
+  `comparativo/` (9), `modelo.py` (formato común). La interfaz vive en `frontend/` (HTML y JavaScript).
 - **Otras carpetas:** `n8n/` (flujos), `db/` (esquema), `prompts/` (instrucciones
   de la IA), `plantillas/` (Excel), `ejemplos/` (caso de prueba), `docs/`,
   `scripts/`, `tests/`.
