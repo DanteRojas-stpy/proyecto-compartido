@@ -14,3 +14,10 @@ Aquí vive la forma de los datos guardados: tablas, estados y trazabilidad.
    Storage. Aquí solo se guardan las referencias y los datos extraídos.
 4. Cada cotización guarda su **versión** (preliminar, corregida o final) y su
    **estado**, para no comparar documentos desactualizados.
+
+## Migraciones disponibles
+
+- `migraciones/001_e1_registro_solicitud.sql`: crea proyectos, solicitudes,
+  proveedores reutilizables, documentos y partidas. También crea el bucket
+  privado `solicitudes` y las políticas que limitan cada registro y archivo a
+  su usuario responsable.

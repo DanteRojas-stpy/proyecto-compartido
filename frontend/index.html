@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CostFlow | Nueva solicitud</title>
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <header class="cabecera">
+      <div>
+        <p class="marca">COSTFLOW</p>
+        <h1>Registro de solicitud de cotización</h1>
+      </div>
+      <button id="cerrar-sesion" class="secundario oculto" type="button">Cerrar sesión</button>
+    </header>
+
+    <main>
+      <section id="configuracion" class="panel aviso oculto" aria-live="polite"></section>
+
+      <section id="acceso" class="panel estrecho">
+        <h2>Acceso</h2>
+        <p>Ingresa con el usuario que tendrá a su cargo las solicitudes.</p>
+        <form id="form-acceso">
+          <label>Correo
+            <input id="correo-acceso" type="email" autocomplete="email" required />
+          </label>
+          <label>Contraseña
+            <input id="clave-acceso" type="password" autocomplete="current-password" minlength="8" required />
+          </label>
+          <div class="acciones">
+            <button type="submit" data-accion="ingresar">Ingresar</button>
+            <button type="button" class="secundario" id="crear-cuenta">Crear cuenta</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="registro" class="panel oculto">
+        <div class="encabezado-seccion">
+          <div>
+            <p class="paso">ETAPA 1</p>
+            <h2>Nueva solicitud</h2>
+          </div>
+          <span id="usuario-activo"></span>
+        </div>
+
+        <form id="form-solicitud">
+          <fieldset>
+            <legend>Proyecto</legend>
+            <div class="rejilla dos-columnas">
+              <label>Código del proyecto
+                <input name="proyecto_codigo" required maxlength="50" placeholder="PROY-001" />
+              </label>
+              <label>Nombre del proyecto
+                <input name="proyecto_nombre" required maxlength="150" placeholder="Edificio Central" />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Solicitud de cotización</legend>
+            <div class="rejilla tres-columnas">
+              <label>Código
+                <input name="solicitud_codigo" required maxlength="50" placeholder="SC-001" />
+              </label>
+              <label>Nombre
+                <input name="solicitud_nombre" required maxlength="180" placeholder="Sistema de agua contra incendios" />
+              </label>
+              <label>Moneda
+                <select name="moneda" required>
+                  <option value="PEN">Soles (PEN)</option>
+                  <option value="USD">Dólares (USD)</option>
+                </select>
+              </label>
+              <label>Vigencia solicitada (días)
+                <input name="vigencia_dias" type="number" min="1" max="365" value="30" required />
+              </label>
+              <label>Fecha límite para recibir ofertas
+                <input name="fecha_limite" type="date" />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Documentos de entrada</legend>
+            <p class="ayuda">Solo archivos Excel. Máximo 50 MB por archivo.</p>
+            <div class="rejilla tres-columnas">
+              <label>Itemizado y metrados
+                <input name="itemizado" type="file" accept=".xlsx,.xls" required />
+              </label>
+              <label>Plantilla del comparativo
+                <input name="plantilla_comparativo" type="file" accept=".xlsx,.xls" required />
+              </label>
+              <label>Cuadro de procura
+                <input name="cuadro_procura" type="file" accept=".xlsx,.xls" required />
+              </label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Proveedores para cotizar</legend>
+            <div class="encabezado-seccion">
+              <p class="ayuda">Un proveedor puede participar en varias solicitudes.</p>
+              <button id="agregar-proveedor" class="secundario" type="button">Agregar proveedor</button>
+            </div>
+            <div id="proveedores"></div>
+          </fieldset>
+
+          <div id="resultado" class="resultado" aria-live="polite"></div>
+          <button id="guardar-solicitud" type="submit">Crear solicitud</button>
+        </form>
+      </section>
+    </main>
+
+    <template id="plantilla-proveedor">
+      <div class="proveedor">
+        <label>Razón social
+          <input data-campo="nombre" required maxlength="180" />
+        </label>
+        <label>RUC
+          <input data-campo="ruc" inputmode="numeric" pattern="[0-9]{11}" maxlength="11" />
+        </label>
+        <label>Correo
+          <input data-campo="correo" type="email" required />
+        </label>
+        <label>Contacto
+          <input data-campo="contacto" maxlength="120" />
+        </label>
+        <label>Teléfono
+          <input data-campo="telefono" maxlength="30" />
+        </label>
+        <button class="peligro quitar-proveedor" type="button">Quitar</button>
+      </div>
+    </template>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>

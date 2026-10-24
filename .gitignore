@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+frontend/js/config.local.js
 
 # Dependencias y builds
 node_modules/
