@@ -21,3 +21,5 @@ Aquí vive la forma de los datos guardados: tablas, estados y trazabilidad.
   proveedores reutilizables, documentos y partidas. También crea el bucket
   privado `solicitudes` y las políticas que limitan cada registro y archivo a
   su usuario responsable.
+- `nhost/001_e1_registro_solicitud.sql`: variante para Nhost. Crea el modelo
+  relacional; los permisos GraphQL y Storage se configuran después en Nhost.
