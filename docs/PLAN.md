@@ -52,8 +52,8 @@ y comparar) y **deja al especialista las decisiones técnicas**.
 | Correo | Gmail API | Enviar solicitudes y seguir respuestas |
 | Orquestación | n8n | Coordina los pasos y dispara las tareas |
 | IA | API de Claude | Interpreta correos y documentos, detecta consultas |
-| Datos | PostgreSQL / Supabase | Estados, versiones y trazabilidad |
-| Archivos | Supabase Storage | Cotizaciones y adjuntos |
+| Datos | PostgreSQL en Nhost | Estados, versiones y trazabilidad |
+| Archivos | Nhost Storage | Cotizaciones y adjuntos |
 | Interfaz | HTML y JavaScript (rontend/) | Pantallas para el especialista |
 | Modelo de datos | pydantic (`app/modelo.py`) | Formato común entre módulos |
 
@@ -117,7 +117,7 @@ Request. Dos personas no trabajan en el mismo módulo al mismo tiempo.
 | Homologación sin evidencia | La IA propone, el especialista aprueba |
 | Fotos o escaneos borrosos | Marcar "baja confianza" |
 | Unidades raras (bolsas, viajes) | Tabla de conversiones editable |
-| Confidencialidad de precios | Archivos reales solo en Supabase Storage, nunca en el repositorio |
+| Confidencialidad de precios | Archivos reales solo en Nhost Storage, nunca en el repositorio |
 
 ## 8. Próximos pasos
 

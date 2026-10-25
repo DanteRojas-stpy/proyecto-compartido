@@ -1,0 +1,241 @@
+{
+  "name": "CostFlow - Enviar solicitud de cotización",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body ?? $json;\nconst evento = body.event;\nconst nueva = evento?.data?.new;\nconst anterior = evento?.data?.old;\nif (evento?.op !== 'UPDATE' || nueva?.estado !== 'lista' || anterior?.estado === 'lista') return [];\nreturn [{ json: { solicitudId: nueva.id, eventoId: body.id } }];"
+      },
+      "id": "0850b96e-ce0c-4816-93c4-6d102d9de274",
+      "name": "Validar solicitud lista",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"query DatosSolicitud($id: uuid!) {\\n  solicitudes_cotizacion_by_pk(id: $id) {\\n    id\\n    codigo\\n    nombre\\n    moneda\\n    fecha_limite\\n    estado\\n    proyecto_asociado { codigo nombre }\\n  }\\n  solicitud_proveedores(where: { solicitud_id: { _eq: $id } }) {\\n    proveedor_id\\n    estado\\n    proveedor_asociado { id nombre correo contacto }\\n  }\\n  documentos(where: {\\n    solicitud_id: { _eq: $id }\\n    tipo: { _eq: \\\"itemizado\\\" }\\n    documento_estado: { _eq: \\\"vigente\\\" }\\n  }) {\\n    storage_file_id\\n    tipo\\n    nombre_original\\n  }\\n  envios_solicitud(where: { solicitud_id: { _eq: $id }, estado: { _eq: \\\"enviado\\\" } }) {\\n    proveedor_id\\n  }\\n}\", variables: { id: $json.solicitudId } } }}",
+        "options": {}
+      },
+      "id": "579be994-c421-44dd-af1a-fdcedda80cb9",
+      "name": "Consultar solicitud en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        448,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const respuesta = $json.data;\nconst solicitud = respuesta?.solicitudes_cotizacion_by_pk;\nif (!solicitud || solicitud.estado !== 'lista') return [];\n\nconst requeridos = ['itemizado'];\nconst documentos = Object.fromEntries(\n  (respuesta.documentos ?? []).map((documento) => [documento.tipo, documento]),\n);\nconst faltantes = requeridos.filter((tipo) => !documentos[tipo]);\nif (faltantes.length) {\n  throw new Error(`Faltan documentos vigentes: ${faltantes.join(', ')}`);\n}\n\nconst yaEnviados = new Set(\n  (respuesta.envios_solicitud ?? []).map((envio) => envio.proveedor_id),\n);\nconst escapar = (valor) => String(valor ?? '')\n  .replaceAll('&', '&amp;')\n  .replaceAll('<', '&lt;')\n  .replaceAll('>', '&gt;')\n  .replaceAll('\"', '&quot;')\n  .replaceAll(\"'\", '&#039;');\n\nconst items = [];\nfor (const vinculo of respuesta.solicitud_proveedores ?? []) {\n  const proveedor = vinculo.proveedor_asociado;\n  if (!proveedor?.correo || yaEnviados.has(vinculo.proveedor_id)) continue;\n  const saludo = proveedor.contacto || proveedor.nombre;\n  const proyecto = solicitud.proyecto_asociado;\n  const fecha = solicitud.fecha_limite\n    ? new Date(`${solicitud.fecha_limite}T12:00:00Z`).toLocaleDateString('es-PE')\n    : 'por coordinar';\n  items.push({\n    json: {\n      solicitudId: solicitud.id,\n      proveedorId: vinculo.proveedor_id,\n      correo: proveedor.correo,\n      asunto: `Solicitud de cotización ${solicitud.codigo} - ${proyecto.nombre}`,\n      mensajeHtml: `<p>Estimado(a) ${escapar(saludo)},</p>\n<p>Le invitamos a presentar su cotización para <strong>${escapar(solicitud.nombre)}</strong>, correspondiente al proyecto <strong>${escapar(proyecto.nombre)}</strong>.</p>\n<p>Fecha límite para recibir la oferta: <strong>${escapar(fecha)}</strong>.<br>Moneda solicitada: <strong>${escapar(solicitud.moneda)}</strong>.</p>\n<p>Adjuntamos el itemizado y metrados para preparar su cotización. Por favor responda a este mismo correo y conserve el código <strong>${escapar(solicitud.codigo)}</strong> en el asunto.</p>\n<p>Saludos,<br>Equipo CostFlow</p>`,\n      documentos,\n    },\n  });\n}\nif (!items.length) throw new Error('No hay proveedores pendientes con correo válido.');\nreturn items;"
+      },
+      "id": "17328180-a1c8-49da-b67c-caaf4b03c395",
+      "name": "Preparar envíos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        688,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files/' + $json.documentos.itemizado.storage_file_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "itemizado"
+            }
+          }
+        }
+      },
+      "id": "3ebf4b29-4b39-437f-90bc-8ed9a1895a3c",
+      "name": "Descargar itemizado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.correo }}",
+        "subject": "={{ $json.asunto }}",
+        "message": "={{ $json.mensajeHtml }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "itemizado"
+              }
+            ]
+          }
+        }
+      },
+      "id": "4ac8d2ba-6fa1-4e5e-a9d0-6c4c314d19d8",
+      "name": "Enviar correo por Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1152,
+        0
+      ],
+      "webhookId": "6163afd0-ef66-4bbe-af15-86216bd5acae",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "REEMPLAZAR_GMAIL",
+          "name": "Gmail CostFlow"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"mutation RegistrarEnvio($envio: envios_solicitud_insert_input!, $solicitudId: uuid!, $proveedorId: uuid!) {\\n  insert_envios_solicitud_one(\\n    object: $envio\\n    on_conflict: {\\n      constraint: envios_solicitud_unico\\n      update_columns: [destinatario, estado, mensaje_id, intentos, enviado_at, ultimo_error]\\n    }\\n  ) { id estado }\\n  update_solicitud_proveedores_by_pk(\\n    pk_columns: { solicitud_id: $solicitudId, proveedor_id: $proveedorId }\\n    _set: { estado: \\\"invitado\\\" }\\n  ) { proveedor_id }\\n  update_solicitudes_cotizacion_by_pk(\\n    pk_columns: { id: $solicitudId }\\n    _set: { estado: \\\"en_proceso\\\" }\\n  ) { id estado }\\n}\", variables: { solicitudId: $('Preparar envíos').item.json.solicitudId, proveedorId: $('Preparar envíos').item.json.proveedorId, envio: { solicitud_id: $('Preparar envíos').item.json.solicitudId, proveedor_id: $('Preparar envíos').item.json.proveedorId, destinatario: $('Preparar envíos').item.json.correo, estado: 'enviado', mensaje_id: $json.id || $json.threadId || null, intentos: 1, enviado_at: $now.toISO(), ultimo_error: null } } } }}",
+        "options": {}
+      },
+      "id": "6f5d708e-f796-4b8f-baa2-f3191dc3e516",
+      "name": "Registrar envío en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1392,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "costflow-solicitud-lista",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "7f5e5cb9-299c-43ef-8bed-3890a3244f60",
+      "name": "Evento de Nhost",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "costflow-solicitud-lista",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_WEBHOOK",
+          "name": "CostFlow Webhook"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Validar solicitud lista": {
+      "main": [
+        [
+          {
+            "node": "Consultar solicitud en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar solicitud en Nhost": {
+      "main": [
+        [
+          {
+            "node": "Preparar envíos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar envíos": {
+      "main": [
+        [
+          {
+            "node": "Descargar itemizado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar itemizado": {
+      "main": [
+        [
+          {
+            "node": "Enviar correo por Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar correo por Gmail": {
+      "main": [
+        [
+          {
+            "node": "Registrar envío en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evento de Nhost": {
+      "main": [
+        [
+          {
+            "node": "Validar solicitud lista",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "12a1a46a-99a1-4501-8a64-eaf1d0e5a2c2",
+  "tags": []
+}
