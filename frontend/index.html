@@ -26,7 +26,8 @@
             <input id="correo-acceso" type="email" autocomplete="email" required />
           </label>
           <label>Contraseña
-            <input id="clave-acceso" type="password" autocomplete="current-password" minlength="8" required />
+            <input id="clave-acceso" type="password" autocomplete="current-password" minlength="8" maxlength="50" required />
+            <span class="ayuda">Entre 8 y 50 caracteres.</span>
           </label>
           <div class="acciones">
             <button type="submit" data-accion="ingresar">Ingresar</button>

@@ -24,6 +24,16 @@ function mostrarResultado(mensaje, tipo = "") {
 }
 
 function mensajeError(error) {
+  const codigo = typeof error?.body?.error === "string"
+    ? error.body.error
+    : error?.body?.error?.message;
+  const mensajesAuth = {
+    "schema-validation-error": "Nhost rechazó el correo o la contraseña. Usa un correo válido y una contraseña de 8 a 50 caracteres.",
+    "email-already-in-use": "Ese correo ya tiene una cuenta. Pulsa Ingresar en lugar de Crear cuenta.",
+    "invalid-email-password": "El correo o la contraseña son incorrectos.",
+    "user-not-found": "No existe una cuenta con ese correo. Pulsa Crear cuenta primero.",
+  };
+  if (mensajesAuth[codigo]) return mensajesAuth[codigo];
   const erroresGraphql = error?.body?.errors;
   if (Array.isArray(erroresGraphql)) return erroresGraphql.map((item) => item.message).join(". ");
   return error?.body?.error?.message || error?.message || "Ocurrió un error inesperado.";
@@ -111,6 +121,9 @@ async function configurarNhost() {
 async function autenticar(crear = false) {
   const email = document.querySelector("#correo-acceso").value.trim();
   const password = document.querySelector("#clave-acceso").value;
+  if (password.length < 8 || password.length > 50) {
+    throw new Error("La contraseña debe tener entre 8 y 50 caracteres.");
+  }
   const respuesta = crear
     ? await nhost.auth.signUpEmailPassword({ email, password })
     : await nhost.auth.signInEmailPassword({ email, password });
@@ -272,6 +285,7 @@ ui.formAcceso.addEventListener("submit", async (evento) => {
   try { await autenticar(false); } catch (error) { alert(mensajeError(error)); }
 });
 ui.crearCuenta.addEventListener("click", async () => {
+  if (!ui.formAcceso.reportValidity()) return;
   try { await autenticar(true); } catch (error) { alert(mensajeError(error)); }
 });
 ui.cerrarSesion.addEventListener("click", async () => {
