@@ -37,6 +37,23 @@
       </section>
 
       <section id="registro" class="panel oculto">
+        <h2>Proyectos</h2>
+        <p class="ayuda">Registra cada proyecto una vez. Después podrás crear varias solicitudes para el mismo proyecto.</p>
+        <form id="form-proyecto">
+          <div class="rejilla dos-columnas">
+            <label>Código del proyecto
+              <input name="proyecto_codigo" required maxlength="50" placeholder="PROY-001" />
+            </label>
+            <label>Nombre del proyecto
+              <input name="proyecto_nombre" required maxlength="150" placeholder="Edificio Central" />
+            </label>
+          </div>
+          <button type="submit">Guardar proyecto</button>
+        </form>
+        <p id="resultado-proyecto" class="resultado" aria-live="polite"></p>
+      </section>
+
+      <section id="solicitudes" class="panel oculto">
         <div class="encabezado-seccion">
           <div>
             <p class="paso">ETAPA 1</p>
@@ -47,22 +64,23 @@
 
         <form id="form-solicitud">
           <fieldset>
-            <legend>Proyecto</legend>
-            <div class="rejilla dos-columnas">
-              <label>Código del proyecto
-                <input name="proyecto_codigo" required maxlength="50" placeholder="PROY-001" />
-              </label>
-              <label>Nombre del proyecto
-                <input name="proyecto_nombre" required maxlength="150" placeholder="Edificio Central" />
-              </label>
-            </div>
+            <legend>Proyecto registrado</legend>
+            <label>Selecciona el proyecto
+              <select name="proyecto_id" id="proyecto-id" required></select>
+            </label>
           </fieldset>
 
           <fieldset>
             <legend>Solicitud de cotización</legend>
             <div class="rejilla tres-columnas">
-              <label>Código
-                <input name="solicitud_codigo" required maxlength="50" placeholder="SC-001" />
+              <label>Tipo de cotización
+                <select name="tipo" id="tipo-solicitud" required>
+                  <option value="MA">Materiales (MA)</option>
+                  <option value="SC">Subcontrata (SC)</option>
+                </select>
+              </label>
+              <label>Código sugerido
+                <input id="codigo-sugerido" readonly placeholder="Selecciona un proyecto" />
               </label>
               <label>Nombre
                 <input name="solicitud_nombre" required maxlength="180" placeholder="Sistema de agua contra incendios" />

@@ -4,6 +4,12 @@ const ui = {
   configuracion: document.querySelector("#configuracion"),
   acceso: document.querySelector("#acceso"),
   registro: document.querySelector("#registro"),
+  solicitudes: document.querySelector("#solicitudes"),
+  formProyecto: document.querySelector("#form-proyecto"),
+  resultadoProyecto: document.querySelector("#resultado-proyecto"),
+  proyectoId: document.querySelector("#proyecto-id"),
+  tipoSolicitud: document.querySelector("#tipo-solicitud"),
+  codigoSugerido: document.querySelector("#codigo-sugerido"),
   formAcceso: document.querySelector("#form-acceso"),
   crearCuenta: document.querySelector("#crear-cuenta"),
   cerrarSesion: document.querySelector("#cerrar-sesion"),
@@ -93,8 +99,11 @@ function mostrarSesion(session) {
   const conectado = Boolean(session?.user);
   ui.acceso.classList.toggle("oculto", conectado);
   ui.registro.classList.toggle("oculto", !conectado);
+  ui.solicitudes.classList.toggle("oculto", !conectado);
   ui.cerrarSesion.classList.toggle("oculto", !conectado);
   ui.usuarioActivo.textContent = conectado ? session.user.email : "";
+  if (conectado) cargarProyectos().catch((error) => mostrarResultado(mensajeError(error), "error"));
+  else ui.proyectoId.replaceChildren();
 }
 
 async function graphql(query, variables = {}) {
@@ -131,16 +140,59 @@ async function autenticar(crear = false) {
   if (crear && !respuesta.body.session) alert("Revisa tu correo para confirmar la cuenta antes de ingresar.");
 }
 
-async function obtenerOCrearProyecto(datos) {
+async function cargarProyectos(seleccionarId = ui.proyectoId.value) {
+  const respuesta = await graphql(`query ProyectosDisponibles {
+    proyectos(order_by: { codigo: asc }) { id codigo nombre }
+  }`);
+  ui.proyectoId.replaceChildren(new Option("Selecciona un proyecto", ""));
+  for (const proyecto of respuesta.proyectos) {
+    ui.proyectoId.add(new Option(`${proyecto.codigo} — ${proyecto.nombre}`, proyecto.id));
+  }
+  if (respuesta.proyectos.some((proyecto) => proyecto.id === seleccionarId)) ui.proyectoId.value = seleccionarId;
+  ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+  await actualizarCodigoSugerido();
+}
+
+async function actualizarCodigoSugerido() {
+  const proyectoId = ui.proyectoId.value;
+  ui.codigoSugerido.value = "";
+  if (!proyectoId) return;
+  const tipo = ui.tipoSolicitud.value;
+  const respuesta = await graphql(`query CodigosDelProyecto($id: uuid!) {
+    solicitudes_cotizacion(where: { proyecto_id: { _eq: $id } }) { codigo }
+  }`, { id: proyectoId });
+  const prefijo = `${tipo}-`;
+  const mayor = respuesta.solicitudes_cotizacion.reduce((actual, solicitud) => {
+    if (!solicitud.codigo.startsWith(prefijo)) return actual;
+    const numero = solicitud.codigo.slice(prefijo.length);
+    return /^[0-9]+$/.test(numero) ? Math.max(actual, Number(numero)) : actual;
+  }, 0);
+  ui.codigoSugerido.value = `${prefijo}${String(mayor + 1).padStart(tipo === "MA" ? 3 : 2, "0")}`;
+}
+
+async function registrarProyecto(evento) {
+  evento.preventDefault();
+  const boton = ui.formProyecto.querySelector('button[type="submit"]');
+  boton.disabled = true;
+  try {
+    const datos = new FormData(ui.formProyecto);
+    const proyectoId = await crearProyecto(datos);
+    await cargarProyectos(proyectoId);
+    ui.formProyecto.reset();
+    ui.resultadoProyecto.textContent = "Proyecto guardado. Ya puedes crear solicitudes para él.";
+    ui.resultadoProyecto.className = "resultado exito";
+  } catch (error) {
+    ui.resultadoProyecto.textContent = mensajeError(error);
+    ui.resultadoProyecto.className = "resultado error";
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+async function crearProyecto(datos) {
   const respuesta = await graphql(
     `mutation GuardarProyecto($objeto: proyectos_insert_input!) {
-      insert_proyectos_one(
-        object: $objeto
-        on_conflict: {
-          constraint: proyectos_responsable_codigo_unique
-          update_columns: [nombre]
-        }
-      ) { id }
+      insert_proyectos_one(object: $objeto) { id }
     }`,
     {
       objeto: {
@@ -155,18 +207,12 @@ async function obtenerOCrearProyecto(datos) {
 async function crearSolicitud(proyectoId, datos) {
   const respuesta = await graphql(
     `mutation CrearSolicitud($objeto: solicitudes_cotizacion_insert_input!) {
-      insert_solicitudes_cotizacion_one(
-        object: $objeto
-        on_conflict: {
-          constraint: solicitudes_proyecto_codigo_unique
-          update_columns: [nombre, moneda, vigencia_dias, fecha_limite]
-        }
-      ) { id }
+      insert_solicitudes_cotizacion_one(object: $objeto) { id codigo }
     }`,
     {
       objeto: {
         proyecto_id: proyectoId,
-        codigo: datos.get("solicitud_codigo").trim(),
+        tipo: datos.get("tipo"),
         nombre: datos.get("solicitud_nombre").trim(),
         moneda: datos.get("moneda"),
         vigencia_dias: Number(datos.get("vigencia_dias")),
@@ -174,7 +220,7 @@ async function crearSolicitud(proyectoId, datos) {
       },
     },
   );
-  return respuesta.insert_solicitudes_cotizacion_one.id;
+  return respuesta.insert_solicitudes_cotizacion_one;
 }
 
 async function guardarProveedor(proveedor) {
@@ -276,10 +322,11 @@ async function registrarSolicitud(evento) {
     const proveedores = leerProveedores();
     if (!proveedores.length) throw new Error("Agrega al menos un proveedor.");
 
-    mostrarResultado("Guardando el proyecto…");
-    const proyectoId = await obtenerOCrearProyecto(datos);
+    const proyectoId = datos.get("proyecto_id");
+    if (!proyectoId) throw new Error("Selecciona un proyecto registrado.");
     mostrarResultado("Guardando la solicitud…");
-    const solicitudId = await crearSolicitud(proyectoId, datos);
+    const solicitud = await crearSolicitud(proyectoId, datos);
+    const solicitudId = solicitud.id;
     mostrarResultado("Guardando los proveedores…");
     await guardarProveedores(solicitudId, proveedores);
 
@@ -300,8 +347,11 @@ async function registrarSolicitud(evento) {
       { id: solicitudId },
     );
 
-    mostrarResultado(`Solicitud creada correctamente. Identificador: ${solicitudId}`, "exito");
+    mostrarResultado(`Solicitud ${solicitud.codigo} creada correctamente. Identificador: ${solicitudId}`, "exito");
     ui.formSolicitud.reset();
+    ui.proyectoId.value = proyectoId;
+    ui.guardarSolicitud.disabled = false;
+    actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.proveedores.replaceChildren();
     agregarProveedor();
   } catch (error) {
@@ -324,6 +374,12 @@ ui.cerrarSesion.addEventListener("click", async () => {
   try { await nhost.auth.signOut({ refreshToken: session?.refreshToken }); } finally { nhost.clearSession(); }
 });
 ui.agregarProveedor.addEventListener("click", agregarProveedor);
+ui.formProyecto.addEventListener("submit", registrarProyecto);
+ui.proyectoId.addEventListener("change", () => {
+  ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+  actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
+});
+ui.tipoSolicitud.addEventListener("change", () => actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error")));
 ui.formSolicitud.addEventListener("submit", registrarSolicitud);
 
 agregarProveedor();

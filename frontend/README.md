@@ -25,6 +25,12 @@ La cuenta usada para administrar Nhost no es una cuenta de la aplicación. En
 la pantalla de CostFlow, usa **Crear cuenta** una vez o crea un usuario desde
 **Nhost > Auth > Users**.
 
+Primero registra el proyecto. Después selecciónalo para crear tantas solicitudes
+como necesites. El código sugerido se muestra en pantalla y PostgreSQL asigna
+el definitivo al guardar, con correlativos separados por proyecto y por tipo
+de cotización (`MA` para materiales y `SC` para subcontratas). Para ello deben
+estar aplicados `db/nhost/004_proyectos_y_correlativos.sql` y los permisos nuevos.
+
 El formulario crea una solicitud en estado `borrador`, registra sus proveedores,
 sube los Excel al bucket `solicitudes` y cambia el estado a `lista` al
 terminar. Si algo falla, conserva el borrador para poder diagnosticarlo.

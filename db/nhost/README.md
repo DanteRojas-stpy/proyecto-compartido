@@ -11,9 +11,17 @@ Ejecutar despues `002_documentos_por_proveedor.sql`. Esta segunda migracion
 distingue los documentos generales de la solicitud de las cotizaciones y
 anexos pertenecientes a cada proveedor, incluyendo version y estado.
 
-Ejecutar finalmente `003_envios_solicitud.sql` con **Track this** activado. Esta
+Ejecutar despues `003_envios_solicitud.sql` con **Track this** activado. Esta
 tabla registra a qué proveedor se envió cada solicitud, el identificador del
 mensaje de Gmail, los intentos y los errores.
+
+Ejecutar finalmente `004_proyectos_y_correlativos.sql` una sola vez. Agrega el
+tipo `MA` (materiales) o `SC` (subcontrata) y asigna el número al insertar una
+solicitud. El correlativo es independiente por proyecto y tipo: `MA-001`,
+`MA-002`, o `SC-01`, `SC-02`. Los códigos existentes se conservan. El bloqueo
+del proyecto evita que dos registros simultáneos reciban el mismo número.
+Después, actualiza los permisos de GraphQL con `scripts/configurar_nhost.py`
+y recarga la metadata para que aparezca la columna `tipo`.
 
 El archivo de Supabase ubicado en `db/migraciones/` se conserva como referencia
 y no debe ejecutarse en Nhost.

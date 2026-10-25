@@ -175,17 +175,17 @@ def main() -> int:
             },
             "solicitudes_cotizacion": {
                 "select": {
-                    "columns": ["id", "proyecto_id", "creado_por", "codigo", "nombre", "moneda", "vigencia_dias", "fecha_limite", "estado", "created_at", "updated_at"],
+                    "columns": ["id", "proyecto_id", "creado_por", "codigo", "tipo", "numero", "nombre", "moneda", "vigencia_dias", "fecha_limite", "estado", "created_at", "updated_at"],
                     "filter": solicitud_filter,
                     "allow_aggregations": False,
                 },
                 "insert": {
-                    "columns": ["proyecto_id", "codigo", "nombre", "moneda", "vigencia_dias", "fecha_limite"],
+                    "columns": ["proyecto_id", "tipo", "nombre", "moneda", "vigencia_dias", "fecha_limite"],
                     "check": solicitud_insert_filter,
                     "set": {"creado_por": SESSION_USER},
                 },
                 "update": {
-                    "columns": ["codigo", "nombre", "moneda", "vigencia_dias", "fecha_limite", "estado"],
+                    "columns": ["nombre", "moneda", "vigencia_dias", "fecha_limite", "estado"],
                     "filter": solicitud_filter,
                     "check": None,
                 },
