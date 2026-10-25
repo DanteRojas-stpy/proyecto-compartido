@@ -1,4 +1,3 @@
-// Copia este archivo como config.local.js y completa los valores públicos
-// mostrados en Supabase > Project settings > API.
-export const SUPABASE_URL = "https://TU-PROYECTO.supabase.co";
-export const SUPABASE_PUBLISHABLE_KEY = "TU_CLAVE_PUBLICA";
+// Copiar como config.local.js. Este archivo local no se publica en Git.
+export const NHOST_SUBDOMAIN = "SUBDOMINIO_DEL_PROYECTO";
+export const NHOST_REGION = "sa-east-1";

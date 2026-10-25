@@ -127,6 +127,7 @@ def main() -> int:
             ("solicitud_proveedores", "solicitud_cotizacion", "solicitud_id"),
             ("solicitud_proveedores", "proveedor_asociado", "proveedor_id"),
             ("documentos", "solicitud_cotizacion", "solicitud_id"),
+            ("documentos", "proveedor_asociado", "proveedor_id"),
             ("partidas", "solicitud_cotizacion", "solicitud_id"),
         ]
         for table, name, foreign_key in relationships:
@@ -220,14 +221,19 @@ def main() -> int:
             },
             "documentos": {
                 "select": {
-                    "columns": ["id", "solicitud_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "subido_por", "created_at"],
+                    "columns": ["id", "solicitud_id", "proveedor_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version", "documento_estado", "subido_por", "created_at"],
                     "filter": documento_filter,
                     "allow_aggregations": False,
                 },
                 "insert": {
-                    "columns": ["solicitud_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes"],
+                    "columns": ["solicitud_id", "proveedor_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version"],
                     "check": documento_filter,
                     "set": {"subido_por": SESSION_USER},
+                },
+                "update": {
+                    "columns": ["documento_estado"],
+                    "filter": documento_filter,
+                    "check": None,
                 },
                 "delete": {"filter": documento_filter},
             },

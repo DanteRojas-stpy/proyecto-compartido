@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@nhost/nhost-js@4.9.0";
 
 const ui = {
   configuracion: document.querySelector("#configuracion"),
@@ -16,7 +16,7 @@ const ui = {
   guardarSolicitud: document.querySelector("#guardar-solicitud"),
 };
 
-let supabase;
+let nhost;
 
 function mostrarResultado(mensaje, tipo = "") {
   ui.resultado.textContent = mensaje;
@@ -24,7 +24,9 @@ function mostrarResultado(mensaje, tipo = "") {
 }
 
 function mensajeError(error) {
-  return error?.message || "Ocurrió un error inesperado.";
+  const erroresGraphql = error?.body?.errors;
+  if (Array.isArray(erroresGraphql)) return erroresGraphql.map((item) => item.message).join(". ");
+  return error?.body?.error?.message || error?.message || "Ocurrió un error inesperado.";
 }
 
 function limpiar(valor) {
@@ -84,17 +86,24 @@ function mostrarSesion(session) {
   ui.usuarioActivo.textContent = conectado ? session.user.email : "";
 }
 
-async function configurarSupabase() {
+async function graphql(query, variables = {}) {
+  const respuesta = await nhost.graphql.request({ query, variables });
+  if (respuesta.body.errors?.length) {
+    throw new Error(respuesta.body.errors.map((item) => item.message).join(". "));
+  }
+  return respuesta.body.data;
+}
+
+async function configurarNhost() {
   try {
     const config = await import("./config.local.js");
-    if (!config.SUPABASE_URL || !config.SUPABASE_PUBLISHABLE_KEY) throw new Error("Configuración incompleta");
-    supabase = createClient(config.SUPABASE_URL, config.SUPABASE_PUBLISHABLE_KEY);
-    const { data } = await supabase.auth.getSession();
-    mostrarSesion(data.session);
-    supabase.auth.onAuthStateChange((_evento, session) => mostrarSesion(session));
+    if (!config.NHOST_SUBDOMAIN || !config.NHOST_REGION) throw new Error("Configuración incompleta");
+    nhost = createClient({ subdomain: config.NHOST_SUBDOMAIN, region: config.NHOST_REGION });
+    mostrarSesion(nhost.getUserSession());
+    nhost.sessionStorage.onChange((session) => mostrarSesion(session));
   } catch (_error) {
     ui.configuracion.classList.remove("oculto");
-    ui.configuracion.textContent = "Falta frontend/js/config.local.js. Copia config.example.js y completa la URL y la clave pública de Supabase.";
+    ui.configuracion.textContent = "Falta frontend/js/config.local.js. Copia config.example.js y completa el subdominio y la región de Nhost.";
     ui.acceso.classList.add("oculto");
   }
 }
@@ -102,93 +111,120 @@ async function configurarSupabase() {
 async function autenticar(crear = false) {
   const email = document.querySelector("#correo-acceso").value.trim();
   const password = document.querySelector("#clave-acceso").value;
-  const operacion = crear
-    ? supabase.auth.signUp({ email, password })
-    : supabase.auth.signInWithPassword({ email, password });
-  const { data, error } = await operacion;
-  if (error) throw error;
-  if (crear && !data.session) alert("Revisa tu correo para confirmar la cuenta antes de ingresar.");
+  const respuesta = crear
+    ? await nhost.auth.signUpEmailPassword({ email, password })
+    : await nhost.auth.signInEmailPassword({ email, password });
+  if (crear && !respuesta.body.session) alert("Revisa tu correo para confirmar la cuenta antes de ingresar.");
 }
 
-async function obtenerOCrearProyecto(userId, datos) {
-  const proyecto = {
-    responsable_id: userId,
-    codigo: datos.get("proyecto_codigo").trim(),
-    nombre: datos.get("proyecto_nombre").trim(),
-  };
-  const { data, error } = await supabase
-    .from("proyectos")
-    .upsert(proyecto, { onConflict: "responsable_id,codigo" })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return data.id;
+async function obtenerOCrearProyecto(datos) {
+  const respuesta = await graphql(
+    `mutation GuardarProyecto($objeto: proyectos_insert_input!) {
+      insert_proyectos_one(
+        object: $objeto
+        on_conflict: {
+          constraint: proyectos_responsable_codigo_unique
+          update_columns: [nombre]
+        }
+      ) { id }
+    }`,
+    {
+      objeto: {
+        codigo: datos.get("proyecto_codigo").trim(),
+        nombre: datos.get("proyecto_nombre").trim(),
+      },
+    },
+  );
+  return respuesta.insert_proyectos_one.id;
 }
 
-async function crearSolicitud(proyectoId, userId, datos) {
-  const solicitud = {
-    proyecto_id: proyectoId,
-    creado_por: userId,
-    codigo: datos.get("solicitud_codigo").trim(),
-    nombre: datos.get("solicitud_nombre").trim(),
-    moneda: datos.get("moneda"),
-    vigencia_dias: Number(datos.get("vigencia_dias")),
-    fecha_limite: limpiar(datos.get("fecha_limite")),
-    estado: "borrador",
-  };
-  const { data, error } = await supabase.from("solicitudes_cotizacion").insert(solicitud).select("id").single();
-  if (error) throw error;
-  return data.id;
+async function crearSolicitud(proyectoId, datos) {
+  const respuesta = await graphql(
+    `mutation CrearSolicitud($objeto: solicitudes_cotizacion_insert_input!) {
+      insert_solicitudes_cotizacion_one(object: $objeto) { id }
+    }`,
+    {
+      objeto: {
+        proyecto_id: proyectoId,
+        codigo: datos.get("solicitud_codigo").trim(),
+        nombre: datos.get("solicitud_nombre").trim(),
+        moneda: datos.get("moneda"),
+        vigencia_dias: Number(datos.get("vigencia_dias")),
+        fecha_limite: limpiar(datos.get("fecha_limite")),
+      },
+    },
+  );
+  return respuesta.insert_solicitudes_cotizacion_one.id;
 }
 
-async function guardarProveedor(userId, proveedor) {
-  let consulta = supabase.from("proveedores").select("id").eq("creado_por", userId);
-  consulta = proveedor.ruc ? consulta.eq("ruc", proveedor.ruc) : consulta.ilike("correo", proveedor.correo);
-  const { data: existente, error: errorBusqueda } = await consulta.maybeSingle();
-  if (errorBusqueda) throw errorBusqueda;
-  if (existente) return existente.id;
+async function guardarProveedor(proveedor) {
+  const where = proveedor.ruc
+    ? { ruc: { _eq: proveedor.ruc } }
+    : proveedor.correo
+      ? { correo: { _ilike: proveedor.correo } }
+      : null;
 
-  const { data, error } = await supabase
-    .from("proveedores")
-    .insert({ ...proveedor, creado_por: userId })
-    .select("id")
-    .single();
-  if (error) throw error;
-  return data.id;
+  if (where) {
+    const busqueda = await graphql(
+      `query BuscarProveedor($where: proveedores_bool_exp!) {
+        proveedores(where: $where, limit: 1) { id }
+      }`,
+      { where },
+    );
+    if (busqueda.proveedores[0]) return busqueda.proveedores[0].id;
+  }
+
+  const respuesta = await graphql(
+    `mutation CrearProveedor($objeto: proveedores_insert_input!) {
+      insert_proveedores_one(object: $objeto) { id }
+    }`,
+    { objeto: proveedor },
+  );
+  return respuesta.insert_proveedores_one.id;
 }
 
-async function guardarProveedores(solicitudId, userId, proveedores) {
+async function guardarProveedores(solicitudId, proveedores) {
   for (const proveedor of proveedores) {
-    const proveedorId = await guardarProveedor(userId, proveedor);
-    const { error } = await supabase.from("solicitud_proveedores").insert({
-      solicitud_id: solicitudId,
-      proveedor_id: proveedorId,
-    });
-    if (error) throw error;
+    const proveedorId = await guardarProveedor(proveedor);
+    await graphql(
+      `mutation VincularProveedor($objeto: solicitud_proveedores_insert_input!) {
+        insert_solicitud_proveedores_one(object: $objeto) { solicitud_id }
+      }`,
+      { objeto: { solicitud_id: solicitudId, proveedor_id: proveedorId } },
+    );
   }
 }
 
-async function subirDocumento(solicitudId, userId, tipo, archivo) {
+async function subirDocumento(solicitudId, tipo, archivo) {
   validarExcel(archivo, tipo);
-  const ruta = `${solicitudId}/entrada/${tipo}-${Date.now()}-${nombreSeguro(archivo.name)}`;
-  const { error: errorCarga } = await supabase.storage.from("solicitudes").upload(ruta, archivo, {
-    contentType: mimeExcel(archivo),
-    upsert: false,
+  const nombre = `${solicitudId}-${tipo}-${Date.now()}-${nombreSeguro(archivo.name)}`;
+  const carga = await nhost.storage.uploadFiles({
+    "bucket-id": "solicitudes",
+    "file[]": [archivo],
+    "metadata[]": [{ name, metadata: { solicitudId, tipo } }],
   });
-  if (errorCarga) throw errorCarga;
+  const archivoGuardado = carga.body.processedFiles[0];
+  if (!archivoGuardado) throw new Error(`No se pudo almacenar el archivo ${tipo}.`);
 
-  const { error: errorRegistro } = await supabase.from("documentos").insert({
-    solicitud_id: solicitudId,
-    tipo,
-    nombre_original: archivo.name,
-    storage_path: ruta,
-    mime_type: mimeExcel(archivo),
-    tamano_bytes: archivo.size,
-    subido_por: userId,
-  });
-  if (errorRegistro) {
-    await supabase.storage.from("solicitudes").remove([ruta]);
-    throw errorRegistro;
+  try {
+    await graphql(
+      `mutation RegistrarDocumento($objeto: documentos_insert_input!) {
+        insert_documentos_one(object: $objeto) { id }
+      }`,
+      {
+        objeto: {
+          solicitud_id: solicitudId,
+          tipo,
+          nombre_original: archivo.name,
+          storage_file_id: archivoGuardado.id,
+          mime_type: mimeExcel(archivo),
+          tamano_bytes: archivo.size,
+        },
+      },
+    );
+  } catch (error) {
+    await nhost.storage.deleteFile(archivoGuardado.id).catch(() => {});
+    throw error;
   }
 }
 
@@ -197,29 +233,28 @@ async function registrarSolicitud(evento) {
   ui.guardarSolicitud.disabled = true;
   mostrarResultado("Creando solicitud y subiendo documentos…");
   try {
-    const { data: sesion } = await supabase.auth.getSession();
-    const userId = sesion.session?.user?.id;
-    if (!userId) throw new Error("La sesión venció. Vuelve a ingresar.");
+    if (!nhost.getUserSession()?.user?.id) throw new Error("La sesión venció. Vuelve a ingresar.");
 
     const datos = new FormData(ui.formSolicitud);
     const proveedores = leerProveedores();
     if (!proveedores.length) throw new Error("Agrega al menos un proveedor.");
 
-    const proyectoId = await obtenerOCrearProyecto(userId, datos);
-    const solicitudId = await crearSolicitud(proyectoId, userId, datos);
-    await guardarProveedores(solicitudId, userId, proveedores);
+    const proyectoId = await obtenerOCrearProyecto(datos);
+    const solicitudId = await crearSolicitud(proyectoId, datos);
+    await guardarProveedores(solicitudId, proveedores);
 
     for (const tipo of ["itemizado", "plantilla_comparativo", "cuadro_procura"]) {
       const archivo = datos.get(tipo);
       if (!(archivo instanceof File) || !archivo.size) throw new Error(`Falta el archivo ${tipo}.`);
-      await subirDocumento(solicitudId, userId, tipo, archivo);
+      await subirDocumento(solicitudId, tipo, archivo);
     }
 
-    const { error } = await supabase
-      .from("solicitudes_cotizacion")
-      .update({ estado: "lista" })
-      .eq("id", solicitudId);
-    if (error) throw error;
+    await graphql(
+      `mutation MarcarSolicitudLista($id: uuid!) {
+        update_solicitudes_cotizacion_by_pk(pk_columns: { id: $id }, _set: { estado: "lista" }) { id }
+      }`,
+      { id: solicitudId },
+    );
 
     mostrarResultado(`Solicitud creada correctamente. Identificador: ${solicitudId}`, "exito");
     ui.formSolicitud.reset();
@@ -239,9 +274,12 @@ ui.formAcceso.addEventListener("submit", async (evento) => {
 ui.crearCuenta.addEventListener("click", async () => {
   try { await autenticar(true); } catch (error) { alert(mensajeError(error)); }
 });
-ui.cerrarSesion.addEventListener("click", () => supabase.auth.signOut());
+ui.cerrarSesion.addEventListener("click", async () => {
+  const session = nhost.getUserSession();
+  try { await nhost.auth.signOut({ refreshToken: session?.refreshToken }); } finally { nhost.clearSession(); }
+});
 ui.agregarProveedor.addEventListener("click", agregarProveedor);
 ui.formSolicitud.addEventListener("submit", registrarSolicitud);
 
 agregarProveedor();
-configurarSupabase();
+configurarNhost();
