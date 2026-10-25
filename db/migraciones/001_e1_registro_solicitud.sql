@@ -1,5 +1,6 @@
--- E1: registro de solicitudes de cotizacion.
--- Ejecutar en Supabase mediante una migracion, nunca pegando datos reales aqui.
+-- E1: registro de solicitudes de cotizacion para Nhost.
+-- Ejecutar una sola vez en Database > SQL Console.
+-- Los permisos de GraphQL y Storage se configuran despues desde Nhost.
 
 create extension if not exists pgcrypto;
 
@@ -72,8 +73,7 @@ create table public.documentos (
     solicitud_id uuid not null references public.solicitudes_cotizacion(id) on delete cascade,
     tipo text not null,
     nombre_original text not null,
-    storage_bucket text not null default 'solicitudes',
-    storage_path text not null,
+    storage_file_id uuid not null,
     mime_type text,
     tamano_bytes bigint,
     subido_por uuid not null references auth.users(id) on delete cascade,
@@ -81,7 +81,7 @@ create table public.documentos (
     constraint documentos_tipo_valido check (tipo in ('itemizado', 'plantilla_comparativo', 'cuadro_procura')),
     constraint documentos_nombre_no_vacio check (btrim(nombre_original) <> ''),
     constraint documentos_tamano_valido check (tamano_bytes is null or tamano_bytes >= 0),
-    constraint documentos_storage_path_unique unique (storage_bucket, storage_path),
+    constraint documentos_storage_file_unique unique (storage_file_id),
     constraint documentos_tipo_por_solicitud_unique unique (solicitud_id, tipo)
 );
 
@@ -121,156 +121,3 @@ create trigger proveedores_updated_at
 before update on public.proveedores
 for each row execute function public.actualizar_updated_at();
 
-alter table public.proyectos enable row level security;
-alter table public.solicitudes_cotizacion enable row level security;
-alter table public.proveedores enable row level security;
-alter table public.solicitud_proveedores enable row level security;
-alter table public.documentos enable row level security;
-alter table public.partidas enable row level security;
-
-create policy proyectos_del_usuario on public.proyectos
-for all to authenticated
-using (responsable_id = auth.uid())
-with check (responsable_id = auth.uid());
-
-create policy solicitudes_del_usuario on public.solicitudes_cotizacion
-for all to authenticated
-using (creado_por = auth.uid())
-with check (
-    creado_por = auth.uid()
-    and exists (
-        select 1 from public.proyectos p
-        where p.id = proyecto_id and p.responsable_id = auth.uid()
-    )
-);
-
-create policy proveedores_del_usuario on public.proveedores
-for all to authenticated
-using (creado_por = auth.uid())
-with check (creado_por = auth.uid());
-
-create policy solicitud_proveedores_del_usuario on public.solicitud_proveedores
-for all to authenticated
-using (
-    exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-)
-with check (
-    exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-    and exists (
-        select 1 from public.proveedores p
-        where p.id = proveedor_id and p.creado_por = auth.uid()
-    )
-);
-
-create policy documentos_del_usuario on public.documentos
-for all to authenticated
-using (
-    exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-)
-with check (
-    subido_por = auth.uid()
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-);
-
-create policy partidas_del_usuario on public.partidas
-for all to authenticated
-using (
-    exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-)
-with check (
-    exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id = solicitud_id and s.creado_por = auth.uid()
-    )
-);
-
-grant usage on schema public to authenticated;
-grant select, insert, update, delete on public.proyectos to authenticated;
-grant select, insert, update, delete on public.solicitudes_cotizacion to authenticated;
-grant select, insert, update, delete on public.proveedores to authenticated;
-grant select, insert, update, delete on public.solicitud_proveedores to authenticated;
-grant select, insert, update, delete on public.documentos to authenticated;
-grant select, insert, update, delete on public.partidas to authenticated;
-
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-    'solicitudes',
-    'solicitudes',
-    false,
-    52428800,
-    array[
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel'
-    ]
-)
-on conflict (id) do update set
-    public = excluded.public,
-    file_size_limit = excluded.file_size_limit,
-    allowed_mime_types = excluded.allowed_mime_types;
-
-create policy solicitudes_storage_lectura on storage.objects
-for select to authenticated
-using (
-    bucket_id = 'solicitudes'
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id::text = split_part(name, '/', 1)
-          and s.creado_por = auth.uid()
-    )
-);
-
-create policy solicitudes_storage_carga on storage.objects
-for insert to authenticated
-with check (
-    bucket_id = 'solicitudes'
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id::text = split_part(name, '/', 1)
-          and s.creado_por = auth.uid()
-    )
-);
-
-create policy solicitudes_storage_actualizacion on storage.objects
-for update to authenticated
-using (
-    bucket_id = 'solicitudes'
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id::text = split_part(name, '/', 1)
-          and s.creado_por = auth.uid()
-    )
-)
-with check (
-    bucket_id = 'solicitudes'
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id::text = split_part(name, '/', 1)
-          and s.creado_por = auth.uid()
-    )
-);
-
-create policy solicitudes_storage_borrado on storage.objects
-for delete to authenticated
-using (
-    bucket_id = 'solicitudes'
-    and exists (
-        select 1 from public.solicitudes_cotizacion s
-        where s.id::text = split_part(name, '/', 1)
-          and s.creado_por = auth.uid()
-    )
-);

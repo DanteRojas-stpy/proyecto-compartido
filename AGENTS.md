@@ -62,12 +62,12 @@ en palabras simples, sin jerga de programación.
   nuestra. Los datos que no están en la cotización quedan vacíos: nunca se
   inventan ni se adivinan.
 - **Arquitectura:** n8n orquesta los flujos (`n8n/`). La IA interpreta
-  (`prompts/`, `app/lectura/`). PostgreSQL/Supabase guarda estados y trazabilidad
-  (`db/`). Supabase Storage guarda los archivos. Gmail API maneja el correo.
+  (`prompts/`, `app/lectura/`). PostgreSQL en Nhost guarda estados y trazabilidad
+  (`db/`). Nhost Storage guarda los archivos. Gmail API maneja el correo.
   Excel es la entrada y la salida.
 - **Módulos de `app/`:** `entradas/` (1), `correo/` (3), `recepcion/` (4),
   `lectura/` (5), `homologacion/` (6), `aclaraciones/` (7 y 8),
   `comparativo/` (9), `modelo.py` (formato común). La interfaz vive en `frontend/` (HTML y JavaScript).
 - **Otras carpetas:** `n8n/` (flujos), `db/` (esquema), `prompts/` (instrucciones
   de la IA), `plantillas/` (Excel), `ejemplos/` (caso de prueba), `docs/`,
-  `scripts/`, `tests/`.
+  `scripts/`, `tests/`. Decisiones del equipo: `docs/DECISIONES.md`.
