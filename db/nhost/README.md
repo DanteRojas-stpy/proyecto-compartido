@@ -8,6 +8,10 @@ E1. No abre las tablas a usuarios finales. Despues de ejecutarla se deben
 configurar los permisos del rol `user` en GraphQL y las reglas de Storage desde
 el panel de Nhost.
 
+Ejecutar despues `002_documentos_por_proveedor.sql`. Esta segunda migracion
+distingue los documentos generales de la solicitud de las cotizaciones y
+anexos pertenecientes a cada proveedor, incluyendo version y estado.
+
 El archivo de Supabase ubicado en `db/migraciones/` se conserva como referencia
 y no debe ejecutarse en Nhost.
 
