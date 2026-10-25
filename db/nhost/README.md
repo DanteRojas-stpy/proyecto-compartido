@@ -10,3 +10,17 @@ el panel de Nhost.
 
 El archivo de Supabase ubicado en `db/migraciones/` se conserva como referencia
 y no debe ejecutarse en Nhost.
+
+## Permisos automatizados
+
+Desde Windows se pueden aplicar las relaciones y permisos del rol `user` sin
+configurar cada celda manualmente:
+
+```powershell
+python scripts/configurar_nhost.py
+```
+
+El programa solicita la Backend URL y `HASURA_GRAPHQL_ADMIN_SECRET`. El secreto
+se escribe oculto, se usa solo en memoria y no se guarda en archivos. La
+ejecucion puede repetirse: reemplaza los permisos de CostFlow por la version
+definida en el repositorio.
