@@ -8,8 +8,13 @@ const ui = {
   formProyecto: document.querySelector("#form-proyecto"),
   resultadoProyecto: document.querySelector("#resultado-proyecto"),
   proyectoId: document.querySelector("#proyecto-id"),
+  proyectoCodigo: document.querySelector("#proyecto-codigo"),
+  proyectoNombre: document.querySelector("#proyecto-nombre"),
   tipoSolicitud: document.querySelector("#tipo-solicitud"),
   codigoSugerido: document.querySelector("#codigo-sugerido"),
+  fechaInicio: document.querySelector("#fecha-inicio"),
+  fechaLimite: document.querySelector("#fecha-limite"),
+  avisosSeguimiento: document.querySelector("#avisos-seguimiento"),
   formAcceso: document.querySelector("#form-acceso"),
   crearCuenta: document.querySelector("#crear-cuenta"),
   cerrarSesion: document.querySelector("#cerrar-sesion"),
@@ -23,6 +28,7 @@ const ui = {
 };
 
 let nhost;
+let proyectosDisponibles = [];
 const opcionesRolUsuario = { headers: { "x-hasura-role": "user" } };
 
 function mostrarResultado(mensaje, tipo = "") {
@@ -144,13 +150,51 @@ async function cargarProyectos(seleccionarId = ui.proyectoId.value) {
   const respuesta = await graphql(`query ProyectosDisponibles {
     proyectos(order_by: { codigo: asc }) { id codigo nombre }
   }`);
+  proyectosDisponibles = respuesta.proyectos;
   ui.proyectoId.replaceChildren(new Option("Selecciona un proyecto", ""));
   for (const proyecto of respuesta.proyectos) {
     ui.proyectoId.add(new Option(`${proyecto.codigo} — ${proyecto.nombre}`, proyecto.id));
   }
   if (respuesta.proyectos.some((proyecto) => proyecto.id === seleccionarId)) ui.proyectoId.value = seleccionarId;
   ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+  mostrarProyectoSeleccionado();
   await actualizarCodigoSugerido();
+  await cargarAvisosSeguimiento();
+}
+
+function mostrarProyectoSeleccionado() {
+  const proyecto = proyectosDisponibles.find((item) => item.id === ui.proyectoId.value);
+  ui.proyectoCodigo.value = proyecto?.codigo ?? "";
+  ui.proyectoNombre.value = proyecto?.nombre ?? "";
+}
+
+async function cargarAvisosSeguimiento() {
+  const proyectoId = ui.proyectoId.value;
+  ui.avisosSeguimiento.replaceChildren();
+  if (!proyectoId) return;
+  const respuesta = await graphql(`query SolicitudesParaSeguimiento($id: uuid!) {
+    solicitudes_cotizacion(where: {
+      proyecto_id: { _eq: $id }, estado: { _in: ["lista", "en_proceso"] }
+    }) { codigo nombre created_at fecha_limite frecuencia_aviso_dias }
+  }`, { id: proyectoId });
+  if (ui.proyectoId.value !== proyectoId) return;
+  const fechaHoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+  const diaHoy = Date.parse(`${fechaHoy}T00:00:00Z`);
+  for (const solicitud of respuesta.solicitudes_cotizacion) {
+    const fechaInicio = new Date(solicitud.created_at)
+      .toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+    const dias = Math.floor((diaHoy - Date.parse(`${fechaInicio}T00:00:00Z`)) / 86400000);
+    const vencida = solicitud.fecha_limite && solicitud.fecha_limite < fechaHoy;
+    if (!vencida && (dias < solicitud.frecuencia_aviso_dias || dias % solicitud.frecuencia_aviso_dias !== 0)) continue;
+    const aviso = document.createElement("li");
+    aviso.textContent = `${solicitud.codigo} — ${solicitud.nombre}: ${vencida ? "fecha fin vencida" : "revisar seguimiento"}.`;
+    ui.avisosSeguimiento.append(aviso);
+  }
+  if (!ui.avisosSeguimiento.children.length) {
+    const vacio = document.createElement("li");
+    vacio.textContent = "No hay avisos pendientes hoy.";
+    ui.avisosSeguimiento.append(vacio);
+  }
 }
 
 async function actualizarCodigoSugerido() {
@@ -167,7 +211,7 @@ async function actualizarCodigoSugerido() {
     const numero = solicitud.codigo.slice(prefijo.length);
     return /^[0-9]+$/.test(numero) ? Math.max(actual, Number(numero)) : actual;
   }, 0);
-  ui.codigoSugerido.value = `${prefijo}${String(mayor + 1).padStart(tipo === "MA" ? 3 : 2, "0")}`;
+  ui.codigoSugerido.value = `${prefijo}${String(mayor + 1).padStart(3, "0")}`;
 }
 
 async function registrarProyecto(evento) {
@@ -215,8 +259,8 @@ async function crearSolicitud(proyectoId, datos) {
         tipo: datos.get("tipo"),
         nombre: datos.get("solicitud_nombre").trim(),
         moneda: datos.get("moneda"),
-        vigencia_dias: Number(datos.get("vigencia_dias")),
         fecha_limite: limpiar(datos.get("fecha_limite")),
+        partida_critica: datos.get("partida_critica") === "true",
       },
     },
   );
@@ -313,6 +357,7 @@ async function subirDocumento(solicitudId, tipo, archivo) {
 
 async function registrarSolicitud(evento) {
   evento.preventDefault();
+  actualizarFechaInicio();
   ui.guardarSolicitud.disabled = true;
   mostrarResultado("Creando solicitud y subiendo documentos…");
   try {
@@ -330,7 +375,7 @@ async function registrarSolicitud(evento) {
     mostrarResultado("Guardando los proveedores…");
     await guardarProveedores(solicitudId, proveedores);
 
-    for (const tipo of ["itemizado", "plantilla_comparativo", "cuadro_procura"]) {
+    for (const tipo of ["itemizado", "plantilla_comparativo"]) {
       const archivo = datos.get(tipo);
       if (!(archivo instanceof File) || !archivo.size) {
         if (tipo === "itemizado") throw new Error("Falta el itemizado y metrados.");
@@ -348,8 +393,11 @@ async function registrarSolicitud(evento) {
     );
 
     mostrarResultado(`Solicitud ${solicitud.codigo} creada correctamente. Identificador: ${solicitudId}`, "exito");
+    cargarAvisosSeguimiento().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.formSolicitud.reset();
+    actualizarFechaInicio();
     ui.proyectoId.value = proyectoId;
+    mostrarProyectoSeleccionado();
     ui.guardarSolicitud.disabled = false;
     actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.proveedores.replaceChildren();
@@ -377,10 +425,19 @@ ui.agregarProveedor.addEventListener("click", agregarProveedor);
 ui.formProyecto.addEventListener("submit", registrarProyecto);
 ui.proyectoId.addEventListener("change", () => {
   ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+  mostrarProyectoSeleccionado();
   actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
+  cargarAvisosSeguimiento().catch((error) => mostrarResultado(mensajeError(error), "error"));
 });
 ui.tipoSolicitud.addEventListener("change", () => actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error")));
 ui.formSolicitud.addEventListener("submit", registrarSolicitud);
 
+function actualizarFechaInicio() {
+  const hoy = new Date();
+  ui.fechaInicio.value = hoy.toLocaleDateString("es-PE", { timeZone: "America/Lima" });
+  ui.fechaLimite.min = hoy.toLocaleDateString("en-CA", { timeZone: "America/Lima" });
+}
+
 agregarProveedor();
+actualizarFechaInicio();
 configurarNhost();

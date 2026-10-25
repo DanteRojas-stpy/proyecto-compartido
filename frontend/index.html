@@ -68,6 +68,14 @@
             <label>Selecciona el proyecto
               <select name="proyecto_id" id="proyecto-id" required></select>
             </label>
+            <div class="rejilla dos-columnas">
+              <label>Código del proyecto
+                <input id="proyecto-codigo" readonly />
+              </label>
+              <label>Nombre del proyecto
+                <input id="proyecto-nombre" readonly />
+              </label>
+            </div>
           </fieldset>
 
           <fieldset>
@@ -91,27 +99,30 @@
                   <option value="USD">Dólares (USD)</option>
                 </select>
               </label>
-              <label>Vigencia solicitada (días)
-                <input name="vigencia_dias" type="number" min="1" max="365" value="30" required />
+              <label>Fecha de inicio
+                <input id="fecha-inicio" readonly />
               </label>
-              <label>Fecha límite para recibir ofertas
-                <input name="fecha_limite" type="date" />
+              <label>Fecha fin para recibir ofertas
+                <input name="fecha_limite" id="fecha-limite" type="date" required />
+              </label>
+              <label>¿Partida crítica?
+                <select name="partida_critica" required>
+                  <option value="false">No — avisos cada 2 días</option>
+                  <option value="true">Sí — avisos diarios</option>
+                </select>
               </label>
             </div>
           </fieldset>
 
           <fieldset>
             <legend>Documentos de entrada</legend>
-            <p class="ayuda">Solo archivos Excel. Máximo 50 MB por archivo. Al proveedor solo se envía el itemizado y metrados; los demás archivos son insumos internos opcionales.</p>
+            <p class="ayuda">Solo archivos Excel. Máximo 50 MB por archivo. Al proveedor solo se envía el itemizado y metrados; la plantilla del comparativo es interna.</p>
             <div class="rejilla tres-columnas">
               <label>Itemizado y metrados
                 <input name="itemizado" type="file" accept=".xlsx,.xls" required />
               </label>
               <label>Plantilla interna del comparativo (opcional)
                 <input name="plantilla_comparativo" type="file" accept=".xlsx,.xls" />
-              </label>
-              <label>Matriz de procura interna (opcional)
-                <input name="cuadro_procura" type="file" accept=".xlsx,.xls" />
               </label>
             </div>
           </fieldset>
@@ -128,6 +139,11 @@
           <div id="resultado" class="resultado" aria-live="polite"></div>
           <button id="guardar-solicitud" type="submit">Crear solicitud</button>
         </form>
+        <section aria-labelledby="titulo-avisos">
+          <h2 id="titulo-avisos">Avisos de seguimiento</h2>
+          <p class="ayuda">Se muestran al abrir el proyecto: diarios para partidas críticas y cada 2 días para las demás.</p>
+          <ul id="avisos-seguimiento" aria-live="polite"></ul>
+        </section>
       </section>
     </main>
 

@@ -15,13 +15,24 @@ Ejecutar despues `003_envios_solicitud.sql` con **Track this** activado. Esta
 tabla registra a qué proveedor se envió cada solicitud, el identificador del
 mensaje de Gmail, los intentos y los errores.
 
-Ejecutar finalmente `004_proyectos_y_correlativos.sql` una sola vez. Agrega el
+Ejecutar `004_proyectos_y_correlativos.sql` una sola vez. Agrega el
 tipo `MA` (materiales) o `SC` (subcontrata) y asigna el número al insertar una
-solicitud. El correlativo es independiente por proyecto y tipo: `MA-001`,
-`MA-002`, o `SC-01`, `SC-02`. Los códigos existentes se conservan. El bloqueo
+solicitud. El correlativo es independiente por proyecto y tipo. Los códigos
+existentes se conservan. El bloqueo
 del proyecto evita que dos registros simultáneos reciban el mismo número.
-Después, actualiza los permisos de GraphQL con `scripts/configurar_nhost.py`
-y recarga la metadata para que aparezca la columna `tipo`.
+
+Ejecutar finalmente `005_fechas_y_partida_critica.sql`. La fecha de inicio se
+registra automáticamente en `created_at`; la fecha fin `fecha_limite` es
+obligatoria para solicitudes nuevas. `partida_critica` determina
+`frecuencia_aviso_dias`: 1 si es crítica y 2 en otro caso. Los códigos nuevos
+usan tres dígitos como mínimo (`MA-001`, `SC-001`). Los documentos de procura
+anteriores se conservan, pero el formulario ya no pide nuevos.
+
+Después de ambas migraciones, actualiza los permisos de GraphQL con
+`scripts/configurar_nhost.py` y recarga la metadata. El front muestra avisos
+al abrir un proyecto, tomando la fecha de creación como inicio: cada día para
+solicitudes críticas y cada 2 días para las demás. Los correos automáticos de
+seguimiento aún no forman parte de este flujo.
 
 El archivo de Supabase ubicado en `db/migraciones/` se conserva como referencia
 y no debe ejecutarse en Nhost.

@@ -28,8 +28,13 @@ la pantalla de CostFlow, usa **Crear cuenta** una vez o crea un usuario desde
 Primero registra el proyecto. Después selecciónalo para crear tantas solicitudes
 como necesites. El código sugerido se muestra en pantalla y PostgreSQL asigna
 el definitivo al guardar, con correlativos separados por proyecto y por tipo
-de cotización (`MA` para materiales y `SC` para subcontratas). Para ello deben
-estar aplicados `db/nhost/004_proyectos_y_correlativos.sql` y los permisos nuevos.
+de cotización (`MA` para materiales y `SC` para subcontratas), ambos con tres
+dígitos mínimos. La fecha de inicio se toma automáticamente al crear; el
+especialista selecciona la fecha fin y si la partida es crítica. Para ello
+deben estar aplicados `db/nhost/004_proyectos_y_correlativos.sql`,
+`db/nhost/005_fechas_y_partida_critica.sql` y los permisos nuevos.
+Al abrir un proyecto, el front muestra avisos de seguimiento para solicitudes
+activas: diarios para partidas críticas y cada 2 días para las demás.
 
 El formulario crea una solicitud en estado `borrador`, registra sus proveedores,
 sube los Excel al bucket `solicitudes` y cambia el estado a `lista` al

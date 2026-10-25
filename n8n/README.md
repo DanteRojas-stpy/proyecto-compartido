@@ -68,6 +68,10 @@ Por cada proveedor pendiente, n8n:
 4. Registra el identificador de Gmail en `envios_solicitud`.
 5. Cambia al proveedor a `invitado` y la solicitud a `en_proceso`.
 
+La versión del flujo en este repositorio ya omite la antigua vigencia en días
+del mensaje. Después de aplicar la migración 005, actualiza el flujo publicado
+en n8n y publica una nueva versión para que el correo use solo la fecha fin.
+
 La plantilla del comparativo y el cuadro de procura son insumos internos. La
 generación del comparativo consolidado y la identificación de partidas críticas
 corresponden a una etapa posterior; este flujo de envío aún no las realiza.
