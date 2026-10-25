@@ -39,7 +39,7 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 1. Importa `flujos/envio-solicitud-cotizacion.json` en n8n.
 2. Crea una credencial **Header Auth** llamada `CostFlow Webhook`, con un nombre
    de cabecera como `x-costflow-secret` y un valor aleatorio largo.
-3. Selecciona `Nhost Admin` en los cinco nodos HTTP y `CostFlow Webhook` en el
+3. Selecciona `Nhost Admin` en los tres nodos HTTP y `CostFlow Webhook` en el
    nodo `Evento de Nhost`.
 4. Conecta la cuenta de envío en una credencial **Gmail OAuth2** y selecciónala
    en `Enviar correo por Gmail`.
