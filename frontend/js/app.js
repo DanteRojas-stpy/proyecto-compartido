@@ -17,6 +17,7 @@ const ui = {
 };
 
 let nhost;
+const opcionesRolUsuario = { headers: { "x-hasura-role": "user" } };
 
 function mostrarResultado(mensaje, tipo = "") {
   ui.resultado.textContent = mensaje;
@@ -97,7 +98,7 @@ function mostrarSesion(session) {
 }
 
 async function graphql(query, variables = {}) {
-  const respuesta = await nhost.graphql.request({ query, variables });
+  const respuesta = await nhost.graphql.request({ query, variables }, opcionesRolUsuario);
   if (respuesta.body.errors?.length) {
     throw new Error(respuesta.body.errors.map((item) => item.message).join(". "));
   }
@@ -154,7 +155,13 @@ async function obtenerOCrearProyecto(datos) {
 async function crearSolicitud(proyectoId, datos) {
   const respuesta = await graphql(
     `mutation CrearSolicitud($objeto: solicitudes_cotizacion_insert_input!) {
-      insert_solicitudes_cotizacion_one(object: $objeto) { id }
+      insert_solicitudes_cotizacion_one(
+        object: $objeto
+        on_conflict: {
+          constraint: solicitudes_proyecto_codigo_unique
+          update_columns: [nombre, moneda, vigencia_dias, fecha_limite]
+        }
+      ) { id }
     }`,
     {
       objeto: {
@@ -201,7 +208,13 @@ async function guardarProveedores(solicitudId, proveedores) {
     const proveedorId = await guardarProveedor(proveedor);
     await graphql(
       `mutation VincularProveedor($objeto: solicitud_proveedores_insert_input!) {
-        insert_solicitud_proveedores_one(object: $objeto) { solicitud_id }
+        insert_solicitud_proveedores_one(
+          object: $objeto
+          on_conflict: {
+            constraint: solicitud_proveedores_pkey
+            update_columns: []
+          }
+        ) { solicitud_id }
       }`,
       { objeto: { solicitud_id: solicitudId, proveedor_id: proveedorId } },
     );
@@ -210,12 +223,23 @@ async function guardarProveedores(solicitudId, proveedores) {
 
 async function subirDocumento(solicitudId, tipo, archivo) {
   validarExcel(archivo, tipo);
+  const existente = await graphql(
+    `query BuscarDocumento($solicitudId: uuid!, $tipo: String!) {
+      documentos(
+        where: { solicitud_id: { _eq: $solicitudId }, tipo: { _eq: $tipo } }
+        limit: 1
+      ) { id }
+    }`,
+    { solicitudId, tipo },
+  );
+  if (existente.documentos.length) return;
+
   const nombre = `${solicitudId}-${tipo}-${Date.now()}-${nombreSeguro(archivo.name)}`;
   const carga = await nhost.storage.uploadFiles({
     "bucket-id": "solicitudes",
     "file[]": [archivo],
     "metadata[]": [{ name, metadata: { solicitudId, tipo } }],
-  });
+  }, opcionesRolUsuario);
   const archivoGuardado = carga.body.processedFiles[0];
   if (!archivoGuardado) throw new Error(`No se pudo almacenar el archivo ${tipo}.`);
 
@@ -236,7 +260,7 @@ async function subirDocumento(solicitudId, tipo, archivo) {
       },
     );
   } catch (error) {
-    await nhost.storage.deleteFile(archivoGuardado.id).catch(() => {});
+    await nhost.storage.deleteFile(archivoGuardado.id, opcionesRolUsuario).catch(() => {});
     throw error;
   }
 }
@@ -252,13 +276,17 @@ async function registrarSolicitud(evento) {
     const proveedores = leerProveedores();
     if (!proveedores.length) throw new Error("Agrega al menos un proveedor.");
 
+    mostrarResultado("Guardando el proyecto…");
     const proyectoId = await obtenerOCrearProyecto(datos);
+    mostrarResultado("Guardando la solicitud…");
     const solicitudId = await crearSolicitud(proyectoId, datos);
+    mostrarResultado("Guardando los proveedores…");
     await guardarProveedores(solicitudId, proveedores);
 
     for (const tipo of ["itemizado", "plantilla_comparativo", "cuadro_procura"]) {
       const archivo = datos.get(tipo);
       if (!(archivo instanceof File) || !archivo.size) throw new Error(`Falta el archivo ${tipo}.`);
+      mostrarResultado(`Subiendo el documento ${tipo.replaceAll("_", " ")}…`);
       await subirDocumento(solicitudId, tipo, archivo);
     }
 
