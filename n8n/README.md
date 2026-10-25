@@ -20,7 +20,7 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
-| `flujos/envio-solicitud-cotizacion.json` | Envía los tres Excel a cada proveedor, registra el mensaje y cambia la solicitud a `en_proceso` | Evento de Nhost cuando `estado` cambia a `lista` | Listo para configurar |
+| `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor, registra el mensaje y cambia la solicitud a `en_proceso` | Evento de Nhost cuando `estado` cambia a `lista` | Listo para configurar |
 
 ## Configurar el primer envío
 
@@ -63,7 +63,11 @@ El flujo ignora otros cambios y solo continúa cuando el estado nuevo es
 Por cada proveedor pendiente, n8n:
 
 1. Consulta la solicitud, proyecto, proveedor y documentos en Nhost.
-2. Descarga el itemizado, la plantilla del comparativo y el cuadro de procura.
-3. Envía un correo con los tres archivos adjuntos mediante Gmail.
+2. Descarga el itemizado y metrados.
+3. Envía un correo con ese único archivo adjunto mediante Gmail.
 4. Registra el identificador de Gmail en `envios_solicitud`.
 5. Cambia al proveedor a `invitado` y la solicitud a `en_proceso`.
+
+La plantilla del comparativo y el cuadro de procura son insumos internos. La
+generación del comparativo consolidado y la identificación de partidas críticas
+corresponden a una etapa posterior; este flujo de envío aún no las realiza.

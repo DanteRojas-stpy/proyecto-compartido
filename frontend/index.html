@@ -84,16 +84,16 @@
 
           <fieldset>
             <legend>Documentos de entrada</legend>
-            <p class="ayuda">Solo archivos Excel. Máximo 50 MB por archivo.</p>
+            <p class="ayuda">Solo archivos Excel. Máximo 50 MB por archivo. Al proveedor solo se envía el itemizado y metrados; los demás archivos son insumos internos opcionales.</p>
             <div class="rejilla tres-columnas">
               <label>Itemizado y metrados
                 <input name="itemizado" type="file" accept=".xlsx,.xls" required />
               </label>
-              <label>Plantilla del comparativo
-                <input name="plantilla_comparativo" type="file" accept=".xlsx,.xls" required />
+              <label>Plantilla interna del comparativo (opcional)
+                <input name="plantilla_comparativo" type="file" accept=".xlsx,.xls" />
               </label>
-              <label>Cuadro de procura
-                <input name="cuadro_procura" type="file" accept=".xlsx,.xls" required />
+              <label>Matriz de procura interna (opcional)
+                <input name="cuadro_procura" type="file" accept=".xlsx,.xls" />
               </label>
             </div>
           </fieldset>

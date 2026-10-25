@@ -285,7 +285,10 @@ async function registrarSolicitud(evento) {
 
     for (const tipo of ["itemizado", "plantilla_comparativo", "cuadro_procura"]) {
       const archivo = datos.get(tipo);
-      if (!(archivo instanceof File) || !archivo.size) throw new Error(`Falta el archivo ${tipo}.`);
+      if (!(archivo instanceof File) || !archivo.size) {
+        if (tipo === "itemizado") throw new Error("Falta el itemizado y metrados.");
+        continue;
+      }
       mostrarResultado(`Subiendo el documento ${tipo.replaceAll("_", " ")}…`);
       await subirDocumento(solicitudId, tipo, archivo);
     }
