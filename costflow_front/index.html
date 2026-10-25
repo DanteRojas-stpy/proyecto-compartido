@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CostFlow | Ahorra tiempo y toma la mejor decisión</title>
+  <meta name="description" content="CostFlow compara cotizaciones de obra y alerta cuáles priorizar. Plataforma inteligente para constructoras y contratistas.">
+  <link rel="icon" type="image/png" href="assets/logo-costflow.png">
+
+  <!-- Estilos del Sistema -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- ========================================================================
+       HEADER FIJO (Translúcido con blur, se reduce al hacer scroll)
+       ======================================================================== -->
+  <header class="site-header" id="main-header" role="banner">
+    <div class="container header-inner">
+      
+      <!-- Izquierda: Logo y Menú de Navegación -->
+      <div class="header-left">
+        <a href="#/inicio" class="header-logo-link" aria-label="CostFlow - Inicio">
+          <img src="assets/logo-costflow.png" alt="CostFlow Logo" class="header-logo-img">
+        </a>
+
+        <nav class="header-nav" aria-label="Navegación principal">
+          <!-- 1) Título Principal: COMPARA con Mega-menú desplegable -->
+          <div class="nav-main-item" id="nav-compara-item">
+            <button type="button" class="nav-main-btn" id="nav-compara-btn" aria-expanded="false" aria-haspopup="true">
+              <span>Compara</span>
+              <svg class="nav-chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
+
+            <!-- Mega-menú con "Edificaciones" y sus 7 subtítulos -->
+            <div class="compara-megamenu" id="compara-megamenu-panel">
+              <div class="megamenu-category-header">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+                  <path d="M9 22v-4h6v4"/>
+                  <path d="M8 6h.01"/><path d="M16 6h.01"/>
+                  <path d="M8 10h.01"/><path d="M16 10h.01"/>
+                </svg>
+                <span>Edificaciones</span>
+              </div>
+
+              <ul class="megamenu-links-list">
+                <li><a href="#/compara/edificaciones/obras-provisionales-preliminares" class="megamenu-link">Obras provisionales y preliminares</a></li>
+                <li><a href="#/compara/edificaciones/salud-seguridad" class="megamenu-link">Salud y seguridad</a></li>
+                <li><a href="#/compara/edificaciones/estructuras" class="megamenu-link">Estructuras</a></li>
+                <li><a href="#/compara/edificaciones/arquitectura" class="megamenu-link">Arquitectura</a></li>
+                <li><a href="#/compara/edificaciones/instalaciones-sanitarias" class="megamenu-link">Instalaciones sanitarias</a></li>
+                <li><a href="#/compara/edificaciones/instalaciones-electricas-mecanicas" class="megamenu-link">Instalaciones eléctricas y mecánicas</a></li>
+                <li><a href="#/compara/edificaciones/otros" class="megamenu-link">Otros</a></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 2) Título Principal: VIGILA (enlace directo a la vista Vigila) -->
+          <div class="nav-main-item">
+            <a href="#/vigila" class="nav-main-btn" id="nav-vigila-link">
+              <span>Vigila</span>
+            </a>
+          </div>
+        </nav>
+      </div>
+
+      <!-- Derecha: Botón Regístrate (Amarillo) -->
+      <div class="header-right">
+        <button type="button" class="btn btn-yellow btn-sm" id="btn-open-register" aria-haspopup="dialog">
+          Regístrate
+        </button>
+
+        <!-- Botón Hamburguesa en Móvil -->
+        <button type="button" class="mobile-hamburger-btn" id="mobile-toggle-btn" aria-label="Abrir menú de navegación móvil">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <line x1="3" y1="12" x2="21" y2="12"/>
+            <line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ========================================================================
+       PANEL MÓVIL (Hamburguesa con Acordeón)
+       ======================================================================== -->
+  <div class="mobile-drawer-overlay" id="mobile-drawer-overlay"></div>
+  <aside class="mobile-drawer" id="mobile-drawer" aria-label="Menú móvil">
+    <div class="mobile-drawer-top">
+      <img src="assets/logo-costflow.png" alt="CostFlow" style="height: 36px;">
+      <button type="button" class="mobile-drawer-close" id="mobile-drawer-close" aria-label="Cerrar menú">&times;</button>
+    </div>
+
+    <div class="mobile-nav-accordion">
+      <!-- Acordeón Compara -> Edificaciones -->
+      <div>
+        <button type="button" class="mobile-acc-header" id="mobile-compara-acc-btn">
+          <span>Compara (Edificaciones)</span>
+          <svg class="acc-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="transition: transform 0.25s;">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="mobile-acc-content" id="mobile-compara-acc-content">
+          <a href="#/compara/edificaciones/obras-provisionales-preliminares" class="mobile-sub-link">Obras provisionales y preliminares</a>
+          <a href="#/compara/edificaciones/salud-seguridad" class="mobile-sub-link">Salud y seguridad</a>
+          <a href="#/compara/edificaciones/estructuras" class="mobile-sub-link">Estructuras</a>
+          <a href="#/compara/edificaciones/arquitectura" class="mobile-sub-link">Arquitectura</a>
+          <a href="#/compara/edificaciones/instalaciones-sanitarias" class="mobile-sub-link">Instalaciones sanitarias</a>
+          <a href="#/compara/edificaciones/instalaciones-electricas-mecanicas" class="mobile-sub-link">Instalaciones eléctricas y mecánicas</a>
+          <a href="#/compara/edificaciones/otros" class="mobile-sub-link">Otros</a>
+        </div>
+      </div>
+
+      <!-- Enlace directo Vigila -->
+      <a href="#/vigila" class="mobile-acc-header mobile-direct-link">
+        <span>Vigila</span>
+        <span style="color:var(--color-cyan); font-weight:800;">&rarr;</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ========================================================================
+       CONTENEDOR 1: PÁGINA DE INICIO (#/inicio)
+       ======================================================================== -->
+  <div id="home-view-container">
+
+    <!-- A) HERO (A pantalla completa con fondo de cotización realista + degradado y parallax) -->
+    <section class="hero-wrapper" id="hero-section">
+      
+      <!-- Fondo: Cotización de Obra Realista HTML/CSS/SVG con Parallax -->
+      <div class="hero-quote-background" id="hero-quote-bg" aria-hidden="true">
+        <div class="quote-sheet-document">
+          <div class="quote-doc-header">
+            <div>
+              <div class="quote-doc-title">COTIZACIÓN DE OBRA N° 0045-2026</div>
+              <div class="quote-doc-meta">PROYECTO: RESIDENCIAL LAS TERRAZAS · CLIENTE: CONSTRUCTORA DEL VALLE</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="quote-doc-meta">FECHA: 24/10/2026</div>
+              <div class="quote-doc-meta">MONEDA: SOLES (S/)</div>
+            </div>
+          </div>
+
+          <table class="quote-doc-table">
+            <thead>
+              <tr>
+                <th>ITEM</th>
+                <th>DESCRIPCIÓN DE LA PARTIDA</th>
+                <th>UND</th>
+                <th>METRADO</th>
+                <th style="text-align:right;">P. UNIT (S/)</th>
+                <th style="text-align:right;">TOTAL (S/)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>01.01</td>
+                <td>Excavación de zanjas para cimientos corridos con maquinaria</td>
+                <td>m³</td>
+                <td>450.00</td>
+                <td class="col-num">38.50</td>
+                <td class="col-num">17,325.00</td>
+              </tr>
+              <tr>
+                <td>01.02</td>
+                <td>Concreto premezclado f'c=210 kg/cm² en zapatas y vigas</td>
+                <td>m³</td>
+                <td>180.00</td>
+                <td class="col-num">365.00</td>
+                <td class="col-num">65,700.00</td>
+              </tr>
+              <tr>
+                <td>01.03</td>
+                <td>Acero corrugado fy=4200 kg/cm² grado 60 habilitado y colocado</td>
+                <td>kg</td>
+                <td>4,200.00</td>
+                <td class="col-num">4.85</td>
+                <td class="col-num">20,370.00</td>
+              </tr>
+              <tr>
+                <td>01.04</td>
+                <td>Muros de albañilería con ladrillo King Kong de arcilla</td>
+                <td>m²</td>
+                <td>210.00</td>
+                <td class="col-num">42.00</td>
+                <td class="col-num">8,820.00</td>
+              </tr>
+              <tr>
+                <td>01.05</td>
+                <td>Instalaciones sanitarias: Red de desagüe PVC 4" y ventilación</td>
+                <td>pto</td>
+                <td>32.00</td>
+                <td class="col-num">196.40</td>
+                <td class="col-num">6,285.00</td>
+              </tr>
+              <tr class="quote-doc-total-row">
+                <td colspan="4"></td>
+                <td style="text-align:right;">TOTAL COTIZADO:</td>
+                <td class="col-num" style="color:#0B2F63; font-size:1.05rem;">S/ 118,500.00</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="quote-doc-stamp">REVISADO & HOMOLOGADO</div>
+            <div class="quote-doc-meta">PLAZO DE EJECUCIÓN: 14 SEMANAS CALENDARIO</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Degradado Semitransparente Azul Marino -->
+      <div class="hero-gradient-overlay" aria-hidden="true"></div>
+
+      <!-- Contenido Textual del Hero -->
+      <div class="container hero-content">
+        <h1 class="hero-main-title">
+          Ahorra tiempo y toma la <span class="hero-underline-subtle">mejor decisión</span> con <span class="hero-word-cyan">CostFlow</span>
+        </h1>
+
+        <p class="hero-subtext">
+          La solución inteligente que automatiza el análisis de cotizaciones de construcción y resalta de forma transparente cuál propuesta optimiza tus costos, tiempos y garantías.
+        </p>
+
+        <a href="#/compara/edificaciones/estructuras" class="btn btn-yellow btn-lg hero-cta-btn">
+          Comienza ahora
+        </a>
+
+        <div>
+          <a href="#seccion-compara" class="hero-scroll-indicator" aria-label="Deslizar hacia abajo para ver más">
+            <span>Desliza hacia abajo</span>
+            <svg class="scroll-arrow-anim" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 5v14M19 12l-7 7-7-7"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- B) SECCIÓN 1: COMPARA (Texto a la IZQUIERDA, Imagen a la DERECHA con Balanza Interactiva) -->
+    <section class="home-section bg-white" id="seccion-compara">
+      <div class="container home-split-grid">
+        
+        <!-- Columna Texto Izquierda -->
+        <div class="animate-fade-up">
+          <span class="eyebrow-cyan">COMPARA</span>
+          <h2 class="section-heading-h2">Compara tus cotizaciones con tan solo unos clicks</h2>
+          <p class="section-desc-p">
+            Centraliza los presupuestos de múltiples contratistas y descubre en segundos las variaciones reales en precios unitarios, plazos de entrega y garantías de obra.
+          </p>
+          <a href="#/compara/edificaciones/estructuras" class="inline-link-action">
+            <span>Ir a Compara</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </a>
+        </div>
+
+        <!-- Columna Imagen Derecha: Balanza Interactiva -->
+        <div class="interactive-scale-card animate-fade-up" id="interactive-scale-card" title="Pasa el cursor o toca para ver la comparación">
+          
+          <!-- Estado Inicial: Balanza Desequilibrada con 3 hojas flotantes -->
+          <div class="scale-initial-view">
+            <!-- Hojas flotantes alrededor -->
+            <div class="floating-quote-sheet sheet-a">
+              <span>Proveedor A</span>
+              <span style="color:#1B5FC1;">S/ 118,500</span>
+            </div>
+            <div class="floating-quote-sheet sheet-b">
+              <span>Proveedor B</span>
+              <span style="color:#0B2F63;">S/ 119,800</span>
+            </div>
+            <div class="floating-quote-sheet sheet-c">
+              <span>Proveedor C</span>
+              <span style="color:#EF4444;">S/ 124,300</span>
+            </div>
+
+            <!-- Ilustración SVG Plano de la Balanza en Paleta CostFlow -->
+            <svg class="scale-svg-box" viewBox="0 0 360 220" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Base y Soporte Central -->
+              <path d="M180 20V190" stroke="#0B2F63" stroke-width="8" stroke-linecap="round"/>
+              <path d="M130 190H230" stroke="#0B2F63" stroke-width="8" stroke-linecap="round"/>
+              <circle cx="180" cy="30" r="10" fill="#12B5D6"/>
+              
+              <!-- Brazo Desequilibrado (inclinado a favor del menor costo) -->
+              <g transform="rotate(-9 180 30)">
+                <line x1="50" y1="30" x2="310" y2="30" stroke="#1B5FC1" stroke-width="6" stroke-linecap="round"/>
+                
+                <!-- Plato Izquierdo -->
+                <line x1="70" y1="30" x2="50" y2="90" stroke="#12B5D6" stroke-width="2.5"/>
+                <line x1="70" y1="30" x2="90" y2="90" stroke="#12B5D6" stroke-width="2.5"/>
+                <path d="M40 90C40 106 100 106 100 90H40Z" fill="#12B5D6" opacity="0.85"/>
+                
+                <!-- Plato Derecho (más bajo) -->
+                <line x1="290" y1="30" x2="270" y2="105" stroke="#12B5D6" stroke-width="2.5"/>
+                <line x1="290" y1="30" x2="310" y2="105" stroke="#12B5D6" stroke-width="2.5"/>
+                <path d="M260 105C260 121 320 121 320 105H260Z" fill="#1B5FC1" opacity="0.9"/>
+              </g>
+            </svg>
+            <div style="font-size:0.8rem; color:var(--color-gray-400); margin-top:8px;">Pasa el cursor para ver la comparativa instantánea</div>
+          </div>
+
+          <!-- Estado Activo: Cuadro Comparativo Animado -->
+          <div class="scale-compared-view">
+            <div class="scale-matrix-title">
+              <h4>Cuadro Comparativo de Cotizaciones</h4>
+              <span style="font-size:0.75rem; font-weight:800; color:var(--color-cyan); background:#E6F8FB; padding:3px 8px; border-radius:12px;">3 Proveedores</span>
+            </div>
+
+            <table class="compared-table">
+              <thead>
+                <tr>
+                  <th>Concepto</th>
+                  <th class="col-highlight-winner">Proveedor A ⭐</th>
+                  <th>Proveedor B</th>
+                  <th>Proveedor C</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Precio total</td>
+                  <td class="col-highlight-winner">S/ 118,500</td>
+                  <td>S/ 119,800</td>
+                  <td>S/ 124,300</td>
+                </tr>
+                <tr>
+                  <td>Plazo de entrega</td>
+                  <td class="col-highlight-winner">14 semanas</td>
+                  <td>12 semanas</td>
+                  <td>16 semanas</td>
+                </tr>
+                <tr>
+                  <td>Garantía técnica</td>
+                  <td class="col-highlight-winner">24 meses</td>
+                  <td>18 meses</td>
+                  <td>12 meses</td>
+                </tr>
+                <tr>
+                  <td>Score CostFlow</td>
+                  <td class="col-highlight-winner" style="color:var(--color-navy); font-weight:800;">94 / 100</td>
+                  <td>88 / 100</td>
+                  <td>79 / 100</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- C) SECCIÓN 2: VIGILA (Imagen a la IZQUIERDA, Texto a la DERECHA con Lupa Interactiva) -->
+    <section class="home-section bg-light" id="seccion-vigila">
+      <div class="container home-split-grid reverse">
+        
+        <!-- Columna Imagen Izquierda: Lupa Interactiva sobre pila de cotizaciones -->
+        <div class="interactive-lupa-card animate-fade-up" id="interactive-lupa-card" title="Mueve el cursor sobre las cotizaciones">
+          
+          <div class="quotes-stack-container">
+            <!-- Cotización 1 -->
+            <div class="stack-quote-item stack-quote-1">
+              <div style="font-size:0.78rem; font-weight:700; color:var(--color-navy);">Cotización A · S/ 118,500</div>
+              <div style="font-size:0.7rem; color:var(--color-gray-400);">Plazo: 14 semanas</div>
+            </div>
+
+            <!-- Cotización 2 (Priorizada con halo) -->
+            <div class="stack-quote-item stack-quote-2">
+              <div style="font-size:0.78rem; font-weight:800; color:var(--color-navy);">Cotización B · S/ 119,800</div>
+              <div style="font-size:0.7rem; color:var(--color-royal);">⭐ Recomendación activa</div>
+            </div>
+
+            <!-- Cotización 3 -->
+            <div class="stack-quote-item stack-quote-3">
+              <div style="font-size:0.78rem; font-weight:700; color:var(--color-navy);">Cotización C · S/ 124,300</div>
+              <div style="font-size:0.7rem; color:var(--color-gray-400);">Plazo: 16 semanas</div>
+            </div>
+          </div>
+
+          <!-- Lupa SVG que sigue el cursor suavemente -->
+          <div class="floating-lupa-tracker" id="lupa-tracker" style="left:48%; top:48%;">
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="42" cy="42" r="30" stroke="#12B5D6" stroke-width="8" fill="rgba(18, 181, 214, 0.15)"/>
+              <path d="M64 64L90 90" stroke="#0B2F63" stroke-width="10" stroke-linecap="round"/>
+              <circle cx="42" cy="42" r="24" stroke="rgba(255, 194, 26, 0.5)" stroke-width="2"/>
+            </svg>
+          </div>
+
+          <!-- Notificación Emergente: "Prioriza esta cotización" -->
+          <div class="lupa-popup-notification" id="lupa-popup-notification">
+            <div class="notif-bell-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+            </div>
+            <div>
+              <div class="notif-title">Prioriza esta cotización</div>
+              <div class="notif-detail">Proveedor B · vence en 2 días · 6% menos que el promedio</div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Columna Texto Derecha -->
+        <div class="animate-fade-up">
+          <span class="eyebrow-cyan">VIGILA</span>
+          <h2 class="section-heading-h2">Recibe alertas de cuáles son las cotizaciones que debes priorizar</h2>
+          <p class="section-desc-p">
+            CostFlow audita continuamente tus cuadros de procura, detectando vencimientos inminentes, cotizaciones desbalanceadas y la propuesta más ventajosa para adjudicar.
+          </p>
+          <a href="#/vigila" class="inline-link-action">
+            <span>Ir a Vigila</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </a>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- D) CIERRE DE LA PÁGINA (Mascota Grande Centrada + Franja Sólida Azul Marino #0B2F63) -->
+    <section class="mascot-closing-block" aria-label="Mascota de CostFlow">
+      <div class="container">
+        <!-- Mascota grande, centrada, con animación suave de flotación -->
+        <div class="mascot-image-wrapper">
+          <img src="assets/mascota-buho.png" alt="Búho vigilante de CostFlow con escudo de protección" class="mascot-image-el">
+        </div>
+        <p class="mascot-message-text">Tu búho vigilante de cotizaciones</p>
+      </div>
+    </section>
+
+    <!-- Franja Sólida Azul Marino a Todo el Ancho -->
+    <footer class="site-footer-solid" role="contentinfo">
+      <div class="container">
+        <div class="footer-social-row">
+          <!-- LinkedIn -->
+          <a href="https://www.linkedin.com/company/costflow" target="_blank" rel="noopener noreferrer" class="footer-contact-link" aria-label="LinkedIn de CostFlow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/>
+              <rect x="2" y="9" width="4" height="12"/>
+              <circle cx="4" cy="4" r="2"/>
+            </svg>
+            <span>LinkedIn</span>
+          </a>
+
+          <!-- Teléfono / WhatsApp -->
+          <a href="https://wa.me/51000000000?text=Hola%20CostFlow" target="_blank" rel="noopener noreferrer" class="footer-contact-link" aria-label="WhatsApp y Teléfono de CostFlow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+            </svg>
+            <span>+51 000 000 000</span>
+          </a>
+
+          <!-- Correo -->
+          <a href="mailto:contacto@costflow.com?subject=Consulta%20sobre%20CostFlow" class="footer-contact-link" aria-label="Enviar correo a CostFlow">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="2" y="4" width="20" height="16" rx="2"/>
+              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+            </svg>
+            <span>contacto@costflow.com</span>
+          </a>
+        </div>
+
+        <div class="footer-bottom-line">
+          © 2026 CostFlow. Todos los derechos reservados.
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- ========================================================================
+       CONTENEDOR 2: VISTAS INTERNAS (Compara 7 subtítulos & Vigila)
+       ======================================================================== -->
+  <main class="internal-view-section" id="internal-view-container" style="display:none;" role="main">
+    <div class="container">
+      
+      <!-- Migas de Pan (Breadcrumbs) -->
+      <nav class="breadcrumbs-nav" id="view-breadcrumbs" aria-label="Migas de pan"></nav>
+
+      <!-- Cabecera de la Vista -->
+      <header class="view-header">
+        <h1 class="view-header-title" id="view-title">Título de la Vista</h1>
+        <p class="view-header-desc" id="view-desc">Descripción de la vista.</p>
+      </header>
+
+      <!-- Espacio donde se monta el Componente Único Reutilizable de Carga -->
+      <section id="reusable-uploader-mount" aria-label="Área de carga de archivos"></section>
+
+    </div>
+  </main>
+
+  <!-- ========================================================================
+       MODAL REGÍSTRATE (Accesible: focus trap, aria-modal, ESC)
+       ======================================================================== -->
+  <div class="register-modal-overlay" id="register-modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-register-heading">
+    <div class="register-modal-card">
+      <button type="button" class="modal-close-trigger" id="modal-close-trigger" aria-label="Cerrar modal">&times;</button>
+      
+      <h3 class="modal-heading-h3" id="modal-register-heading">Crea tu cuenta en CostFlow</h3>
+      <p class="modal-subtext-p">Comienza a comparar cotizaciones de obra y prioriza las mejores decisiones técnicas.</p>
+
+      <form class="register-form" id="register-modal-form" novalidate>
+        <div class="form-field-group">
+          <label class="form-label-txt" for="register-email-input">Correo electrónico corporativo</label>
+          <input type="email" id="register-email-input" class="form-input-txt" placeholder="tu.nombre@constructora.com" required autocomplete="email">
+          <div class="form-feedback-msg" id="register-feedback-msg" role="status"></div>
+        </div>
+
+        <button type="submit" class="btn btn-yellow btn-lg" style="width:100%; margin-top:8px;">
+          Crear cuenta
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/data.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
