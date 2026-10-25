@@ -281,7 +281,19 @@ async function guardarProveedor(proveedor) {
       }`,
       { where },
     );
-    if (busqueda.proveedores[0]) return busqueda.proveedores[0].id;
+    const existente = busqueda.proveedores[0];
+    if (existente) {
+      const actualizacion = await graphql(
+        `mutation ActualizarProveedor($id: uuid!, $cambios: proveedores_set_input!) {
+          update_proveedores_by_pk(pk_columns: { id: $id }, _set: $cambios) { id }
+        }`,
+        { id: existente.id, cambios: proveedor },
+      );
+      if (!actualizacion.update_proveedores_by_pk) {
+        throw new Error("No se pudo actualizar el proveedor existente.");
+      }
+      return actualizacion.update_proveedores_by_pk.id;
+    }
   }
 
   const respuesta = await graphql(
