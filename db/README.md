@@ -25,3 +25,5 @@ Aquí vive la forma de los datos guardados: tablas, estados y trazabilidad.
   relacional; los permisos GraphQL y Storage se configuran después en Nhost.
 - `nhost/002_documentos_por_proveedor.sql`: vincula las cotizaciones y anexos
   con un proveedor concreto dentro de una solicitud y conserva sus versiones.
+- `nhost/003_envios_solicitud.sql`: registra el envío de la solicitud a cada
+  proveedor para evitar duplicados y permitir el seguimiento por correo.

@@ -11,6 +11,10 @@ Ejecutar despues `002_documentos_por_proveedor.sql`. Esta segunda migracion
 distingue los documentos generales de la solicitud de las cotizaciones y
 anexos pertenecientes a cada proveedor, incluyendo version y estado.
 
+Ejecutar finalmente `003_envios_solicitud.sql` con **Track this** activado. Esta
+tabla registra a qué proveedor se envió cada solicitud, el identificador del
+mensaje de Gmail, los intentos y los errores.
+
 El archivo de Supabase ubicado en `db/migraciones/` se conserva como referencia
 y no debe ejecutarse en Nhost.
 
