@@ -16,7 +16,7 @@
       "position": [0, 0],
       "webhookId": "cotizacion-subida",
       "credentials": {
-        "httpHeaderAuth": { "id": "PENDIENTE", "name": "CostFlow Webhook" }
+        "httpHeaderAuth": { "id": "REEMPLAZAR_credencial_webhook", "name": "CostFlow Webhook" }
       }
     },
     {
@@ -46,7 +46,7 @@
       "typeVersion": 4.2,
       "position": [440, 0],
       "credentials": {
-        "httpHeaderAuth": { "id": "PENDIENTE", "name": "Nhost Admin" }
+        "httpHeaderAuth": { "id": "REEMPLAZAR_credencial_nhost", "name": "Nhost Admin" }
       }
     },
     {
@@ -83,7 +83,7 @@
       "typeVersion": 4.2,
       "position": [880, 0],
       "credentials": {
-        "httpHeaderAuth": { "id": "PENDIENTE", "name": "Anthropic API" }
+        "httpHeaderAuth": { "id": "REEMPLAZAR_credencial_anthropic", "name": "Anthropic API" }
       }
     },
     {
