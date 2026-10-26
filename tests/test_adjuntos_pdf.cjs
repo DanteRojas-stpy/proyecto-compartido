@@ -22,7 +22,7 @@ test('prepara todos los PDF y conserva sus bytes, sin incluir imágenes ni Excel
   assert.deepEqual(leidos, ['adjunto_0', 'adjunto_1']);
   for (const item of salida) {
     assert.deepEqual(Buffer.from(item.binary.pdf.data, 'base64'), pdf);
-    assert.equal(item.json.storage_bucket, 'solicitudes');
+    assert.equal(item.json.storage_bucket, 'cotizaciones');
     assert.equal(item.json.tamano_bytes, pdf.length);
     assert.equal(item.json.metadata_storage.metadata.proveedor_id, 'proveedor-1');
     assert.equal(item.json.metadata_storage.metadata.solicitud_id, 'solicitud-1');
@@ -75,7 +75,7 @@ test('404 permite cargar, 200 omite duplicados y errores de acceso detienen el f
 
 test('solo confirma una subida completa del archivo esperado en el bucket correcto', async () => {
   const adjunto = (await prepararPdfs([correo({ adjunto_0: archivo() })], [deteccion()], async () => pdf))[0].json;
-  const respuesta = { processedFiles: [{ id: adjunto.storage_file_id, bucketId: 'solicitudes', isUploaded: true, size: pdf.length, name: adjunto.nombre_archivo }] };
+  const respuesta = { processedFiles: [{ id: adjunto.storage_file_id, bucketId: 'cotizaciones', isUploaded: true, size: pdf.length, name: adjunto.nombre_archivo }] };
   assert.equal(confirmarGuardado(respuesta, adjunto).estado_adjunto, 'guardado');
   for (const cambios of [{ id: 'otro' }, { bucketId: 'otro' }, { isUploaded: false }, { size: 0 }]) {
     assert.throws(() => confirmarGuardado({ processedFiles: [{ ...respuesta.processedFiles[0], ...cambios }] }, adjunto), /no corresponde/);
@@ -97,12 +97,13 @@ test('el JSON ejecuta la preparación y recupera los binarios después de compro
   assert.equal(pendientes[0].binary.pdf.data, pdf.toString('base64'));
   const p = pendientes[0].json;
   const resultado = await ejecutar('PDF guardado y vinculado', [{ json: { processedFiles: [{
-    id: p.storage_file_id, bucketId: 'solicitudes', isUploaded: true, size: pdf.length, name: p.nombre_archivo,
+    id: p.storage_file_id, bucketId: 'cotizaciones', isUploaded: true, size: pdf.length, name: p.nombre_archivo,
   }] } }], { '¿Se debe subir el PDF?': pendientes });
   assert.equal(resultado[0].json.estado_adjunto, 'guardado');
   assert.equal(resultado[0].json.proveedor_id, deteccion().proveedor_id);
   const subida = flujo.nodes.find(n => n.name === 'Guardar PDF en Nhost Storage');
   assert.equal(subida.parameters.contentType, 'multipart-form-data');
+  assert.equal(subida.parameters.bodyParameters.parameters.find(p => p.name === 'bucket-id').value, 'cotizaciones');
   assert.deepEqual(subida.parameters.bodyParameters.parameters.find(p => p.parameterType === 'formBinaryData'),
     { parameterType: 'formBinaryData', name: 'file[]', inputDataFieldName: 'pdf' });
   assert.equal(flujo.connections['¿Hay un PDF válido?'].main[1][0].node, 'Respuesta sin PDF o archivo rechazado');

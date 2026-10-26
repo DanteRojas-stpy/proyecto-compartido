@@ -128,7 +128,7 @@ return await prepararPdfs(items, detecciones,
             'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
             'sendBody': True, 'contentType': 'multipart-form-data',
             'bodyParameters': {'parameters': [
-                {'parameterType': 'formData', 'name': 'bucket-id', 'value': 'solicitudes'},
+                {'parameterType': 'formData', 'name': 'bucket-id', 'value': 'cotizaciones'},
                 {'parameterType': 'formData', 'name': 'metadata[]', 'value': '={{ JSON.stringify($json.metadata_storage) }}'},
                 {'parameterType': 'formBinaryData', 'name': 'file[]', 'inputDataFieldName': 'pdf'},
             ]}, 'options': {'timeout': 120000},
@@ -141,7 +141,7 @@ return await prepararPdfs(items, detecciones,
         nodo('Respuesta sin PDF o archivo rechazado', 'noOp', 1, [2880, 100], {}),
         nodo('Revisar conversación manualmente', 'noOp', 1, [1680, 160], {}),
         nodo('Cómo conectar este flujo', 'stickyNote', 1, [0, -320], {
-            'content': '## Respuestas y PDF de proveedores\n1. Selecciona el MISMO Gmail del envío en los tres nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los cuatro nodos HTTP.\n3. Bucket: solicitudes. Guarda TODOS los PDF adjuntos de respuestas identificadas.\n4. Prueba una respuesta con PDF; después publica/activa.\n\nLos archivos incluyen metadatos de solicitud, proveedor y correo. Evita volver a subir el mismo adjunto. No envía correos ni decide si una cotización es final.',
+            'content': '## Respuestas y PDF de proveedores\n1. Selecciona el MISMO Gmail del envío en los tres nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los cuatro nodos HTTP.\n3. Bucket: cotizaciones. Guarda TODOS los PDF adjuntos de respuestas identificadas.\n4. Prueba una respuesta con PDF; después publica/activa.\n\nLos archivos incluyen metadatos de solicitud, proveedor y correo. Evita volver a subir el mismo adjunto. No envía correos ni decide si una cotización es final.',
             'height': 280, 'width': 750,
         }),
     ]

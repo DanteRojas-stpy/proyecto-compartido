@@ -4,7 +4,7 @@ El flujo `flujos/detectar-respuestas-proveedores.json` lee los correos nuevos
 de la cuenta que envía las solicitudes. Cada minuto revisa mensajes leídos y
 no leídos, sin marcar ninguno como leído ni enviar correos. Al identificar la
 solicitud, descarga todos los PDF adjuntos de esa respuesta y los guarda en
-el bucket `solicitudes` de Nhost Storage.
+el bucket `cotizaciones` de Nhost Storage.
 
 ## Conexión en n8n
 
@@ -21,7 +21,7 @@ el bucket `solicitudes` de Nhost Storage.
    No pegues ese secreto dentro del JSON.
 4. Las direcciones HTTP apuntan al proyecto Nhost de CostFlow: dos usan
    GraphQL y dos usan Storage. Si usas otro proyecto, cambia esos cuatro
-   nodos. El bucket `solicitudes` debe existir y permitir PDF del tamaño recibido.
+   nodos. El bucket `cotizaciones` debe existir y permitir PDF del tamaño recibido.
 5. Prueba como se indica abajo. Después publica/activa el flujo y mantén n8n
    encendido para la revisión de cada minuto.
 
@@ -48,7 +48,7 @@ Hasta conectar ese registro, el especialista debe actualizarlo en su proceso
 de seguimiento para que una respuesta recibida no se cuente como ausente.
 
 El identificador del archivo se calcula de forma reproducible a partir de la
-solicitud, proveedor, correo y posición del adjunto. Antes de subirlo, el flujo
+bucket, solicitud, proveedor, correo y posición del adjunto. Antes de subirlo, el flujo
 consulta Storage con HEAD. Un archivo existente con tamaño, tipo y ETag válidos
 sale por **PDF ya guardado anteriormente**. Uno inexistente se sube con ese
 mismo identificador. Un reintento no crea otra copia del mismo adjunto; una
@@ -103,7 +103,7 @@ desde n8n; no se convierte en una detección correcta ni en una lista vacía.
 3. En el disparador de Gmail, **Fetch Test Event** toma el correo más reciente
    que cumpla los filtros. Ejecuta el resto del flujo. Comprueba que salga en
    **PDF guardado y vinculado** con la solicitud correcta. Verifica los archivos
-   y sus metadatos en Nhost > Storage > solicitudes.
+   y sus metadatos en Nhost > Storage > cotizaciones.
 4. Haz otra solicitud al mismo proveedor y responde a su segundo correo.
    Comprueba que la detección conserve la diferencia entre ambas solicitudes.
 5. Envía, desde esa misma dirección, un correo nuevo sin responder a la

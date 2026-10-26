@@ -42,7 +42,7 @@ async function prepararPdfs(items, detecciones, leerBinario) {
         continue;
       }
       const id = idArchivoEstable(JSON.stringify([
-        'costflow-pdf-v1', deteccion.solicitud_id, deteccion.proveedor_id,
+        'costflow-pdf-v1', 'cotizaciones', deteccion.solicitud_id, deteccion.proveedor_id,
         deteccion.gmail_message_id, clave, nombreOriginal,
       ]));
       const nombre = nombrePdf(`${deteccion.solicitud ?? 'solicitud'}-${deteccion.proveedor ?? 'proveedor'}-${nombreOriginal}`);
@@ -53,7 +53,7 @@ async function prepararPdfs(items, detecciones, leerBinario) {
         nombre_original: nombreOriginal, origen: 'gmail', tipo: 'adjunto_pdf_proveedor',
       };
       salida.push({ json: { ...deteccion, estado_adjunto: 'pendiente',
-        storage_file_id: id, storage_bucket: 'solicitudes', nombre_original: nombreOriginal,
+        storage_file_id: id, storage_bucket: 'cotizaciones', nombre_original: nombreOriginal,
         nombre_archivo: nombre, tamano_bytes: buffer.length,
         metadata_storage: { id, name: nombre, metadata },
       }, binary: { pdf: { ...archivo, fileName: nombre, mimeType: 'application/pdf' } },
@@ -89,7 +89,7 @@ function confirmarGuardado(respuesta, adjunto) {
     throw new Error('Nhost Storage no confirmó la carga del PDF.');
   }
   const archivo = archivos[0];
-  if (archivo.id !== adjunto.storage_file_id || archivo.bucketId !== 'solicitudes'
+  if (archivo.id !== adjunto.storage_file_id || archivo.bucketId !== 'cotizaciones'
       || archivo.isUploaded !== true || Number(archivo.size) !== adjunto.tamano_bytes) {
     throw new Error('La confirmación de Nhost no corresponde al PDF enviado.');
   }
