@@ -126,6 +126,29 @@ en Storage sí genera sus propios registros internos de archivos en Nhost.
 
 ## Mantenimiento y pruebas
 
+### Paso de datos a E3.1
+
+Cuando ya esté instalado E3.1, la llamada `Registrar cotización (E3.1)` debe
+ejecutarse una vez con todos los archivos y esperar su resultado. E3.1 acepta
+todos los campos del detector. Una ejecución manual de E3.1 sin esos datos
+debe mostrar un error de entrada, en lugar de terminar como correcta con cero
+archivos. La ejecución del detector y la prueba manual independiente tienen
+historias distintas en n8n; abrir E3.1 no recupera automáticamente resultados
+de ejecuciones anteriores.
+
+Para corregir una exportación existente conservando credenciales y otros nodos:
+
+```powershell
+.venv\Scripts\python.exe scripts\asegurar_entrada_e31.py detector detector-exportado.json detector-corregido.json
+.venv\Scripts\python.exe scripts\asegurar_entrada_e31.py recepcion e31-exportado.json e31-corregido.json
+```
+
+El ajuste de E3.1 también diferencia la recepción guardada de la lectura:
+si E3.2 no está publicado o configurado, conserva `version_id` y muestra
+`estado_recepcion: registrado` y `estado_lectura: pendiente`, con el motivo.
+La lectura con IA queda pendiente de configurar; no se crean credenciales ni
+se envían avisos automáticamente durante esta corrección.
+
 Las reglas de identificación viven en `app/correo/deteccion.js` y las de
 adjuntos en `app/recepcion/adjuntos.js`. El generador las incluye dentro de los nodos Code para que el JSON pueda importarse sin
 instalar módulos dentro de n8n. Después de modificar las reglas, regenera:
