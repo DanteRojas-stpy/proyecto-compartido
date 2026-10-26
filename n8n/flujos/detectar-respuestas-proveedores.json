@@ -256,6 +256,15 @@
       "parameters": {
         "method": "HEAD",
         "url": "={{ \"https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files/\" + $json.storage_file_id }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "costflow_check",
+              "value": "={{ $execution.id + '-' + $itemIndex + '-' + Date.now() }}"
+            }
+          ]
+        },
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {

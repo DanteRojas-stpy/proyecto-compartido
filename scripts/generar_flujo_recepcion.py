@@ -113,6 +113,10 @@ return await prepararPdfs(items, detecciones,
         condicion('¿Hay un PDF válido?', [2640, -100], 'estado_adjunto', 'pendiente'),
         nodo('Comprobar PDF en Nhost Storage', 'httpRequest', 4.2, [2880, -180], {
             'method': 'HEAD', 'url': '={{ ' + json.dumps(URL_STORAGE + '/') + ' + $json.storage_file_id }}',
+            # Evita reutilizar un 404 guardado por la CDN antes de subir el PDF.
+            'sendQuery': True, 'queryParameters': {'parameters': [
+                {'name': 'costflow_check', 'value': "={{ $execution.id + '-' + $itemIndex + '-' + Date.now() }}"},
+            ]},
             'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
             'options': {'timeout': 30000, 'response': {'response': {
                 'fullResponse': True, 'neverError': True, 'responseFormat': 'text',
