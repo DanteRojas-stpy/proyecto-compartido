@@ -21,6 +21,6 @@ jobs:
       - name: Revisar JavaScript del frontend
         run: node --check frontend/js/app.js
       - name: Probar deteccion de respuestas de proveedores
-        run: node --test tests/test_deteccion_correo.cjs
+        run: node --test tests/test_deteccion_correo.cjs tests/test_adjuntos_pdf.cjs
       - name: Correr pruebas
         run: python -m pytest -q

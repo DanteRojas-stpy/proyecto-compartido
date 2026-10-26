@@ -8,7 +8,9 @@ from uuid import NAMESPACE_URL, uuid5
 ROOT = Path(__file__).resolve().parents[1]
 DESTINO = ROOT / 'n8n/flujos/detectar-respuestas-proveedores.json'
 REGLAS = (ROOT / 'app/correo/deteccion.js').read_text(encoding='utf-8').split('module.exports =')[0]
+REGLAS_PDF = (ROOT / 'app/recepcion/adjuntos.js').read_text(encoding='utf-8').split('module.exports =')[0]
 URL_NHOST = 'https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1'
+URL_STORAGE = 'https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files'
 
 
 def nodo(nombre, tipo, version, posicion, parametros, **extra):
@@ -19,6 +21,20 @@ def nodo(nombre, tipo, version, posicion, parametros, **extra):
 
 def codigo(nombre, posicion, cuerpo):
     return nodo(nombre, 'code', 2, posicion, {'jsCode': REGLAS + '\n' + cuerpo})
+
+
+def codigo_pdf(nombre, posicion, cuerpo):
+    return nodo(nombre, 'code', 2, posicion, {'jsCode': REGLAS_PDF + '\n' + cuerpo})
+
+
+def condicion(nombre, posicion, campo, valor):
+    return nodo(nombre, 'if', 2.2, posicion, {
+        'conditions': {'options': {'caseSensitive': True, 'leftValue': '',
+                                    'typeValidation': 'strict', 'version': 2},
+                       'conditions': [{'id': campo, 'leftValue': '={{ $json.' + campo + ' }}',
+                                       'rightValue': valor, 'operator': {'type': 'string', 'operation': 'equals'}}],
+                       'combinator': 'and'}, 'options': {},
+    })
 
 
 def consulta(nombre, posicion, cuerpo):
@@ -85,9 +101,47 @@ return identificarRespuestas(registros).map(deteccion => {
   json: completarDeteccion(item.json, $('¿Solicitud identificada?').itemMatching(index).json),
   pairedItem: { item: index },
 }));'''),
+        nodo('Descargar adjuntos de la respuesta', 'gmail', 2.1, [2160, -100], {
+            'resource': 'message', 'operation': 'get',
+            'messageId': '={{ $json.gmail_message_id }}', 'simple': False,
+            'options': {'downloadAttachments': True, 'dataPropertyAttachmentsPrefixName': 'adjunto_'},
+        }),
+        codigo_pdf('Preparar PDF del proveedor', [2400, -100], '''const items = $input.all();
+const detecciones = items.map((item, index) => $('Respuesta de proveedor detectada').itemMatching(index).json);
+return await prepararPdfs(items, detecciones,
+  (index, clave) => this.helpers.getBinaryDataBuffer(index, clave));'''),
+        condicion('¿Hay un PDF válido?', [2640, -100], 'estado_adjunto', 'pendiente'),
+        nodo('Comprobar PDF en Nhost Storage', 'httpRequest', 4.2, [2880, -180], {
+            'method': 'HEAD', 'url': '={{ ' + json.dumps(URL_STORAGE + '/') + ' + $json.storage_file_id }}',
+            'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+            'options': {'timeout': 30000, 'response': {'response': {
+                'fullResponse': True, 'neverError': True, 'responseFormat': 'text',
+            }}},
+        }),
+        codigo_pdf('Comprobar si ya está guardado', [3120, -180], '''return $input.all().map((item, index) => ({
+  ...comprobarExistencia(item.json, $('¿Hay un PDF válido?').itemMatching(index)),
+  pairedItem: { item: index },
+}));'''),
+        condicion('¿Se debe subir el PDF?', [3360, -180], 'estado_adjunto', 'pendiente'),
+        nodo('Guardar PDF en Nhost Storage', 'httpRequest', 4.2, [3600, -260], {
+            'method': 'POST', 'url': URL_STORAGE,
+            'authentication': 'genericCredentialType', 'genericAuthType': 'httpHeaderAuth',
+            'sendBody': True, 'contentType': 'multipart-form-data',
+            'bodyParameters': {'parameters': [
+                {'parameterType': 'formData', 'name': 'bucket-id', 'value': 'solicitudes'},
+                {'parameterType': 'formData', 'name': 'metadata[]', 'value': '={{ JSON.stringify($json.metadata_storage) }}'},
+                {'parameterType': 'formBinaryData', 'name': 'file[]', 'inputDataFieldName': 'pdf'},
+            ]}, 'options': {'timeout': 120000},
+        }),
+        codigo_pdf('PDF guardado y vinculado', [3840, -260], '''return $input.all().map((item, index) => ({
+  json: confirmarGuardado(item.json, $('¿Se debe subir el PDF?').itemMatching(index).json),
+  pairedItem: { item: index },
+}));'''),
+        nodo('PDF ya guardado anteriormente', 'noOp', 1, [3600, 0], {}),
+        nodo('Respuesta sin PDF o archivo rechazado', 'noOp', 1, [2880, 100], {}),
         nodo('Revisar conversación manualmente', 'noOp', 1, [1680, 160], {}),
         nodo('Cómo conectar este flujo', 'stickyNote', 1, [0, -320], {
-            'content': '## Detector de respuestas de proveedores\n1. Selecciona el MISMO Gmail del envío en los dos nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los dos nodos HTTP.\n3. Prueba con una respuesta al correo original.\n4. Publica/activa cuando termines la conexión.\n\nSolo lee y muestra resultados. No envía correos, no modifica Nhost y no decide si una cotización es final. Lee nuevos mensajes, incluso si ya los abriste.',
+            'content': '## Respuestas y PDF de proveedores\n1. Selecciona el MISMO Gmail del envío en los tres nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los cuatro nodos HTTP.\n3. Bucket: solicitudes. Guarda TODOS los PDF adjuntos de respuestas identificadas.\n4. Prueba una respuesta con PDF; después publica/activa.\n\nLos archivos incluyen metadatos de solicitud, proveedor y correo. Evita volver a subir el mismo adjunto. No envía correos ni decide si una cotización es final.',
             'height': 280, 'width': 750,
         }),
     ]
@@ -97,10 +151,17 @@ return identificarRespuestas(registros).map(deteccion => {
         while len(ramas) <= salida:
             ramas.append([])
         ramas[salida].append({'node': destino, 'type': 'main', 'index': 0})
-    cadena = [n['name'] for n in nodos[:9]]
+    cadena = [n['name'] for n in nodos[:12]]
     for origen, destino in zip(cadena, cadena[1:]):
         conectar(origen, destino)
     conectar('¿Solicitud identificada?', 'Revisar conversación manualmente', 1)
+    conectar('¿Hay un PDF válido?', 'Comprobar PDF en Nhost Storage')
+    conectar('¿Hay un PDF válido?', 'Respuesta sin PDF o archivo rechazado', 1)
+    conectar('Comprobar PDF en Nhost Storage', 'Comprobar si ya está guardado')
+    conectar('Comprobar si ya está guardado', '¿Se debe subir el PDF?')
+    conectar('¿Se debe subir el PDF?', 'Guardar PDF en Nhost Storage')
+    conectar('¿Se debe subir el PDF?', 'PDF ya guardado anteriormente', 1)
+    conectar('Guardar PDF en Nhost Storage', 'PDF guardado y vinculado')
     return {
         'id': 'costflowDetecta01',
         'name': 'CostFlow - Detectar respuestas de proveedores', 'nodes': nodos,

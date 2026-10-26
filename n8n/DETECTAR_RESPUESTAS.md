@@ -1,28 +1,67 @@
-# Detectar respuestas de proveedores
+# Detectar respuestas y guardar PDF de proveedores
 
 El flujo `flujos/detectar-respuestas-proveedores.json` lee los correos nuevos
 de la cuenta que envía las solicitudes. Cada minuto revisa mensajes leídos y
-no leídos, sin marcar ninguno como leído ni enviar correos.
+no leídos, sin marcar ninguno como leído ni enviar correos. Al identificar la
+solicitud, descarga todos los PDF adjuntos de esa respuesta y los guarda en
+el bucket `solicitudes` de Nhost Storage.
 
 ## Conexión en n8n
 
 1. Importa el JSON. Se crea desactivado.
-2. En **Leer respuestas en Gmail** y **Consultar envío original en Gmail**,
+2. En **Leer respuestas en Gmail**, **Consultar envío original en Gmail** y
+   **Descargar adjuntos de la respuesta**,
    selecciona la misma credencial **Gmail OAuth2** usada para los envíos.
    La conexión debe permitir leer mensajes. Si aún no existe, inicia la conexión
    desde n8n con la persona que administra el correo.
-3. En **Buscar envíos al proveedor** y **Consultar datos de la solicitud**,
+3. En **Buscar envíos al proveedor**, **Consultar datos de la solicitud**,
+   **Comprobar PDF en Nhost Storage** y **Guardar PDF en Nhost Storage**,
    selecciona **Header Auth** con nombre `Nhost Admin`, cabecera
    `x-hasura-admin-secret` y el secreto configurado en la credencial de n8n.
    No pegues ese secreto dentro del JSON.
-4. Las direcciones HTTP apuntan al proyecto Nhost de CostFlow. Si usas otro
-   proyecto, cambia la URL en ambos nodos HTTP.
+4. Las direcciones HTTP apuntan al proyecto Nhost de CostFlow: dos usan
+   GraphQL y dos usan Storage. Si usas otro proyecto, cambia esos cuatro
+   nodos. El bucket `solicitudes` debe existir y permitir PDF del tamaño recibido.
 5. Prueba como se indica abajo. Después publica/activa el flujo y mantén n8n
    encendido para la revisión de cada minuto.
 
 No necesita tablas ni migraciones nuevas. Usa `envios_solicitud`,
 `solicitudes_cotizacion`, `proveedores` y la relación `proyecto_asociado`,
 que ya utiliza el flujo de envío. Nhost debe tenerlas disponibles en GraphQL.
+
+## Guardado de los PDF
+
+Solo se descargan los adjuntos después de identificar la solicitud y el
+proveedor. Se guardan todos los PDF de esa respuesta, tanto fichas técnicas
+como cotizaciones u otros PDF; se ignoran imágenes, Excel y otros formatos.
+La extensión `.pdf` o el tipo `application/pdf` sirven para seleccionar los
+candidatos y se comprueba la cabecera binaria PDF antes de subirlos. Esto no
+reemplaza un análisis completo de integridad del documento.
+
+Cada archivo lleva un nombre legible y metadatos de `solicitud_id`,
+`proveedor_id`, `gmail_message_id`, `gmail_thread_id`, nombre original y origen
+Gmail. Estas referencias se guardan en **Storage**, no se insertan todavía en
+la tabla `documentos` ni se asignan versiones de cotización.
+
+El identificador del archivo se calcula de forma reproducible a partir de la
+solicitud, proveedor, correo y posición del adjunto. Antes de subirlo, el flujo
+consulta Storage con HEAD. Un archivo existente con tamaño, tipo y ETag válidos
+sale por **PDF ya guardado anteriormente**. Uno inexistente se sube con ese
+mismo identificador. Un reintento no crea otra copia del mismo adjunto; una
+respuesta nueva conserva su propio archivo. Dos PDF con el mismo nombre en
+un correo también permanecen separados.
+
+Solo se muestra **PDF guardado y vinculado** cuando Storage confirma el
+identificador, bucket, tamaño y carga completa. Errores de acceso, límite de
+tamaño, cuota o carga interrumpen la ejecución. Si dos ejecuciones intentan
+crear simultáneamente el mismo archivo, la unicidad de su ID impide otra
+copia; una puede fallar y debe reintentarse desde el principio. No se reemplaza
+ni se borra un archivo existente automáticamente.
+
+Las respuestas sin PDF y los archivos que no tienen cabecera PDF quedan en
+**Respuesta sin PDF o archivo rechazado** con el motivo. Los enlaces a PDF
+dentro del cuerpo del correo no se descargan. Los permisos del bucket no se
+cambian; la visibilidad desde el front requiere sus permisos de Storage.
 
 ## Cómo reconoce una respuesta
 
@@ -55,37 +94,44 @@ desde n8n; no se convierte en una detección correcta ni en una lista vacía.
 
 1. Crea una solicitud con una dirección de prueba que controles y comprueba
    que el flujo de Rodrigo haya enviado y registrado el mensaje en Nhost.
-2. Desde esa dirección, responde al correo original.
+2. Desde esa dirección, responde al correo original con dos PDF adjuntos y una
+   imagen. Se deben guardar los dos PDF y omitir la imagen.
 3. En el disparador de Gmail, **Fetch Test Event** toma el correo más reciente
    que cumpla los filtros. Ejecuta el resto del flujo. Comprueba que salga en
-   **Respuesta de proveedor detectada** con la solicitud correcta.
+   **PDF guardado y vinculado** con la solicitud correcta. Verifica los archivos
+   y sus metadatos en Nhost > Storage > solicitudes.
 4. Haz otra solicitud al mismo proveedor y responde a su segundo correo.
    Comprueba que la detección conserve la diferencia entre ambas solicitudes.
 5. Envía, desde esa misma dirección, un correo nuevo sin responder a la
-   conversación anterior: debe pasar a revisión manual.
+   conversación anterior: debe pasar a revisión manual y no subir adjuntos.
+6. Repite la ejecución del mismo correo: los archivos deben salir como ya
+   guardados. Prueba también una respuesta sin PDF y una con un archivo de texto
+   renombrado `.pdf`: deben mostrarse sin carga o rechazadas, respectivamente.
 
 En funcionamiento automático se revisan mensajes nuevos desde la activación;
 no se importa todo el historial. La prueba manual del disparador solo toma el
 último mensaje disponible. Las ejecuciones guardadas contienen metadatos del
 correo; respeta la configuración de acceso y retención de tu instalación.
 
-## Alcance de esta primera versión
+## Alcance
 
-Detecta respuestas, con o sin adjuntos. No descarga archivos, no analiza el
-contenido con IA, no escribe en PostgreSQL, no envía avisos y no cambia estados
-de proveedores ni declara una cotización final. Es la entrada para conectar
-posteriormente la recepción de adjuntos y el análisis de E3.
+Detecta respuestas y guarda sus PDF en Storage. No analiza el contenido con IA,
+no registra documentos en las tablas de negocio de PostgreSQL, no envía avisos
+y no cambia estados de proveedores ni declara una cotización final. El guardado
+en Storage sí genera sus propios registros internos de archivos en Nhost.
 
 ## Mantenimiento y pruebas
 
-Las reglas de identificación viven en `app/correo/deteccion.js`. El generador
-las incluye dentro de los nodos Code para que el JSON pueda importarse sin
+Las reglas de identificación viven en `app/correo/deteccion.js` y las de
+adjuntos en `app/recepcion/adjuntos.js`. El generador las incluye dentro de los nodos Code para que el JSON pueda importarse sin
 instalar módulos dentro de n8n. Después de modificar las reglas, regenera:
 
 ```powershell
 .venv\Scripts\python.exe scripts\generar_flujo_recepcion.py
-node --test tests/test_deteccion_correo.cjs
+node --test tests/test_deteccion_correo.cjs tests/test_adjuntos_pdf.cjs
 ```
 
 Referencias oficiales: [Gmail en n8n](https://docs.n8n.io/integrations/builtin/app-nodes/n8n-nodes-base.gmail/message-operations/)
 y [los identificadores de mensajes y conversaciones de Gmail](https://developers.google.com/workspace/gmail/api/reference/rest/v1/users.messages).
+La carga usa [multipart de n8n](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.httprequest/)
+y el contrato oficial de [Nhost Storage](https://pkg.go.dev/github.com/nhost/nhost/services/storage/api#UploadFileMetadata).

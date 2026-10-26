@@ -179,6 +179,219 @@
       }
     },
     {
+      "name": "Descargar adjuntos de la respuesta",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "id": "b96c498f-5560-5e4d-91d3-69ade2145787",
+      "position": [
+        2160,
+        -100
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.gmail_message_id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true,
+          "dataPropertyAttachmentsPrefixName": "adjunto_"
+        }
+      }
+    },
+    {
+      "name": "Preparar PDF del proveedor",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "b3607570-fa0b-5861-96e6-694b4b287979",
+      "position": [
+        2400,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "/* Preparación de PDF para Nhost. El contenido binario permanece en n8n. */\nfunction idArchivoEstable(texto) {\n  // FNV-1a de 128 bits: identidad reproducible, no se usa como secreto.\n  let hash = 0x6c62272e07bb014262b821756295c58dn;\n  for (let i = 0; i < texto.length; i++) {\n    hash ^= BigInt(texto.charCodeAt(i));\n    hash = BigInt.asUintN(128, hash * 0x0000000001000000000000000000013bn);\n  }\n  const h = hash.toString(16).padStart(32, '0');\n  return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20)}`;\n}\n\nfunction nombrePdf(nombre) {\n  let limpio = String(nombre ?? 'adjunto.pdf').normalize('NFKD')\n    .replace(/[\\u0300-\\u036f]/g, '').replace(/[\\\\/\\u0000-\\u001f\\u007f]/g, '_')\n    .replace(/[^a-zA-Z0-9._ -]/g, '_').replace(/^\\.+/, '').trim();\n  limpio = limpio.slice(0, 170) || 'adjunto';\n  return /\\.pdf$/i.test(limpio) ? limpio : limpio + '.pdf';\n}\n\nasync function prepararPdfs(items, detecciones, leerBinario) {\n  const salida = [];\n  for (const [index, item] of items.entries()) {\n    const deteccion = detecciones[index];\n    if (!deteccion || deteccion.estado_deteccion !== 'detectado'\n      || item.json.id !== deteccion.gmail_message_id\n      || item.json.threadId !== deteccion.gmail_thread_id) {\n      throw new Error('El adjunto no corresponde a la respuesta identificada.');\n    }\n    let encontrados = 0;\n    for (const [clave, archivo] of Object.entries(item.binary ?? {})) {\n      const mime = String(archivo.mimeType ?? '').split(';')[0].trim().toLowerCase();\n      if (mime !== 'application/pdf' && !/\\.pdf$/i.test(archivo.fileName ?? '')) continue;\n      encontrados++;\n      const buffer = await leerBinario(index, clave);\n      const cabecera = String.fromCharCode(...buffer.subarray(0, 1024));\n      const nombreOriginal = archivo.fileName || 'adjunto.pdf';\n      if (!/^(?:\\xEF\\xBB\\xBF)?\\s*%PDF-/.test(cabecera)) {\n        salida.push({ json: { ...deteccion, estado_adjunto: 'rechazado',\n          nombre_original: nombreOriginal, motivo: 'El archivo anunciado como PDF no tiene cabecera PDF.' },\n          pairedItem: { item: index } });\n        continue;\n      }\n      const id = idArchivoEstable(JSON.stringify([\n        'costflow-pdf-v1', deteccion.solicitud_id, deteccion.proveedor_id,\n        deteccion.gmail_message_id, clave, nombreOriginal,\n      ]));\n      const nombre = nombrePdf(`${deteccion.solicitud ?? 'solicitud'}-${deteccion.proveedor ?? 'proveedor'}-${nombreOriginal}`);\n      const metadata = {\n        solicitud_id: deteccion.solicitud_id, proveedor_id: deteccion.proveedor_id,\n        gmail_message_id: deteccion.gmail_message_id,\n        gmail_thread_id: deteccion.gmail_thread_id, adjunto_gmail: clave,\n        nombre_original: nombreOriginal, origen: 'gmail', tipo: 'adjunto_pdf_proveedor',\n      };\n      salida.push({ json: { ...deteccion, estado_adjunto: 'pendiente',\n        storage_file_id: id, storage_bucket: 'solicitudes', nombre_original: nombreOriginal,\n        nombre_archivo: nombre, tamano_bytes: buffer.length,\n        metadata_storage: { id, name: nombre, metadata },\n      }, binary: { pdf: { ...archivo, fileName: nombre, mimeType: 'application/pdf' } },\n      pairedItem: { item: index } });\n    }\n    if (!encontrados) salida.push({ json: { ...deteccion, estado_adjunto: 'sin_pdf',\n      motivo: 'La respuesta no contiene PDF adjuntos.' }, pairedItem: { item: index } });\n  }\n  return salida;\n}\n\nfunction comprobarExistencia(respuesta, adjunto) {\n  const estado = Number(respuesta.statusCode);\n  if (estado !== 200 && estado !== 404) {\n    throw new Error(`No se pudo comprobar el PDF en Nhost Storage (HTTP ${estado || 'desconocido'}).`);\n  }\n  if (estado === 200) {\n    const headers = Object.fromEntries(Object.entries(respuesta.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));\n    if (Number(headers['content-length']) !== adjunto.json.tamano_bytes\n      || String(headers['content-type']).split(';')[0].trim().toLowerCase() !== 'application/pdf'\n      || !headers.etag) {\n      throw new Error('Nhost tiene un archivo con ese identificador, pero sus metadatos no coinciden con el PDF.');\n    }\n  }\n  return { json: { ...adjunto.json, ya_guardado: estado === 200,\n    estado_adjunto: estado === 200 ? 'ya_guardado' : 'pendiente' },\n    binary: adjunto.binary };\n}\n\nfunction confirmarGuardado(respuesta, adjunto) {\n  const archivos = respuesta.processedFiles;\n  if (respuesta.error || !Array.isArray(archivos) || archivos.length !== 1) {\n    throw new Error('Nhost Storage no confirmó la carga del PDF.');\n  }\n  const archivo = archivos[0];\n  if (archivo.id !== adjunto.storage_file_id || archivo.bucketId !== 'solicitudes'\n      || archivo.isUploaded !== true || Number(archivo.size) !== adjunto.tamano_bytes) {\n    throw new Error('La confirmación de Nhost no corresponde al PDF enviado.');\n  }\n  return { ...adjunto, estado_adjunto: 'guardado', ya_guardado: false,\n    nombre_archivo: archivo.name };\n}\n\n\nconst items = $input.all();\nconst detecciones = items.map((item, index) => $('Respuesta de proveedor detectada').itemMatching(index).json);\nreturn await prepararPdfs(items, detecciones,\n  (index, clave) => this.helpers.getBinaryDataBuffer(index, clave));"
+      }
+    },
+    {
+      "name": "¿Hay un PDF válido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "338eec44-d7ac-5d15-880b-77012f37495b",
+      "position": [
+        2640,
+        -100
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "estado_adjunto",
+              "leftValue": "={{ $json.estado_adjunto }}",
+              "rightValue": "pendiente",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Comprobar PDF en Nhost Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "e8d98483-19ae-53a4-bf63-5732d490adbf",
+      "position": [
+        2880,
+        -180
+      ],
+      "parameters": {
+        "method": "HEAD",
+        "url": "={{ \"https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files/\" + $json.storage_file_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "Comprobar si ya está guardado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "cd964011-a542-57fe-b1c4-addbb45e31df",
+      "position": [
+        3120,
+        -180
+      ],
+      "parameters": {
+        "jsCode": "/* Preparación de PDF para Nhost. El contenido binario permanece en n8n. */\nfunction idArchivoEstable(texto) {\n  // FNV-1a de 128 bits: identidad reproducible, no se usa como secreto.\n  let hash = 0x6c62272e07bb014262b821756295c58dn;\n  for (let i = 0; i < texto.length; i++) {\n    hash ^= BigInt(texto.charCodeAt(i));\n    hash = BigInt.asUintN(128, hash * 0x0000000001000000000000000000013bn);\n  }\n  const h = hash.toString(16).padStart(32, '0');\n  return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20)}`;\n}\n\nfunction nombrePdf(nombre) {\n  let limpio = String(nombre ?? 'adjunto.pdf').normalize('NFKD')\n    .replace(/[\\u0300-\\u036f]/g, '').replace(/[\\\\/\\u0000-\\u001f\\u007f]/g, '_')\n    .replace(/[^a-zA-Z0-9._ -]/g, '_').replace(/^\\.+/, '').trim();\n  limpio = limpio.slice(0, 170) || 'adjunto';\n  return /\\.pdf$/i.test(limpio) ? limpio : limpio + '.pdf';\n}\n\nasync function prepararPdfs(items, detecciones, leerBinario) {\n  const salida = [];\n  for (const [index, item] of items.entries()) {\n    const deteccion = detecciones[index];\n    if (!deteccion || deteccion.estado_deteccion !== 'detectado'\n      || item.json.id !== deteccion.gmail_message_id\n      || item.json.threadId !== deteccion.gmail_thread_id) {\n      throw new Error('El adjunto no corresponde a la respuesta identificada.');\n    }\n    let encontrados = 0;\n    for (const [clave, archivo] of Object.entries(item.binary ?? {})) {\n      const mime = String(archivo.mimeType ?? '').split(';')[0].trim().toLowerCase();\n      if (mime !== 'application/pdf' && !/\\.pdf$/i.test(archivo.fileName ?? '')) continue;\n      encontrados++;\n      const buffer = await leerBinario(index, clave);\n      const cabecera = String.fromCharCode(...buffer.subarray(0, 1024));\n      const nombreOriginal = archivo.fileName || 'adjunto.pdf';\n      if (!/^(?:\\xEF\\xBB\\xBF)?\\s*%PDF-/.test(cabecera)) {\n        salida.push({ json: { ...deteccion, estado_adjunto: 'rechazado',\n          nombre_original: nombreOriginal, motivo: 'El archivo anunciado como PDF no tiene cabecera PDF.' },\n          pairedItem: { item: index } });\n        continue;\n      }\n      const id = idArchivoEstable(JSON.stringify([\n        'costflow-pdf-v1', deteccion.solicitud_id, deteccion.proveedor_id,\n        deteccion.gmail_message_id, clave, nombreOriginal,\n      ]));\n      const nombre = nombrePdf(`${deteccion.solicitud ?? 'solicitud'}-${deteccion.proveedor ?? 'proveedor'}-${nombreOriginal}`);\n      const metadata = {\n        solicitud_id: deteccion.solicitud_id, proveedor_id: deteccion.proveedor_id,\n        gmail_message_id: deteccion.gmail_message_id,\n        gmail_thread_id: deteccion.gmail_thread_id, adjunto_gmail: clave,\n        nombre_original: nombreOriginal, origen: 'gmail', tipo: 'adjunto_pdf_proveedor',\n      };\n      salida.push({ json: { ...deteccion, estado_adjunto: 'pendiente',\n        storage_file_id: id, storage_bucket: 'solicitudes', nombre_original: nombreOriginal,\n        nombre_archivo: nombre, tamano_bytes: buffer.length,\n        metadata_storage: { id, name: nombre, metadata },\n      }, binary: { pdf: { ...archivo, fileName: nombre, mimeType: 'application/pdf' } },\n      pairedItem: { item: index } });\n    }\n    if (!encontrados) salida.push({ json: { ...deteccion, estado_adjunto: 'sin_pdf',\n      motivo: 'La respuesta no contiene PDF adjuntos.' }, pairedItem: { item: index } });\n  }\n  return salida;\n}\n\nfunction comprobarExistencia(respuesta, adjunto) {\n  const estado = Number(respuesta.statusCode);\n  if (estado !== 200 && estado !== 404) {\n    throw new Error(`No se pudo comprobar el PDF en Nhost Storage (HTTP ${estado || 'desconocido'}).`);\n  }\n  if (estado === 200) {\n    const headers = Object.fromEntries(Object.entries(respuesta.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));\n    if (Number(headers['content-length']) !== adjunto.json.tamano_bytes\n      || String(headers['content-type']).split(';')[0].trim().toLowerCase() !== 'application/pdf'\n      || !headers.etag) {\n      throw new Error('Nhost tiene un archivo con ese identificador, pero sus metadatos no coinciden con el PDF.');\n    }\n  }\n  return { json: { ...adjunto.json, ya_guardado: estado === 200,\n    estado_adjunto: estado === 200 ? 'ya_guardado' : 'pendiente' },\n    binary: adjunto.binary };\n}\n\nfunction confirmarGuardado(respuesta, adjunto) {\n  const archivos = respuesta.processedFiles;\n  if (respuesta.error || !Array.isArray(archivos) || archivos.length !== 1) {\n    throw new Error('Nhost Storage no confirmó la carga del PDF.');\n  }\n  const archivo = archivos[0];\n  if (archivo.id !== adjunto.storage_file_id || archivo.bucketId !== 'solicitudes'\n      || archivo.isUploaded !== true || Number(archivo.size) !== adjunto.tamano_bytes) {\n    throw new Error('La confirmación de Nhost no corresponde al PDF enviado.');\n  }\n  return { ...adjunto, estado_adjunto: 'guardado', ya_guardado: false,\n    nombre_archivo: archivo.name };\n}\n\n\nreturn $input.all().map((item, index) => ({\n  ...comprobarExistencia(item.json, $('¿Hay un PDF válido?').itemMatching(index)),\n  pairedItem: { item: index },\n}));"
+      }
+    },
+    {
+      "name": "¿Se debe subir el PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "b5b634be-9649-59c4-b5a0-2f80e319fe05",
+      "position": [
+        3360,
+        -180
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "estado_adjunto",
+              "leftValue": "={{ $json.estado_adjunto }}",
+              "rightValue": "pendiente",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Guardar PDF en Nhost Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "e2e571ea-d853-566e-9e54-4bd0cc42bec2",
+      "position": [
+        3600,
+        -260
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formData",
+              "name": "bucket-id",
+              "value": "solicitudes"
+            },
+            {
+              "parameterType": "formData",
+              "name": "metadata[]",
+              "value": "={{ JSON.stringify($json.metadata_storage) }}"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file[]",
+              "inputDataFieldName": "pdf"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "name": "PDF guardado y vinculado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "6e367da9-8fdd-5635-92eb-9ca57da508a7",
+      "position": [
+        3840,
+        -260
+      ],
+      "parameters": {
+        "jsCode": "/* Preparación de PDF para Nhost. El contenido binario permanece en n8n. */\nfunction idArchivoEstable(texto) {\n  // FNV-1a de 128 bits: identidad reproducible, no se usa como secreto.\n  let hash = 0x6c62272e07bb014262b821756295c58dn;\n  for (let i = 0; i < texto.length; i++) {\n    hash ^= BigInt(texto.charCodeAt(i));\n    hash = BigInt.asUintN(128, hash * 0x0000000001000000000000000000013bn);\n  }\n  const h = hash.toString(16).padStart(32, '0');\n  return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${((parseInt(h[16], 16) & 3) | 8).toString(16)}${h.slice(17, 20)}-${h.slice(20)}`;\n}\n\nfunction nombrePdf(nombre) {\n  let limpio = String(nombre ?? 'adjunto.pdf').normalize('NFKD')\n    .replace(/[\\u0300-\\u036f]/g, '').replace(/[\\\\/\\u0000-\\u001f\\u007f]/g, '_')\n    .replace(/[^a-zA-Z0-9._ -]/g, '_').replace(/^\\.+/, '').trim();\n  limpio = limpio.slice(0, 170) || 'adjunto';\n  return /\\.pdf$/i.test(limpio) ? limpio : limpio + '.pdf';\n}\n\nasync function prepararPdfs(items, detecciones, leerBinario) {\n  const salida = [];\n  for (const [index, item] of items.entries()) {\n    const deteccion = detecciones[index];\n    if (!deteccion || deteccion.estado_deteccion !== 'detectado'\n      || item.json.id !== deteccion.gmail_message_id\n      || item.json.threadId !== deteccion.gmail_thread_id) {\n      throw new Error('El adjunto no corresponde a la respuesta identificada.');\n    }\n    let encontrados = 0;\n    for (const [clave, archivo] of Object.entries(item.binary ?? {})) {\n      const mime = String(archivo.mimeType ?? '').split(';')[0].trim().toLowerCase();\n      if (mime !== 'application/pdf' && !/\\.pdf$/i.test(archivo.fileName ?? '')) continue;\n      encontrados++;\n      const buffer = await leerBinario(index, clave);\n      const cabecera = String.fromCharCode(...buffer.subarray(0, 1024));\n      const nombreOriginal = archivo.fileName || 'adjunto.pdf';\n      if (!/^(?:\\xEF\\xBB\\xBF)?\\s*%PDF-/.test(cabecera)) {\n        salida.push({ json: { ...deteccion, estado_adjunto: 'rechazado',\n          nombre_original: nombreOriginal, motivo: 'El archivo anunciado como PDF no tiene cabecera PDF.' },\n          pairedItem: { item: index } });\n        continue;\n      }\n      const id = idArchivoEstable(JSON.stringify([\n        'costflow-pdf-v1', deteccion.solicitud_id, deteccion.proveedor_id,\n        deteccion.gmail_message_id, clave, nombreOriginal,\n      ]));\n      const nombre = nombrePdf(`${deteccion.solicitud ?? 'solicitud'}-${deteccion.proveedor ?? 'proveedor'}-${nombreOriginal}`);\n      const metadata = {\n        solicitud_id: deteccion.solicitud_id, proveedor_id: deteccion.proveedor_id,\n        gmail_message_id: deteccion.gmail_message_id,\n        gmail_thread_id: deteccion.gmail_thread_id, adjunto_gmail: clave,\n        nombre_original: nombreOriginal, origen: 'gmail', tipo: 'adjunto_pdf_proveedor',\n      };\n      salida.push({ json: { ...deteccion, estado_adjunto: 'pendiente',\n        storage_file_id: id, storage_bucket: 'solicitudes', nombre_original: nombreOriginal,\n        nombre_archivo: nombre, tamano_bytes: buffer.length,\n        metadata_storage: { id, name: nombre, metadata },\n      }, binary: { pdf: { ...archivo, fileName: nombre, mimeType: 'application/pdf' } },\n      pairedItem: { item: index } });\n    }\n    if (!encontrados) salida.push({ json: { ...deteccion, estado_adjunto: 'sin_pdf',\n      motivo: 'La respuesta no contiene PDF adjuntos.' }, pairedItem: { item: index } });\n  }\n  return salida;\n}\n\nfunction comprobarExistencia(respuesta, adjunto) {\n  const estado = Number(respuesta.statusCode);\n  if (estado !== 200 && estado !== 404) {\n    throw new Error(`No se pudo comprobar el PDF en Nhost Storage (HTTP ${estado || 'desconocido'}).`);\n  }\n  if (estado === 200) {\n    const headers = Object.fromEntries(Object.entries(respuesta.headers ?? {}).map(([key, value]) => [key.toLowerCase(), value]));\n    if (Number(headers['content-length']) !== adjunto.json.tamano_bytes\n      || String(headers['content-type']).split(';')[0].trim().toLowerCase() !== 'application/pdf'\n      || !headers.etag) {\n      throw new Error('Nhost tiene un archivo con ese identificador, pero sus metadatos no coinciden con el PDF.');\n    }\n  }\n  return { json: { ...adjunto.json, ya_guardado: estado === 200,\n    estado_adjunto: estado === 200 ? 'ya_guardado' : 'pendiente' },\n    binary: adjunto.binary };\n}\n\nfunction confirmarGuardado(respuesta, adjunto) {\n  const archivos = respuesta.processedFiles;\n  if (respuesta.error || !Array.isArray(archivos) || archivos.length !== 1) {\n    throw new Error('Nhost Storage no confirmó la carga del PDF.');\n  }\n  const archivo = archivos[0];\n  if (archivo.id !== adjunto.storage_file_id || archivo.bucketId !== 'solicitudes'\n      || archivo.isUploaded !== true || Number(archivo.size) !== adjunto.tamano_bytes) {\n    throw new Error('La confirmación de Nhost no corresponde al PDF enviado.');\n  }\n  return { ...adjunto, estado_adjunto: 'guardado', ya_guardado: false,\n    nombre_archivo: archivo.name };\n}\n\n\nreturn $input.all().map((item, index) => ({\n  json: confirmarGuardado(item.json, $('¿Se debe subir el PDF?').itemMatching(index).json),\n  pairedItem: { item: index },\n}));"
+      }
+    },
+    {
+      "name": "PDF ya guardado anteriormente",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "id": "d387da72-0a0a-5ad6-81c3-f9986584aa7c",
+      "position": [
+        3600,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Respuesta sin PDF o archivo rechazado",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "id": "8a15572a-3f53-5139-9fb6-e83cfe7502fb",
+      "position": [
+        2880,
+        100
+      ],
+      "parameters": {}
+    },
+    {
       "name": "Revisar conversación manualmente",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
@@ -199,7 +412,7 @@
         -320
       ],
       "parameters": {
-        "content": "## Detector de respuestas de proveedores\n1. Selecciona el MISMO Gmail del envío en los dos nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los dos nodos HTTP.\n3. Prueba con una respuesta al correo original.\n4. Publica/activa cuando termines la conexión.\n\nSolo lee y muestra resultados. No envía correos, no modifica Nhost y no decide si una cotización es final. Lee nuevos mensajes, incluso si ya los abriste.",
+        "content": "## Respuestas y PDF de proveedores\n1. Selecciona el MISMO Gmail del envío en los tres nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los cuatro nodos HTTP.\n3. Bucket: solicitudes. Guarda TODOS los PDF adjuntos de respuestas identificadas.\n4. Prueba una respuesta con PDF; después publica/activa.\n\nLos archivos incluyen metadatos de solicitud, proveedor y correo. Evita volver a subir el mismo adjunto. No envía correos ni decide si una cotización es final.",
         "height": 280,
         "width": 750
       }
@@ -295,6 +508,108 @@
         [
           {
             "node": "Respuesta de proveedor detectada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respuesta de proveedor detectada": {
+      "main": [
+        [
+          {
+            "node": "Descargar adjuntos de la respuesta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar adjuntos de la respuesta": {
+      "main": [
+        [
+          {
+            "node": "Preparar PDF del proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar PDF del proveedor": {
+      "main": [
+        [
+          {
+            "node": "¿Hay un PDF válido?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay un PDF válido?": {
+      "main": [
+        [
+          {
+            "node": "Comprobar PDF en Nhost Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respuesta sin PDF o archivo rechazado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar PDF en Nhost Storage": {
+      "main": [
+        [
+          {
+            "node": "Comprobar si ya está guardado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar si ya está guardado": {
+      "main": [
+        [
+          {
+            "node": "¿Se debe subir el PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se debe subir el PDF?": {
+      "main": [
+        [
+          {
+            "node": "Guardar PDF en Nhost Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "PDF ya guardado anteriormente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar PDF en Nhost Storage": {
+      "main": [
+        [
+          {
+            "node": "PDF guardado y vinculado",
             "type": "main",
             "index": 0
           }
