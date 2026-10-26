@@ -37,3 +37,5 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
 - `006_estados_solicitudes.sql`: estados de la solicitud y cierre validado.
 - `007_seguimiento_proveedores.sql`: respuestas, correos, aclaraciones,
   coordinaciones, auditoría y notificaciones persistentes.
+- `008_revision_seguimiento_proveedores.sql`: corrige la trazabilidad entre
+  correos y clasificaciones y la validación de respuestas recibidas a tiempo.
