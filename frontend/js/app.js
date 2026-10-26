@@ -268,20 +268,34 @@ async function crearSolicitud(proyectoId, datos) {
 }
 
 async function guardarProveedor(proveedor) {
-  const where = proveedor.ruc
-    ? { ruc: { _eq: proveedor.ruc } }
-    : proveedor.correo
-      ? { correo: { _ilike: proveedor.correo } }
-      : null;
+  const identificadores = [];
+  if (proveedor.ruc) identificadores.push({ ruc: { _eq: proveedor.ruc } });
+  if (proveedor.correo) identificadores.push({ correo: { _ilike: proveedor.correo } });
+  const where = identificadores.length ? { _or: identificadores } : null;
 
   if (where) {
     const busqueda = await graphql(
       `query BuscarProveedor($where: proveedores_bool_exp!) {
-        proveedores(where: $where, limit: 1) { id }
+        proveedores(where: $where, limit: 2) { id }
       }`,
       { where },
     );
-    if (busqueda.proveedores[0]) return busqueda.proveedores[0].id;
+    if (busqueda.proveedores.length > 1) {
+      throw new Error("El RUC y el correo pertenecen a proveedores diferentes.");
+    }
+    const existente = busqueda.proveedores[0];
+    if (existente) {
+      const actualizacion = await graphql(
+        `mutation ActualizarProveedor($id: uuid!, $cambios: proveedores_set_input!) {
+          update_proveedores_by_pk(pk_columns: { id: $id }, _set: $cambios) { id }
+        }`,
+        { id: existente.id, cambios: proveedor },
+      );
+      if (!actualizacion.update_proveedores_by_pk) {
+        throw new Error("No se pudo actualizar el proveedor existente.");
+      }
+      return actualizacion.update_proveedores_by_pk.id;
+    }
   }
 
   const respuesta = await graphql(

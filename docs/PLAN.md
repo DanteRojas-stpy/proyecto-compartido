@@ -60,6 +60,11 @@ y comparar) y **deja al especialista las decisiones técnicas**.
 **Regla central:** n8n orquesta, la IA interpreta y propone, y PostgreSQL guarda
 el estado. Ninguno decide por el especialista.
 
+**Regla de proveedores:** la ficha de un proveedor se reutiliza por RUC o
+correo. Un mismo proveedor puede participar en varias solicitudes, incluso de
+proyectos distintos; `solicitud_proveedores` registra cada participación por
+separado.
+
 ## 5. Fases
 
 ### Fase 0: preparación (1 semana)
