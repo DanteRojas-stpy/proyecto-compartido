@@ -65,6 +65,12 @@ correo. Un mismo proveedor puede participar en varias solicitudes, incluso de
 proyectos distintos; `solicitud_proveedores` registra cada participación por
 separado.
 
+**Regla de estados:** una solicitud se crea en **Inicio** y permanece allí
+durante el envío y la recepción de ofertas. El especialista la cambia a
+**Cerrado** después de obtener el cuadro comparativo. Si la fecha fin vence sin
+respuesta ni cotización de proveedores, n8n la cambia a **Cerrado sin
+proveedores**. Los dos estados de cierre son finales.
+
 ## 5. Fases
 
 ### Fase 0: preparación (1 semana)

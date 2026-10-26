@@ -175,7 +175,7 @@ def main() -> int:
             },
             "solicitudes_cotizacion": {
                 "select": {
-                    "columns": ["id", "proyecto_id", "creado_por", "codigo", "tipo", "numero", "nombre", "moneda", "vigencia_dias", "fecha_limite", "partida_critica", "frecuencia_aviso_dias", "estado", "created_at", "updated_at"],
+                    "columns": ["id", "proyecto_id", "creado_por", "codigo", "tipo", "numero", "nombre", "moneda", "vigencia_dias", "fecha_limite", "partida_critica", "frecuencia_aviso_dias", "estado", "preparada_para_envio", "cerrada_at", "created_at", "updated_at"],
                     "filter": solicitud_filter,
                     "allow_aggregations": False,
                 },
@@ -185,7 +185,7 @@ def main() -> int:
                     "set": {"creado_por": SESSION_USER},
                 },
                 "update": {
-                    "columns": ["nombre", "moneda", "fecha_limite", "partida_critica", "estado"],
+                    "columns": ["nombre", "moneda", "fecha_limite", "partida_critica", "estado", "preparada_para_envio"],
                     "filter": solicitud_filter,
                     "check": None,
                 },

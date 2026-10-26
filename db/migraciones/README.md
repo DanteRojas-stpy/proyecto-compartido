@@ -28,6 +28,12 @@ Console** de un proyecto Nhost nuevo.
    `SC-001`). Los documentos anteriores se conservan, pero el formulario ya no
    pide nuevos.
 
+6. `006_estados_solicitudes.sql`: reemplaza los estados técnicos anteriores por
+   `inicio`, `cerrado` y `cerrado_sin_proveedores`. Agrega la señal técnica
+   `preparada_para_envio`, registra la fecha de cierre y exige un cuadro
+   comparativo vigente para el cierre manual. También habilita el tipo de
+   documento `cuadro_comparativo`.
+
 Después de las migraciones, actualiza los permisos de GraphQL con
 `scripts/configurar_nhost.py` y recarga la metadata. El front muestra avisos al
 abrir un proyecto, tomando la fecha de creación como inicio: cada día para

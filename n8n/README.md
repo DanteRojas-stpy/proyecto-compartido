@@ -20,13 +20,15 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
-| `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor, registra el mensaje y cambia la solicitud a `en_proceso` | Evento de Nhost cuando `estado` cambia a `lista` | Listo para configurar |
+| `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor y registra el mensaje | Evento de Nhost cuando `preparada_para_envio` cambia a `true` | Listo para configurar |
+| `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron respuestas ni ofertas | Todos los días a las 08:00, hora de Lima | Listo para configurar |
 
 ## Configurar el primer envío
 
 ### 1. Preparar Nhost
 
-1. Ejecuta `db/nhost/003_envios_solicitud.sql` desde **Database > SQL Console**
+1. Ejecuta `db/migraciones/003_envios_solicitud.sql` y
+   `db/migraciones/006_estados_solicitudes.sql` desde **Database > SQL Console**
    con **Track this** activado.
 2. En n8n crea una credencial **Header Auth** llamada `Nhost Admin`:
    - Name: `x-hasura-admin-secret`
@@ -50,13 +52,14 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 En **Events**, crea un evento sobre `public.solicitudes_cotizacion`:
 
 - Operación: `UPDATE`.
-- Columna observada: `estado`.
+- Columna observada: `preparada_para_envio`.
 - Webhook: la Production URL copiada desde n8n.
 - Cabecera: el mismo nombre y valor usados en `CostFlow Webhook`.
 
-El flujo ignora otros cambios y solo continúa cuando el estado nuevo es
-`lista`. Antes de enviar verifica si ese proveedor ya tiene un envío con estado
-`enviado`, por lo que una repetición del evento no duplica el correo.
+El flujo ignora otros cambios y solo continúa cuando la señal pasa de `false` a
+`true`. Antes de enviar verifica que la solicitud siga en `inicio` y que ese
+proveedor no tenga un envío con estado `enviado`, por lo que una repetición del
+evento no duplica el correo.
 
 ## Resultado del flujo
 
@@ -66,7 +69,18 @@ Por cada proveedor pendiente, n8n:
 2. Descarga el itemizado y metrados.
 3. Envía un correo con ese único archivo adjunto mediante Gmail.
 4. Registra el identificador de Gmail en `envios_solicitud`.
-5. Cambia al proveedor a `invitado` y la solicitud a `en_proceso`.
+5. Cambia al proveedor a `invitado`. La solicitud permanece en `inicio`.
+
+## Configurar el cierre por vencimiento
+
+1. Importa `flujos/actualizar-estados-solicitudes.json`.
+2. Selecciona `Nhost Admin` en sus dos nodos HTTP.
+3. Confirma que el workflow use la zona horaria `America/Lima` y actívalo.
+
+Cada día consulta las solicitudes cuya fecha fin ya pasó. Cuando no existe un
+proveedor con estado `respondio` ni una cotización de proveedor vigente, cambia
+el estado a `cerrado_sin_proveedores`. PostgreSQL vuelve a validar la regla antes
+de aceptar el cambio.
 
 La versión del flujo en este repositorio ya omite la antigua vigencia en días
 del mensaje. Después de aplicar la migración 005, actualiza el flujo publicado

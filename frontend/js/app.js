@@ -14,6 +14,7 @@ const ui = {
   codigoSugerido: document.querySelector("#codigo-sugerido"),
   fechaInicio: document.querySelector("#fecha-inicio"),
   fechaLimite: document.querySelector("#fecha-limite"),
+  estadoSolicitudes: document.querySelector("#estado-solicitudes"),
   avisosSeguimiento: document.querySelector("#avisos-seguimiento"),
   formAcceso: document.querySelector("#form-acceso"),
   crearCuenta: document.querySelector("#crear-cuenta"),
@@ -159,6 +160,7 @@ async function cargarProyectos(seleccionarId = ui.proyectoId.value) {
   ui.guardarSolicitud.disabled = !ui.proyectoId.value;
   mostrarProyectoSeleccionado();
   await actualizarCodigoSugerido();
+  await cargarEstadoSolicitudes();
   await cargarAvisosSeguimiento();
 }
 
@@ -174,7 +176,9 @@ async function cargarAvisosSeguimiento() {
   if (!proyectoId) return;
   const respuesta = await graphql(`query SolicitudesParaSeguimiento($id: uuid!) {
     solicitudes_cotizacion(where: {
-      proyecto_id: { _eq: $id }, estado: { _in: ["lista", "en_proceso"] }
+      proyecto_id: { _eq: $id }
+      estado: { _eq: "inicio" }
+      preparada_para_envio: { _eq: true }
     }) { codigo nombre created_at fecha_limite frecuencia_aviso_dias }
   }`, { id: proyectoId });
   if (ui.proyectoId.value !== proyectoId) return;
@@ -194,6 +198,76 @@ async function cargarAvisosSeguimiento() {
     const vacio = document.createElement("li");
     vacio.textContent = "No hay avisos pendientes hoy.";
     ui.avisosSeguimiento.append(vacio);
+  }
+}
+
+async function cerrarSolicitud(solicitud) {
+  const confirmado = window.confirm(
+    `¿Cerrar ${solicitud.codigo} — ${solicitud.nombre}? Esta acción requiere un cuadro comparativo vigente y no se puede deshacer.`,
+  );
+  if (!confirmado) return;
+  try {
+    const respuesta = await graphql(
+      `mutation CerrarSolicitud($id: uuid!) {
+        update_solicitudes_cotizacion_by_pk(
+          pk_columns: { id: $id }
+          _set: { estado: "cerrado" }
+        ) { id estado }
+      }`,
+      { id: solicitud.id },
+    );
+    if (!respuesta.update_solicitudes_cotizacion_by_pk) {
+      throw new Error("No se pudo cerrar la solicitud.");
+    }
+    mostrarResultado(`Solicitud ${solicitud.codigo} cerrada correctamente.`, "exito");
+    await cargarEstadoSolicitudes();
+    await cargarAvisosSeguimiento();
+  } catch (error) {
+    mostrarResultado(mensajeError(error), "error");
+  }
+}
+
+async function cargarEstadoSolicitudes() {
+  const proyectoId = ui.proyectoId.value;
+  ui.estadoSolicitudes.replaceChildren();
+  if (!proyectoId) return;
+  const respuesta = await graphql(`query EstadoSolicitudes($id: uuid!) {
+    solicitudes_cotizacion(
+      where: { proyecto_id: { _eq: $id } }
+      order_by: { created_at: desc }
+    ) { id codigo nombre fecha_limite estado preparada_para_envio }
+  }`, { id: proyectoId });
+  if (ui.proyectoId.value !== proyectoId) return;
+  const etiquetas = {
+    inicio: "Inicio",
+    cerrado: "Cerrado",
+    cerrado_sin_proveedores: "Cerrado sin proveedores",
+  };
+  for (const solicitud of respuesta.solicitudes_cotizacion) {
+    const item = document.createElement("li");
+    item.className = "solicitud-inicio";
+    const detalle = document.createElement("div");
+    const nombre = document.createElement("p");
+    nombre.textContent = `${solicitud.codigo} — ${solicitud.nombre} · Fecha fin: ${solicitud.fecha_limite}`;
+    const estado = document.createElement("span");
+    estado.className = "estado-solicitud";
+    estado.textContent = etiquetas[solicitud.estado] ?? solicitud.estado;
+    detalle.append(nombre, estado);
+    item.append(detalle);
+    if (solicitud.estado === "inicio" && solicitud.preparada_para_envio) {
+      const boton = document.createElement("button");
+      boton.type = "button";
+      boton.className = "secundario";
+      boton.textContent = "Cerrar solicitud";
+      boton.addEventListener("click", () => cerrarSolicitud(solicitud));
+      item.append(boton);
+    }
+    ui.estadoSolicitudes.append(item);
+  }
+  if (!ui.estadoSolicitudes.children.length) {
+    const vacio = document.createElement("li");
+    vacio.textContent = "No hay solicitudes para este proyecto.";
+    ui.estadoSolicitudes.append(vacio);
   }
 }
 
@@ -400,13 +474,17 @@ async function registrarSolicitud(evento) {
     }
 
     await graphql(
-      `mutation MarcarSolicitudLista($id: uuid!) {
-        update_solicitudes_cotizacion_by_pk(pk_columns: { id: $id }, _set: { estado: "lista" }) { id }
+      `mutation PrepararSolicitudParaEnvio($id: uuid!) {
+        update_solicitudes_cotizacion_by_pk(
+          pk_columns: { id: $id }
+          _set: { preparada_para_envio: true }
+        ) { id estado preparada_para_envio }
       }`,
       { id: solicitudId },
     );
 
     mostrarResultado(`Solicitud ${solicitud.codigo} creada correctamente. Identificador: ${solicitudId}`, "exito");
+    cargarEstadoSolicitudes().catch((error) => mostrarResultado(mensajeError(error), "error"));
     cargarAvisosSeguimiento().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.formSolicitud.reset();
     actualizarFechaInicio();
@@ -441,6 +519,7 @@ ui.proyectoId.addEventListener("change", () => {
   ui.guardarSolicitud.disabled = !ui.proyectoId.value;
   mostrarProyectoSeleccionado();
   actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
+  cargarEstadoSolicitudes().catch((error) => mostrarResultado(mensajeError(error), "error"));
   cargarAvisosSeguimiento().catch((error) => mostrarResultado(mensajeError(error), "error"));
 });
 ui.tipoSolicitud.addEventListener("change", () => actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error")));
