@@ -202,9 +202,9 @@ async function actualizarCodigoSugerido() {
   ui.codigoSugerido.value = "";
   if (!proyectoId) return;
   const tipo = ui.tipoSolicitud.value;
-  const respuesta = await graphql(`query CodigosDelProyecto($id: uuid!) {
-    solicitudes_cotizacion(where: { proyecto_id: { _eq: $id } }) { codigo }
-  }`, { id: proyectoId });
+  const respuesta = await graphql(`query CodigosDelUsuario {
+    solicitudes_cotizacion { codigo }
+  }`);
   const prefijo = `${tipo}-`;
   const mayor = respuesta.solicitudes_cotizacion.reduce((actual, solicitud) => {
     if (!solicitud.codigo.startsWith(prefijo)) return actual;

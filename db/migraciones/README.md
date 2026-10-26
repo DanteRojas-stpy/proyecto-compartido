@@ -26,6 +26,11 @@ Console** de un proyecto Nhost nuevo.
    `SC-001`). Los documentos anteriores se conservan, pero el formulario ya no
    pide nuevos.
 
+6. `006_codigos_unicos_solicitud.sql`: renumera las solicitudes existentes y
+   asigna correlativos únicos por usuario y tipo entre todos sus proyectos. Un
+   usuario tendrá una sola secuencia `MA-001`, `MA-002`… y otra `SC-001`,
+   `SC-002`…, aunque las solicitudes pertenezcan a proyectos distintos.
+
 Después de las migraciones, actualiza los permisos de GraphQL con
 `scripts/configurar_nhost.py` y recarga la metadata. El front muestra avisos al
 abrir un proyecto, tomando la fecha de creación como inicio: cada día para
