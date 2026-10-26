@@ -17,7 +17,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "url": "https://zgorsmkvfyytsouacrpa.hasura.sa-east-1.nhost.run/v1/graphql",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -116,7 +116,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "url": "https://zgorsmkvfyytsouacrpa.hasura.sa-east-1.nhost.run/v1/graphql",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
