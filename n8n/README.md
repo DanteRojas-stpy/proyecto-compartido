@@ -87,15 +87,15 @@ PostgreSQL vuelve a validar la regla antes de aceptar el cambio.
 
 ## Configurar el seguimiento
 
-1. Ejecuta `scripts/configurar_nhost.py` después de las migraciones 007 y 008
-   para crear relaciones y permisos.
+1. Ejecuta `scripts/configurar_nhost.py` después de las migraciones 007, 008 y
+   009 para crear relaciones y permisos.
 2. Importa `flujos/seguimiento-diario-proveedores.json` y selecciona la
    credencial `Nhost Admin` en sus dos nodos HTTP. Configura la zona horaria del
    workflow como `America/Lima` y publícalo.
 3. Importa `flujos/analizar-respuestas-proveedores.json`. Selecciona `Nhost
    Admin` en los dos nodos HTTP, la cuenta Gmail que recibe las respuestas en
-   `Correo nuevo en Gmail` y una credencial propia de Google Gemini en `Modelo
-   Gemini`.
+   `Correo nuevo en Gmail` y `Recuperar correos recientes`, y una credencial
+   propia de Google Gemini en `Modelo Gemini`.
 4. Publica ambos workflows. La credencial de IA debe reemplazar el marcador
    `Gemini CostFlow`; el archivo exportado no contiene ninguna clave. El flujo
    usa una cadena LLM simple porque la clasificación no necesita memoria ni
@@ -106,12 +106,38 @@ las 09:00 cada día para partidas críticas y cada dos días calendario para las
 demás. También excluye a quien llega a tres coordinaciones sin cotización o
 vence el plazo. El cierre automático se ejecuta quince minutos después.
 
-El flujo de Gmail deduplica por `message_id`, correlaciona primero por
-`thread_id` y usa correo, empresa, asunto, código y contexto como respaldo. Una
-confianza menor de 0.8 crea una solicitud de revisión sin modificar el estado.
-Los correos posteriores a la fecha límite quedan registrados, pero no generan
-notificaciones ni reincorporan al proveedor. Todas las notificaciones se
-muestran en CostFlow; este proceso no envía un resumen por correo al usuario.
+El flujo de Gmail procesa cada mensaje por separado. Además del disparador en
+tiempo real, hace un barrido cada hora de los últimos 30 días de conversaciones
+con “Cotización” en el asunto para recuperar respuestas que llegaron cuando el
+workflow estaba apagado. Deduplica por
+`message_id`, por lo que el barrido no repite clasificaciones ni alertas.
+Correlaciona primero por `thread_id` y usa correo, empresa, asunto, código y
+contexto como respaldo. Una confianza menor de 0.8 crea una solicitud de
+revisión sin modificar el estado. Los mensajes antiguos se registran sin
+sobrescribir el estado producido por un correo más reciente.
+
+Una ficha técnica sin precios cuenta como respuesta del proveedor y genera su
+propia notificación, pero permanece en `no_envio_cotizacion` con el detalle
+`ficha_tecnica_sin_cotizacion`. Los correos posteriores a la fecha límite
+quedan registrados, pero no generan notificaciones ni reincorporan al
+proveedor. Todas las notificaciones se muestran en CostFlow; este proceso no
+envía un resumen por correo al usuario.
+
+### Recuperar respuestas omitidas
+
+Después de reemplazar una versión anterior del flujo:
+
+1. Ejecuta las migraciones 008 y 009 que todavía no estén aplicadas.
+2. Vuelve a seleccionar las credenciales de Nhost, Gmail y Gemini y publica el
+   workflow.
+3. Ejecuta una vez `Revisión horaria de correos` o espera al siguiente cambio
+   de hora.
+4. Comprueba que cada proveedor que respondió tenga `Último correo`, una
+   notificación individual y un detalle distinto de `Sin respuesta`.
+
+Los correos ya clasificados con la versión anterior se revisan una sola vez.
+Las notificaciones conservan su identificador y actualizan su texto, de modo
+que esta recuperación no crea duplicados.
 
 Los nodos HTTP usan el endpoint directo de Hasura (`/v1/graphql`). Es necesario
 cuando Nhost no acepta el secreto administrativo a través del gateway público.

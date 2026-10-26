@@ -39,3 +39,5 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
   coordinaciones, auditoría y notificaciones persistentes.
 - `008_revision_seguimiento_proveedores.sql`: corrige la trazabilidad entre
   correos y clasificaciones y la validación de respuestas recibidas a tiempo.
+- `009_respuestas_con_ficha_tecnica.sql`: diferencia una ficha técnica sin
+  oferta económica de una ausencia de respuesta.
