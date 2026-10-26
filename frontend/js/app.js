@@ -65,6 +65,7 @@ const etiquetasRespuesta = {
 const etiquetasDetalle = {
   sin_respuesta: "Sin respuesta",
   confirmo_recepcion: "Confirmó recepción",
+  ficha_tecnica_sin_cotizacion: "Respondió con ficha técnica, sin cotización",
   consulta_previa: "Realizó una consulta previa",
   rechazo_participar: "Rechazó participar",
   aclaraciones_pendientes: "Tiene aclaraciones pendientes",
@@ -397,12 +398,8 @@ async function registrarCoordinacion(evento) {
   }
 }
 
-async function corregirEstadoRespuesta(participacion, estado) {
-  const detalle = {
-    no_envio_cotizacion: "sin_respuesta",
-    envio_cotizacion_con_aclaracion: "aclaraciones_pendientes",
-    envio_cotizacion: "cotizacion_definitiva",
-  }[estado];
+async function corregirEstadoRespuesta(participacion, clasificacion) {
+  const [estado, detalle] = clasificacion.split("|");
   try {
     await graphql(
       `mutation CorregirEstadoProveedor(
@@ -506,8 +503,18 @@ function crearTarjetaProveedor(participacion, aclaraciones) {
     const etiquetaSelector = document.createElement("label");
     etiquetaSelector.textContent = "Corrección del usuario";
     const selector = document.createElement("select");
-    for (const [valor, etiqueta] of Object.entries(etiquetasRespuesta)) {
-      selector.add(new Option(etiqueta, valor, false, valor === participacion.estado_respuesta));
+    const correcciones = [
+      ["no_envio_cotizacion|sin_respuesta", "Sin respuesta"],
+      ["no_envio_cotizacion|confirmo_recepcion", "Confirmó recepción"],
+      ["no_envio_cotizacion|ficha_tecnica_sin_cotizacion", "Respondió con ficha técnica, sin cotización"],
+      ["no_envio_cotizacion|consulta_previa", "Realizó una consulta previa"],
+      ["no_envio_cotizacion|rechazo_participar", "Rechazó participar"],
+      ["envio_cotizacion_con_aclaracion|aclaraciones_pendientes", "Envió cotización con aclaraciones"],
+      ["envio_cotizacion|cotizacion_definitiva", "Envió cotización definitiva"],
+    ];
+    const clasificacionActual = `${participacion.estado_respuesta}|${participacion.detalle_respuesta}`;
+    for (const [valor, etiqueta] of correcciones) {
+      selector.add(new Option(etiqueta, valor, false, valor === clasificacionActual));
     }
     etiquetaSelector.append(selector);
     const botonCorregir = document.createElement("button");

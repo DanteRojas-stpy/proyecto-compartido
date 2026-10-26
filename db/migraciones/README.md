@@ -39,6 +39,13 @@ Console** de un proyecto Nhost nuevo.
    clasificaciones y notificaciones en la plataforma. Después de tres
    coordinaciones sin cotización excluye al proveedor y conserva la evidencia.
 
+8. `008_revision_seguimiento_proveedores.sql`: conserva el vínculo entre cada
+   clasificación automática y su correo, limpia la evidencia de IA cuando el
+   usuario corrige el estado y valida el plazo usando la fecha real del correo.
+
+9. `009_respuestas_con_ficha_tecnica.sql`: distingue al proveedor que respondió
+   con documentación técnica pero todavía no envió una cotización económica.
+
 Después de las migraciones, actualiza los permisos de GraphQL con
 `scripts/configurar_nhost.py` y recarga la metadata. El seguimiento empieza con
 el primer envío exitoso. n8n crea una notificación persistente a las 09:00,
