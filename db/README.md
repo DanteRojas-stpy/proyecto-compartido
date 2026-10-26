@@ -15,6 +15,9 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
    Storage. Aquí solo se guardan las referencias y los datos extraídos.
 4. Cada cotización guarda su **versión** (preliminar, corregida o final) y su
    **estado**, para no comparar documentos desactualizados.
+5. Un proveedor se registra una sola vez por usuario y puede participar en
+   múltiples solicitudes, incluso de proyectos distintos. La tabla
+   `solicitud_proveedores` conserva cada vínculo y su estado independiente.
 
 ## Migraciones disponibles
 

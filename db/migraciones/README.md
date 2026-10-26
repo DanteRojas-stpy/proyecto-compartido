@@ -5,7 +5,9 @@ Console** de un proyecto Nhost nuevo.
 
 1. `001_e1_registro_solicitud.sql`: crea las tablas, validaciones e índices de la
    etapa E1. No abre las tablas a usuarios finales. Después se configuran las
-   relaciones, los permisos del rol `user` y las reglas de Storage.
+   relaciones, los permisos del rol `user` y las reglas de Storage. La tabla
+   `proveedores` guarda una ficha reutilizable y `solicitud_proveedores` permite
+   vincularla con muchas solicitudes sin duplicarla.
 
 2. `002_documentos_por_proveedor.sql`: distingue los documentos generales de la
    solicitud de las cotizaciones y anexos de cada proveedor, con versión y estado.

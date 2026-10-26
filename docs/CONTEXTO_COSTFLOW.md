@@ -37,6 +37,10 @@ Actividad | Especialista | Agente IA
 
 4. CONSIDERACIONES FUNCIONALES IMPORTANTES
 
+- Proveedores reutilizables: un proveedor se registra una sola vez por usuario
+  y puede participar en múltiples solicitudes de cotización, incluso de
+  proyectos distintos. Cada participación conserva su propio estado dentro de
+  la solicitud.
 - Ruta crítica: las partidas críticas tendrán reglas de seguimiento y notificación más exigentes.
 - Vigencia de cotizaciones: el sistema debe alertar cuando una propuesta esté próxima a vencer.
 - Cotización final: el agente debe diferenciar versiones preliminares, corregidas y finales para evitar comparar documentos desactualizados.
