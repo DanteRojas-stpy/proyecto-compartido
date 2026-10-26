@@ -20,5 +20,7 @@ jobs:
         run: python -m compileall -q app tests
       - name: Revisar JavaScript del frontend
         run: node --check frontend/js/app.js
+      - name: Probar deteccion de respuestas de proveedores
+        run: node --test tests/test_deteccion_correo.cjs
       - name: Correr pruebas
         run: python -m pytest -q

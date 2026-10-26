@@ -21,6 +21,7 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
 | `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor, registra el mensaje y cambia la solicitud a `en_proceso` | Evento de Nhost cuando `estado` cambia a `lista` | Listo para configurar |
+| `flujos/detectar-respuestas-proveedores.json` | Identifica respuestas por remitente y conversación del envío original | Gmail, cada minuto | [Conexión y pruebas](DETECTAR_RESPUESTAS.md) |
 
 ## Configurar el primer envío
 

@@ -1,0 +1,314 @@
+{
+  "id": "costflowDetecta01",
+  "name": "CostFlow - Detectar respuestas de proveedores",
+  "nodes": [
+    {
+      "name": "Leer respuestas en Gmail",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "id": "3fefa88e-4fd6-5f81-9d5d-cfc8c97821b0",
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "event": "messageReceived",
+        "simple": true,
+        "maxResults": 50,
+        "filters": {
+          "readStatus": "both",
+          "includeSpamTrash": false,
+          "includeDrafts": false,
+          "q": "-in:sent -in:drafts -in:spam -in:trash"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Normalizar correo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "f7501eca-f12f-50fe-90aa-05aec3258385",
+      "position": [
+        240,
+        0
+      ],
+      "parameters": {
+        "jsCode": "/* Reglas de identificación compartidas con el flujo de recepción de n8n.\n * No envía mensajes ni decide si una cotización es final.\n */\nfunction direccion(valor) {\n  if (valor && typeof valor === 'object') {\n    const lista = valor.value ?? (Array.isArray(valor) ? valor : []);\n    if (lista.length !== 1) return null;\n    return direccion(lista[0].address ?? lista[0].email);\n  }\n  const texto = String(valor ?? '').trim();\n  const angulos = [...texto.matchAll(/<([^<>]+)>/g)];\n  const correo = (angulos.length === 1 ? angulos[0][1] : texto).trim();\n  return /^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(correo)\n    ? correo.toLowerCase() : null;\n}\n\nfunction cabeceras(mensaje) {\n  const resultado = {};\n  for (const item of mensaje.payload?.headers ?? []) {\n    resultado[String(item.name).toLowerCase()] = item.value;\n  }\n  for (const [clave, valor] of Object.entries(mensaje.headers ?? {})) {\n    resultado[clave.toLowerCase()] = valor;\n  }\n  return resultado;\n}\n\nfunction etiquetas(mensaje) {\n  return (mensaje.labelIds ?? mensaje.labels ?? []).map(valor =>\n    typeof valor === 'string' ? valor : valor.id);\n}\n\nfunction fechaMensaje(mensaje) {\n  const valor = mensaje.internalDate\n    ? Number(mensaje.internalDate) : mensaje.date ?? cabeceras(mensaje).date;\n  if (valor === null || valor === undefined || valor === '') return null;\n  const fecha = new Date(valor);\n  return Number.isFinite(fecha.getTime()) ? fecha.toISOString() : null;\n}\n\nfunction normalizarCorreo(mensaje) {\n  if (etiquetas(mensaje).some(valor => ['SENT', 'DRAFT', 'SPAM', 'TRASH'].includes(valor))) return null;\n  const headers = cabeceras(mensaje);\n  const remitente = direccion(mensaje.from ?? mensaje.From ?? headers.from);\n  if (!remitente || !mensaje.id || !mensaje.threadId) return null;\n  return {\n    gmail_message_id: String(mensaje.id),\n    gmail_thread_id: String(mensaje.threadId),\n    remitente,\n    asunto: String(mensaje.subject ?? mensaje.Subject ?? headers.subject ?? ''),\n    fecha_recepcion: fechaMensaje(mensaje),\n  };\n}\n\nfunction patronCorreo(correo) {\n  // _ y % pueden existir en una dirección, pero no deben ser comodines de SQL.\n  return correo.replace(/[\\\\%_]/g, valor => '\\\\' + valor);\n}\n\nfunction prepararCandidatos(respuesta, correo) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de envíos: ' + respuesta.errors.map(e => e.message).join('; '));\n  if (!Array.isArray(respuesta.data?.envios_solicitud)) throw new Error('Nhost no devolvió la lista de envíos.');\n  const vistos = new Set();\n  return respuesta.data.envios_solicitud.filter(envio => {\n    const valido = ['enviado', 'respondido'].includes(envio.estado)\n      && direccion(envio.destinatario) === correo.remitente\n      && envio.mensaje_id && envio.solicitud_id && envio.proveedor_id && envio.id;\n    if (!valido || vistos.has(envio.id)) return false;\n    vistos.add(envio.id);\n    return true;\n  }).map(envio => ({ correo, envio }));\n}\n\nfunction identificarRespuestas(registros) {\n  const grupos = new Map();\n  for (const registro of registros) {\n    const id = registro.correo.gmail_message_id;\n    if (!grupos.has(id)) grupos.set(id, []);\n    grupos.get(id).push(registro);\n  }\n  const resultado = [];\n  for (const grupo of grupos.values()) {\n    const correo = grupo[0].correo;\n    const coincidencias = grupo.filter(({ envio, original }) => {\n      if (original.error || String(original.id ?? '') !== String(envio.mensaje_id)) return false;\n      if (!etiquetas(original).includes('SENT')) return false;\n      if (String(original.threadId ?? '') !== correo.gmail_thread_id) return false;\n      if (String(original.id) === correo.gmail_message_id) return false;\n      const fechaEnvio = fechaMensaje(original);\n      return !fechaEnvio || !correo.fecha_recepcion || correo.fecha_recepcion >= fechaEnvio;\n    });\n    if (coincidencias.length === 1) {\n      const envio = coincidencias[0].envio;\n      resultado.push({\n        ...correo, estado_deteccion: 'detectado', envio_id: envio.id,\n        solicitud_id: envio.solicitud_id, proveedor_id: envio.proveedor_id,\n        gmail_message_id_envio: envio.mensaje_id,\n        enlace_gmail: 'https://mail.google.com/mail/u/0/#all/' + correo.gmail_thread_id,\n      });\n    } else {\n      resultado.push({\n        ...correo, estado_deteccion: 'revisar',\n        motivo: coincidencias.length > 1\n          ? 'La conversación está vinculada a más de un envío.'\n          : grupo.some(item => item.original.error)\n            ? 'No se pudo consultar uno o más envíos originales en Gmail.'\n            : 'El remitente es conocido, pero el correo no corresponde a una conversación enviada registrada.',\n      });\n    }\n  }\n  return resultado;\n}\n\nfunction completarDeteccion(respuesta, deteccion) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de la solicitud.');\n  const solicitud = respuesta.data?.solicitudes_cotizacion_by_pk;\n  const proveedor = respuesta.data?.proveedores_by_pk;\n  if (!solicitud || !proveedor) throw new Error('La solicitud o el proveedor ya no están disponibles.');\n  return {\n    ...deteccion,\n    proveedor: proveedor.nombre,\n    solicitud: solicitud.codigo,\n    partida: solicitud.nombre,\n    proyecto: solicitud.proyecto_asociado?.nombre ?? null,\n    estado_solicitud: solicitud.estado,\n  };\n}\n\n\nreturn $input.all().flatMap((item, index) => {\n  const correo = normalizarCorreo(item.json);\n  return correo ? [{ json: { correo, patron_correo: patronCorreo(correo.remitente) }, pairedItem: { item: index } }] : [];\n});"
+      }
+    },
+    {
+      "name": "Buscar envíos al proveedor",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "980ad964-dbc6-54db-9076-251cdfd917fa",
+      "position": [
+        480,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"query EnviosDelRemitente($correo: String!) {\\n  envios_solicitud(where: {\\n    destinatario: { _ilike: $correo }, estado: { _in: [\\\"enviado\\\", \\\"respondido\\\"] }\\n  }) { id solicitud_id proveedor_id destinatario mensaje_id estado enviado_at }\\n}\", variables: { correo: $json.patron_correo } } }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "name": "Preparar candidatos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "38131a42-3ea1-570a-8155-ac0a578dd6c4",
+      "position": [
+        720,
+        0
+      ],
+      "parameters": {
+        "jsCode": "/* Reglas de identificación compartidas con el flujo de recepción de n8n.\n * No envía mensajes ni decide si una cotización es final.\n */\nfunction direccion(valor) {\n  if (valor && typeof valor === 'object') {\n    const lista = valor.value ?? (Array.isArray(valor) ? valor : []);\n    if (lista.length !== 1) return null;\n    return direccion(lista[0].address ?? lista[0].email);\n  }\n  const texto = String(valor ?? '').trim();\n  const angulos = [...texto.matchAll(/<([^<>]+)>/g)];\n  const correo = (angulos.length === 1 ? angulos[0][1] : texto).trim();\n  return /^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(correo)\n    ? correo.toLowerCase() : null;\n}\n\nfunction cabeceras(mensaje) {\n  const resultado = {};\n  for (const item of mensaje.payload?.headers ?? []) {\n    resultado[String(item.name).toLowerCase()] = item.value;\n  }\n  for (const [clave, valor] of Object.entries(mensaje.headers ?? {})) {\n    resultado[clave.toLowerCase()] = valor;\n  }\n  return resultado;\n}\n\nfunction etiquetas(mensaje) {\n  return (mensaje.labelIds ?? mensaje.labels ?? []).map(valor =>\n    typeof valor === 'string' ? valor : valor.id);\n}\n\nfunction fechaMensaje(mensaje) {\n  const valor = mensaje.internalDate\n    ? Number(mensaje.internalDate) : mensaje.date ?? cabeceras(mensaje).date;\n  if (valor === null || valor === undefined || valor === '') return null;\n  const fecha = new Date(valor);\n  return Number.isFinite(fecha.getTime()) ? fecha.toISOString() : null;\n}\n\nfunction normalizarCorreo(mensaje) {\n  if (etiquetas(mensaje).some(valor => ['SENT', 'DRAFT', 'SPAM', 'TRASH'].includes(valor))) return null;\n  const headers = cabeceras(mensaje);\n  const remitente = direccion(mensaje.from ?? mensaje.From ?? headers.from);\n  if (!remitente || !mensaje.id || !mensaje.threadId) return null;\n  return {\n    gmail_message_id: String(mensaje.id),\n    gmail_thread_id: String(mensaje.threadId),\n    remitente,\n    asunto: String(mensaje.subject ?? mensaje.Subject ?? headers.subject ?? ''),\n    fecha_recepcion: fechaMensaje(mensaje),\n  };\n}\n\nfunction patronCorreo(correo) {\n  // _ y % pueden existir en una dirección, pero no deben ser comodines de SQL.\n  return correo.replace(/[\\\\%_]/g, valor => '\\\\' + valor);\n}\n\nfunction prepararCandidatos(respuesta, correo) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de envíos: ' + respuesta.errors.map(e => e.message).join('; '));\n  if (!Array.isArray(respuesta.data?.envios_solicitud)) throw new Error('Nhost no devolvió la lista de envíos.');\n  const vistos = new Set();\n  return respuesta.data.envios_solicitud.filter(envio => {\n    const valido = ['enviado', 'respondido'].includes(envio.estado)\n      && direccion(envio.destinatario) === correo.remitente\n      && envio.mensaje_id && envio.solicitud_id && envio.proveedor_id && envio.id;\n    if (!valido || vistos.has(envio.id)) return false;\n    vistos.add(envio.id);\n    return true;\n  }).map(envio => ({ correo, envio }));\n}\n\nfunction identificarRespuestas(registros) {\n  const grupos = new Map();\n  for (const registro of registros) {\n    const id = registro.correo.gmail_message_id;\n    if (!grupos.has(id)) grupos.set(id, []);\n    grupos.get(id).push(registro);\n  }\n  const resultado = [];\n  for (const grupo of grupos.values()) {\n    const correo = grupo[0].correo;\n    const coincidencias = grupo.filter(({ envio, original }) => {\n      if (original.error || String(original.id ?? '') !== String(envio.mensaje_id)) return false;\n      if (!etiquetas(original).includes('SENT')) return false;\n      if (String(original.threadId ?? '') !== correo.gmail_thread_id) return false;\n      if (String(original.id) === correo.gmail_message_id) return false;\n      const fechaEnvio = fechaMensaje(original);\n      return !fechaEnvio || !correo.fecha_recepcion || correo.fecha_recepcion >= fechaEnvio;\n    });\n    if (coincidencias.length === 1) {\n      const envio = coincidencias[0].envio;\n      resultado.push({\n        ...correo, estado_deteccion: 'detectado', envio_id: envio.id,\n        solicitud_id: envio.solicitud_id, proveedor_id: envio.proveedor_id,\n        gmail_message_id_envio: envio.mensaje_id,\n        enlace_gmail: 'https://mail.google.com/mail/u/0/#all/' + correo.gmail_thread_id,\n      });\n    } else {\n      resultado.push({\n        ...correo, estado_deteccion: 'revisar',\n        motivo: coincidencias.length > 1\n          ? 'La conversación está vinculada a más de un envío.'\n          : grupo.some(item => item.original.error)\n            ? 'No se pudo consultar uno o más envíos originales en Gmail.'\n            : 'El remitente es conocido, pero el correo no corresponde a una conversación enviada registrada.',\n      });\n    }\n  }\n  return resultado;\n}\n\nfunction completarDeteccion(respuesta, deteccion) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de la solicitud.');\n  const solicitud = respuesta.data?.solicitudes_cotizacion_by_pk;\n  const proveedor = respuesta.data?.proveedores_by_pk;\n  if (!solicitud || !proveedor) throw new Error('La solicitud o el proveedor ya no están disponibles.');\n  return {\n    ...deteccion,\n    proveedor: proveedor.nombre,\n    solicitud: solicitud.codigo,\n    partida: solicitud.nombre,\n    proyecto: solicitud.proyecto_asociado?.nombre ?? null,\n    estado_solicitud: solicitud.estado,\n  };\n}\n\n\nreturn $input.all().flatMap((item, index) => {\n  const correo = $('Normalizar correo').itemMatching(index).json.correo;\n  return prepararCandidatos(item.json, correo).map(candidato => ({ json: candidato, pairedItem: { item: index } }));\n});"
+      }
+    },
+    {
+      "name": "Consultar envío original en Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "id": "bdb9c746-68ed-5753-9176-14fe124f1674",
+      "position": [
+        960,
+        0
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.envio.mensaje_id }}",
+        "simple": true,
+        "options": {}
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "name": "Identificar respuestas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "e4876e70-d2c2-5e07-af71-7d7c14e57a9b",
+      "position": [
+        1200,
+        0
+      ],
+      "parameters": {
+        "jsCode": "/* Reglas de identificación compartidas con el flujo de recepción de n8n.\n * No envía mensajes ni decide si una cotización es final.\n */\nfunction direccion(valor) {\n  if (valor && typeof valor === 'object') {\n    const lista = valor.value ?? (Array.isArray(valor) ? valor : []);\n    if (lista.length !== 1) return null;\n    return direccion(lista[0].address ?? lista[0].email);\n  }\n  const texto = String(valor ?? '').trim();\n  const angulos = [...texto.matchAll(/<([^<>]+)>/g)];\n  const correo = (angulos.length === 1 ? angulos[0][1] : texto).trim();\n  return /^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(correo)\n    ? correo.toLowerCase() : null;\n}\n\nfunction cabeceras(mensaje) {\n  const resultado = {};\n  for (const item of mensaje.payload?.headers ?? []) {\n    resultado[String(item.name).toLowerCase()] = item.value;\n  }\n  for (const [clave, valor] of Object.entries(mensaje.headers ?? {})) {\n    resultado[clave.toLowerCase()] = valor;\n  }\n  return resultado;\n}\n\nfunction etiquetas(mensaje) {\n  return (mensaje.labelIds ?? mensaje.labels ?? []).map(valor =>\n    typeof valor === 'string' ? valor : valor.id);\n}\n\nfunction fechaMensaje(mensaje) {\n  const valor = mensaje.internalDate\n    ? Number(mensaje.internalDate) : mensaje.date ?? cabeceras(mensaje).date;\n  if (valor === null || valor === undefined || valor === '') return null;\n  const fecha = new Date(valor);\n  return Number.isFinite(fecha.getTime()) ? fecha.toISOString() : null;\n}\n\nfunction normalizarCorreo(mensaje) {\n  if (etiquetas(mensaje).some(valor => ['SENT', 'DRAFT', 'SPAM', 'TRASH'].includes(valor))) return null;\n  const headers = cabeceras(mensaje);\n  const remitente = direccion(mensaje.from ?? mensaje.From ?? headers.from);\n  if (!remitente || !mensaje.id || !mensaje.threadId) return null;\n  return {\n    gmail_message_id: String(mensaje.id),\n    gmail_thread_id: String(mensaje.threadId),\n    remitente,\n    asunto: String(mensaje.subject ?? mensaje.Subject ?? headers.subject ?? ''),\n    fecha_recepcion: fechaMensaje(mensaje),\n  };\n}\n\nfunction patronCorreo(correo) {\n  // _ y % pueden existir en una dirección, pero no deben ser comodines de SQL.\n  return correo.replace(/[\\\\%_]/g, valor => '\\\\' + valor);\n}\n\nfunction prepararCandidatos(respuesta, correo) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de envíos: ' + respuesta.errors.map(e => e.message).join('; '));\n  if (!Array.isArray(respuesta.data?.envios_solicitud)) throw new Error('Nhost no devolvió la lista de envíos.');\n  const vistos = new Set();\n  return respuesta.data.envios_solicitud.filter(envio => {\n    const valido = ['enviado', 'respondido'].includes(envio.estado)\n      && direccion(envio.destinatario) === correo.remitente\n      && envio.mensaje_id && envio.solicitud_id && envio.proveedor_id && envio.id;\n    if (!valido || vistos.has(envio.id)) return false;\n    vistos.add(envio.id);\n    return true;\n  }).map(envio => ({ correo, envio }));\n}\n\nfunction identificarRespuestas(registros) {\n  const grupos = new Map();\n  for (const registro of registros) {\n    const id = registro.correo.gmail_message_id;\n    if (!grupos.has(id)) grupos.set(id, []);\n    grupos.get(id).push(registro);\n  }\n  const resultado = [];\n  for (const grupo of grupos.values()) {\n    const correo = grupo[0].correo;\n    const coincidencias = grupo.filter(({ envio, original }) => {\n      if (original.error || String(original.id ?? '') !== String(envio.mensaje_id)) return false;\n      if (!etiquetas(original).includes('SENT')) return false;\n      if (String(original.threadId ?? '') !== correo.gmail_thread_id) return false;\n      if (String(original.id) === correo.gmail_message_id) return false;\n      const fechaEnvio = fechaMensaje(original);\n      return !fechaEnvio || !correo.fecha_recepcion || correo.fecha_recepcion >= fechaEnvio;\n    });\n    if (coincidencias.length === 1) {\n      const envio = coincidencias[0].envio;\n      resultado.push({\n        ...correo, estado_deteccion: 'detectado', envio_id: envio.id,\n        solicitud_id: envio.solicitud_id, proveedor_id: envio.proveedor_id,\n        gmail_message_id_envio: envio.mensaje_id,\n        enlace_gmail: 'https://mail.google.com/mail/u/0/#all/' + correo.gmail_thread_id,\n      });\n    } else {\n      resultado.push({\n        ...correo, estado_deteccion: 'revisar',\n        motivo: coincidencias.length > 1\n          ? 'La conversación está vinculada a más de un envío.'\n          : grupo.some(item => item.original.error)\n            ? 'No se pudo consultar uno o más envíos originales en Gmail.'\n            : 'El remitente es conocido, pero el correo no corresponde a una conversación enviada registrada.',\n      });\n    }\n  }\n  return resultado;\n}\n\nfunction completarDeteccion(respuesta, deteccion) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de la solicitud.');\n  const solicitud = respuesta.data?.solicitudes_cotizacion_by_pk;\n  const proveedor = respuesta.data?.proveedores_by_pk;\n  if (!solicitud || !proveedor) throw new Error('La solicitud o el proveedor ya no están disponibles.');\n  return {\n    ...deteccion,\n    proveedor: proveedor.nombre,\n    solicitud: solicitud.codigo,\n    partida: solicitud.nombre,\n    proyecto: solicitud.proyecto_asociado?.nombre ?? null,\n    estado_solicitud: solicitud.estado,\n  };\n}\n\n\nconst registros = $input.all().map((item, index) => ({\n  ...$('Preparar candidatos').itemMatching(index).json, original: item.json,\n}));\nreturn identificarRespuestas(registros).map(deteccion => {\n  const index = registros.findIndex(item => item.correo.gmail_message_id === deteccion.gmail_message_id);\n  return { json: deteccion, pairedItem: { item: index } };\n});"
+      }
+    },
+    {
+      "name": "¿Solicitud identificada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "id": "68be5bef-0c71-55b0-a0f5-4947eebb191a",
+      "position": [
+        1440,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "es-respuesta",
+              "leftValue": "={{ $json.estado_deteccion }}",
+              "rightValue": "detectado",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Consultar datos de la solicitud",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "id": "354d5740-3e07-5b14-8c26-cfa84559e8fb",
+      "position": [
+        1680,
+        -100
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"query DetalleRespuesta($solicitudId: uuid!, $proveedorId: uuid!) {\\n  solicitudes_cotizacion_by_pk(id: $solicitudId) {\\n    codigo nombre estado proyecto_asociado { nombre }\\n  }\\n  proveedores_by_pk(id: $proveedorId) { nombre }\\n}\", variables: { solicitudId: $json.solicitud_id, proveedorId: $json.proveedor_id } } }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "name": "Respuesta de proveedor detectada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "id": "5a6b5be8-8c6e-5c05-8be8-3b56c56172ec",
+      "position": [
+        1920,
+        -100
+      ],
+      "parameters": {
+        "jsCode": "/* Reglas de identificación compartidas con el flujo de recepción de n8n.\n * No envía mensajes ni decide si una cotización es final.\n */\nfunction direccion(valor) {\n  if (valor && typeof valor === 'object') {\n    const lista = valor.value ?? (Array.isArray(valor) ? valor : []);\n    if (lista.length !== 1) return null;\n    return direccion(lista[0].address ?? lista[0].email);\n  }\n  const texto = String(valor ?? '').trim();\n  const angulos = [...texto.matchAll(/<([^<>]+)>/g)];\n  const correo = (angulos.length === 1 ? angulos[0][1] : texto).trim();\n  return /^[^\\s<>@,;]+@[^\\s<>@,;]+\\.[^\\s<>@,;]+$/.test(correo)\n    ? correo.toLowerCase() : null;\n}\n\nfunction cabeceras(mensaje) {\n  const resultado = {};\n  for (const item of mensaje.payload?.headers ?? []) {\n    resultado[String(item.name).toLowerCase()] = item.value;\n  }\n  for (const [clave, valor] of Object.entries(mensaje.headers ?? {})) {\n    resultado[clave.toLowerCase()] = valor;\n  }\n  return resultado;\n}\n\nfunction etiquetas(mensaje) {\n  return (mensaje.labelIds ?? mensaje.labels ?? []).map(valor =>\n    typeof valor === 'string' ? valor : valor.id);\n}\n\nfunction fechaMensaje(mensaje) {\n  const valor = mensaje.internalDate\n    ? Number(mensaje.internalDate) : mensaje.date ?? cabeceras(mensaje).date;\n  if (valor === null || valor === undefined || valor === '') return null;\n  const fecha = new Date(valor);\n  return Number.isFinite(fecha.getTime()) ? fecha.toISOString() : null;\n}\n\nfunction normalizarCorreo(mensaje) {\n  if (etiquetas(mensaje).some(valor => ['SENT', 'DRAFT', 'SPAM', 'TRASH'].includes(valor))) return null;\n  const headers = cabeceras(mensaje);\n  const remitente = direccion(mensaje.from ?? mensaje.From ?? headers.from);\n  if (!remitente || !mensaje.id || !mensaje.threadId) return null;\n  return {\n    gmail_message_id: String(mensaje.id),\n    gmail_thread_id: String(mensaje.threadId),\n    remitente,\n    asunto: String(mensaje.subject ?? mensaje.Subject ?? headers.subject ?? ''),\n    fecha_recepcion: fechaMensaje(mensaje),\n  };\n}\n\nfunction patronCorreo(correo) {\n  // _ y % pueden existir en una dirección, pero no deben ser comodines de SQL.\n  return correo.replace(/[\\\\%_]/g, valor => '\\\\' + valor);\n}\n\nfunction prepararCandidatos(respuesta, correo) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de envíos: ' + respuesta.errors.map(e => e.message).join('; '));\n  if (!Array.isArray(respuesta.data?.envios_solicitud)) throw new Error('Nhost no devolvió la lista de envíos.');\n  const vistos = new Set();\n  return respuesta.data.envios_solicitud.filter(envio => {\n    const valido = ['enviado', 'respondido'].includes(envio.estado)\n      && direccion(envio.destinatario) === correo.remitente\n      && envio.mensaje_id && envio.solicitud_id && envio.proveedor_id && envio.id;\n    if (!valido || vistos.has(envio.id)) return false;\n    vistos.add(envio.id);\n    return true;\n  }).map(envio => ({ correo, envio }));\n}\n\nfunction identificarRespuestas(registros) {\n  const grupos = new Map();\n  for (const registro of registros) {\n    const id = registro.correo.gmail_message_id;\n    if (!grupos.has(id)) grupos.set(id, []);\n    grupos.get(id).push(registro);\n  }\n  const resultado = [];\n  for (const grupo of grupos.values()) {\n    const correo = grupo[0].correo;\n    const coincidencias = grupo.filter(({ envio, original }) => {\n      if (original.error || String(original.id ?? '') !== String(envio.mensaje_id)) return false;\n      if (!etiquetas(original).includes('SENT')) return false;\n      if (String(original.threadId ?? '') !== correo.gmail_thread_id) return false;\n      if (String(original.id) === correo.gmail_message_id) return false;\n      const fechaEnvio = fechaMensaje(original);\n      return !fechaEnvio || !correo.fecha_recepcion || correo.fecha_recepcion >= fechaEnvio;\n    });\n    if (coincidencias.length === 1) {\n      const envio = coincidencias[0].envio;\n      resultado.push({\n        ...correo, estado_deteccion: 'detectado', envio_id: envio.id,\n        solicitud_id: envio.solicitud_id, proveedor_id: envio.proveedor_id,\n        gmail_message_id_envio: envio.mensaje_id,\n        enlace_gmail: 'https://mail.google.com/mail/u/0/#all/' + correo.gmail_thread_id,\n      });\n    } else {\n      resultado.push({\n        ...correo, estado_deteccion: 'revisar',\n        motivo: coincidencias.length > 1\n          ? 'La conversación está vinculada a más de un envío.'\n          : grupo.some(item => item.original.error)\n            ? 'No se pudo consultar uno o más envíos originales en Gmail.'\n            : 'El remitente es conocido, pero el correo no corresponde a una conversación enviada registrada.',\n      });\n    }\n  }\n  return resultado;\n}\n\nfunction completarDeteccion(respuesta, deteccion) {\n  if (respuesta.errors?.length) throw new Error('Nhost rechazó la consulta de la solicitud.');\n  const solicitud = respuesta.data?.solicitudes_cotizacion_by_pk;\n  const proveedor = respuesta.data?.proveedores_by_pk;\n  if (!solicitud || !proveedor) throw new Error('La solicitud o el proveedor ya no están disponibles.');\n  return {\n    ...deteccion,\n    proveedor: proveedor.nombre,\n    solicitud: solicitud.codigo,\n    partida: solicitud.nombre,\n    proyecto: solicitud.proyecto_asociado?.nombre ?? null,\n    estado_solicitud: solicitud.estado,\n  };\n}\n\n\nreturn $input.all().map((item, index) => ({\n  json: completarDeteccion(item.json, $('¿Solicitud identificada?').itemMatching(index).json),\n  pairedItem: { item: index },\n}));"
+      }
+    },
+    {
+      "name": "Revisar conversación manualmente",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "id": "21131455-4d78-5c0d-9cb4-53625a48314e",
+      "position": [
+        1680,
+        160
+      ],
+      "parameters": {}
+    },
+    {
+      "name": "Cómo conectar este flujo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "id": "2c21e823-d1d8-5c5b-b820-9b3aad798c9e",
+      "position": [
+        0,
+        -320
+      ],
+      "parameters": {
+        "content": "## Detector de respuestas de proveedores\n1. Selecciona el MISMO Gmail del envío en los dos nodos Gmail.\n2. Selecciona Nhost Admin (Header Auth) en los dos nodos HTTP.\n3. Prueba con una respuesta al correo original.\n4. Publica/activa cuando termines la conexión.\n\nSolo lee y muestra resultados. No envía correos, no modifica Nhost y no decide si una cotización es final. Lee nuevos mensajes, incluso si ya los abriste.",
+        "height": 280,
+        "width": 750
+      }
+    }
+  ],
+  "connections": {
+    "Leer respuestas en Gmail": {
+      "main": [
+        [
+          {
+            "node": "Normalizar correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalizar correo": {
+      "main": [
+        [
+          {
+            "node": "Buscar envíos al proveedor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar envíos al proveedor": {
+      "main": [
+        [
+          {
+            "node": "Preparar candidatos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar candidatos": {
+      "main": [
+        [
+          {
+            "node": "Consultar envío original en Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar envío original en Gmail": {
+      "main": [
+        [
+          {
+            "node": "Identificar respuestas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar respuestas": {
+      "main": [
+        [
+          {
+            "node": "¿Solicitud identificada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Solicitud identificada?": {
+      "main": [
+        [
+          {
+            "node": "Consultar datos de la solicitud",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Revisar conversación manualmente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar datos de la solicitud": {
+      "main": [
+        [
+          {
+            "node": "Respuesta de proveedor detectada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  },
+  "tags": []
+}
