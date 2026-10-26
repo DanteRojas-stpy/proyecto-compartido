@@ -42,6 +42,10 @@ Cada archivo lleva un nombre legible y metadatos de `solicitud_id`,
 `proveedor_id`, `gmail_message_id`, `gmail_thread_id`, nombre original y origen
 Gmail. Estas referencias se guardan en **Storage**, no se insertan todavía en
 la tabla `documentos` ni se asignan versiones de cotización.
+El control de cierre por vencimiento de E2 consulta las tablas de negocio:
+guardar un archivo en Storage no registra por sí solo el estado `respondio`.
+Hasta conectar ese registro, el especialista debe actualizarlo en su proceso
+de seguimiento para que una respuesta recibida no se cuente como ausente.
 
 El identificador del archivo se calcula de forma reproducible a partir de la
 solicitud, proveedor, correo y posición del adjunto. Antes de subirlo, el flujo

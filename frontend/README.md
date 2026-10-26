@@ -33,11 +33,13 @@ dígitos mínimos. La fecha de inicio se toma automáticamente al crear; el
 especialista selecciona la fecha fin y si la partida es crítica. Para ello
 deben estar aplicados `db/migraciones/004_proyectos_y_correlativos.sql`,
 `db/migraciones/005_fechas_y_partida_critica.sql` y los permisos nuevos.
-Al abrir un proyecto, el front muestra avisos de seguimiento para solicitudes
-activas: diarios para partidas críticas y cada 2 días para las demás.
+Al abrir un proyecto, el front muestra el estado de todas sus solicitudes y los
+avisos de seguimiento para las que están en `inicio`: diarios para partidas
+críticas y cada 2 días para las demás. El especialista puede cerrar una
+solicitud desde esa lista cuando ya existe su cuadro comparativo vigente.
 
-El formulario crea una solicitud en estado `borrador`, busca cada proveedor por
+El formulario crea una solicitud en estado `inicio`, busca cada proveedor por
 RUC o correo y reutiliza su ficha si ya existe. El mismo proveedor puede quedar
 vinculado con varias solicitudes, incluso de proyectos distintos. Después sube
-los Excel al bucket `solicitudes` y cambia el estado a `lista` al terminar. Si
-algo falla, conserva el borrador para poder diagnosticarlo.
+los Excel al bucket `solicitudes` y activa `preparada_para_envio` al terminar.
+El envío de correos no cambia el estado de negocio.

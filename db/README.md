@@ -1,6 +1,10 @@
 # Base de datos (PostgreSQL en Nhost)
 
 Aquí vive la forma de los datos guardados: tablas, estados y trazabilidad.
+
+Las solicitudes usan tres estados de negocio: `inicio`, `cerrado` y
+`cerrado_sin_proveedores`. La preparación del correo se registra aparte mediante
+`preparada_para_envio`; por ello el envío no modifica el estado de la solicitud.
 La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
 
 - `migraciones/`: cambios del esquema en orden numerado. Las instrucciones

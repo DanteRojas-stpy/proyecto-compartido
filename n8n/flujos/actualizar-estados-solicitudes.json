@@ -1,0 +1,132 @@
+{
+  "name": "CostFlow - Cerrar solicitudes sin proveedores",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * *"
+            }
+          ]
+        }
+      },
+      "id": "2a9b887a-bc74-49c0-9611-ceb17447b2fc",
+      "name": "Revisión diaria",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"query SolicitudesVencidas($hoy: date!) {\\n  solicitudes_cotizacion(where: { estado: { _eq: \\\"inicio\\\" }, fecha_limite: { _lt: $hoy } }) { id codigo }\\n  solicitud_proveedores(where: { estado: { _eq: \\\"respondio\\\" } }) { solicitud_id }\\n  documentos(where: { tipo: { _eq: \\\"cotizacion_proveedor\\\" }, documento_estado: { _eq: \\\"vigente\\\" } }) { solicitud_id }\\n}\", variables: { hoy: $now.setZone('America/Lima').toISODate() } } }}",
+        "options": {}
+      },
+      "id": "8c152218-9e60-42e0-86bb-8dcc030202b5",
+      "name": "Consultar solicitudes vencidas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const datos = $json.data;\nif (!datos) throw new Error('Nhost no devolvió datos para revisar los vencimientos.');\nconst conProveedor = new Set([\n  ...(datos.solicitud_proveedores ?? []).map((item) => item.solicitud_id),\n  ...(datos.documentos ?? []).map((item) => item.solicitud_id),\n]);\nreturn (datos.solicitudes_cotizacion ?? [])\n  .filter((solicitud) => !conProveedor.has(solicitud.id))\n  .map((solicitud) => ({ json: solicitud }));"
+      },
+      "id": "c47c86ee-e89f-4b49-8acd-36eb15469732",
+      "name": "Identificar solicitudes sin proveedores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"mutation CerrarSinProveedores($id: uuid!) {\\n  update_solicitudes_cotizacion_by_pk(\\n    pk_columns: { id: $id }\\n    _set: { estado: \\\"cerrado_sin_proveedores\\\" }\\n  ) { id codigo estado cerrada_at }\\n}\", variables: { id: $json.id } } }}",
+        "options": {}
+      },
+      "id": "270de5c9-19bf-4fc3-8b5e-5d543414ab43",
+      "name": "Cerrar sin proveedores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Revisión diaria": {
+      "main": [
+        [
+          {
+            "node": "Consultar solicitudes vencidas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar solicitudes vencidas": {
+      "main": [
+        [
+          {
+            "node": "Identificar solicitudes sin proveedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Identificar solicitudes sin proveedores": {
+      "main": [
+        [
+          {
+            "node": "Cerrar sin proveedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima"
+  },
+  "versionId": "38ca190f-a030-43c1-9ab7-2fffc522c256",
+  "tags": []
+}

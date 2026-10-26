@@ -41,6 +41,10 @@ Actividad | Especialista | Agente IA
   y puede participar en múltiples solicitudes de cotización, incluso de
   proyectos distintos. Cada participación conserva su propio estado dentro de
   la solicitud.
+- Estado de solicitudes: toda solicitud nace en **Inicio**. El especialista la
+  cambia a **Cerrado** cuando existe el cuadro comparativo. Si vence la fecha fin
+  sin respuesta ni cotización de un proveedor, el sistema la cambia a
+  **Cerrado sin proveedores**. Ambos cierres son finales.
 - Ruta crítica: las partidas críticas tendrán reglas de seguimiento y notificación más exigentes.
 - Vigencia de cotizaciones: el sistema debe alertar cuando una propuesta esté próxima a vencer.
 - Cotización final: el agente debe diferenciar versiones preliminares, corregidas y finales para evitar comparar documentos desactualizados.
