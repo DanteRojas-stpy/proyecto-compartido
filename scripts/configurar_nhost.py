@@ -55,7 +55,9 @@ def table_metadata(metadata: dict, schema: str, name: str) -> dict:
 
 
 def relationship_exists(table: dict, name: str) -> bool:
-    relationships = table.get("object_relationships", [])
+    relationships = (
+        table.get("object_relationships", []) + table.get("array_relationships", [])
+    )
     return any(item.get("name") == name for item in relationships)
 
 
@@ -66,14 +68,47 @@ def permission_exists(table: dict, action: str) -> bool:
     )
 
 
-def relationship_operation(table: str, name: str, foreign_key: str) -> dict:
+def relationship_operation(
+    table: str, name: str, foreign_key: str | None = None,
+    remote_table: str | None = None, column_mapping: dict | None = None,
+) -> dict:
+    if foreign_key:
+        using = {"foreign_key_constraint_on": foreign_key}
+    else:
+        using = {
+            "manual_configuration": {
+                "remote_table": {"schema": "public", "name": remote_table},
+                "column_mapping": column_mapping,
+                "insertion_order": None,
+            }
+        }
     return {
         "type": "pg_create_object_relationship",
         "args": {
             "source": SOURCE,
             "table": {"schema": "public", "name": table},
             "name": name,
-            "using": {"foreign_key_constraint_on": foreign_key},
+            "using": using,
+        },
+    }
+
+
+def array_relationship_operation(
+    table: str, name: str, remote_table: str, column_mapping: dict
+) -> dict:
+    return {
+        "type": "pg_create_array_relationship",
+        "args": {
+            "source": SOURCE,
+            "table": {"schema": "public", "name": table},
+            "name": name,
+            "using": {
+                "manual_configuration": {
+                    "remote_table": {"schema": "public", "name": remote_table},
+                    "column_mapping": column_mapping,
+                    "insertion_order": None,
+                }
+            },
         },
     }
 
@@ -122,18 +157,62 @@ def main() -> int:
         metadata = request_metadata(base_url, secret, {"type": "export_metadata", "args": {}})
         operations: list[dict] = []
 
-        relationships = [
-            ("solicitudes_cotizacion", "proyecto_asociado", "proyecto_id"),
-            ("solicitud_proveedores", "solicitud_cotizacion", "solicitud_id"),
-            ("solicitud_proveedores", "proveedor_asociado", "proveedor_id"),
-            ("documentos", "solicitud_cotizacion", "solicitud_id"),
-            ("documentos", "proveedor_asociado", "proveedor_id"),
-            ("partidas", "solicitud_cotizacion", "solicitud_id"),
+        tracked_tables = [
+            "correos_proveedor",
+            "aclaraciones_proveedor",
+            "coordinaciones_proveedor",
+            "historial_respuestas_proveedor",
+            "notificaciones",
         ]
-        for table, name, foreign_key in relationships:
+        for name in tracked_tables:
+            if not table_metadata(metadata, "public", name):
+                operations.append({
+                    "type": "pg_track_table",
+                    "args": {"source": SOURCE, "table": {"schema": "public", "name": name}},
+                })
+
+        relationships = [
+            ("solicitudes_cotizacion", "proyecto_asociado", "proyecto_id", None, None),
+            ("solicitud_proveedores", "solicitud_cotizacion", "solicitud_id", None, None),
+            ("solicitud_proveedores", "proveedor_asociado", "proveedor_id", None, None),
+            ("documentos", "solicitud_cotizacion", "solicitud_id", None, None),
+            ("documentos", "proveedor_asociado", "proveedor_id", None, None),
+            ("partidas", "solicitud_cotizacion", "solicitud_id", None, None),
+            ("envios_solicitud", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("envios_solicitud", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("envios_solicitud", "participacion_seguimiento", None, "solicitud_proveedores", {"solicitud_id": "solicitud_id", "proveedor_id": "proveedor_id"}),
+            ("correos_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("correos_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("aclaraciones_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("aclaraciones_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("aclaraciones_proveedor", "correo_asociado", "correo_id", None, None),
+            ("coordinaciones_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("coordinaciones_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("historial_respuestas_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("historial_respuestas_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("historial_respuestas_proveedor", "correo_asociado", "correo_id", None, None),
+            ("notificaciones", "solicitud_cotizacion", "solicitud_id", None, None),
+            ("notificaciones", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+        ]
+        for table, name, foreign_key, remote_table, column_mapping in relationships:
             current = table_metadata(metadata, "public", table)
             if not relationship_exists(current, name):
-                operations.append(relationship_operation(table, name, foreign_key))
+                operations.append(relationship_operation(
+                    table, name, foreign_key, remote_table, column_mapping
+                ))
+
+        solicitud_proveedores_metadata = table_metadata(
+            metadata, "public", "solicitud_proveedores"
+        )
+        if not relationship_exists(
+            solicitud_proveedores_metadata, "aclaraciones_pendientes"
+        ):
+            operations.append(array_relationship_operation(
+                "solicitud_proveedores",
+                "aclaraciones_pendientes",
+                "aclaraciones_proveedor",
+                {"solicitud_id": "solicitud_id", "proveedor_id": "proveedor_id"},
+            ))
 
         proyecto_filter = owner_filter("responsable_id")
         solicitud_filter = owner_filter("creado_por")
@@ -157,6 +236,8 @@ def main() -> int:
             ]
         }
         partida_filter = {"solicitud_cotizacion": solicitud_filter}
+        seguimiento_filter = {"solicitud_cotizacion": solicitud_filter}
+        notificacion_filter = owner_filter("usuario_id")
 
         definitions = {
             "proyectos": {
@@ -211,12 +292,17 @@ def main() -> int:
             },
             "solicitud_proveedores": {
                 "select": {
-                    "columns": ["solicitud_id", "proveedor_id", "estado", "created_at"],
+                    "columns": ["solicitud_id", "proveedor_id", "estado", "estado_respuesta", "detalle_respuesta", "considerado", "numero_coordinaciones", "ultimo_correo_at", "proximo_seguimiento_at", "origen_clasificacion", "confianza_clasificacion", "evidencia_clasificacion", "created_at", "updated_at"],
                     "filter": vinculo_filter,
                     "allow_aggregations": False,
                 },
                 "insert": {"columns": ["solicitud_id", "proveedor_id"], "check": vinculo_filter},
-                "update": {"columns": ["estado"], "filter": vinculo_filter, "check": None},
+                "update": {
+                    "columns": ["estado", "estado_respuesta", "detalle_respuesta"],
+                    "filter": vinculo_filter,
+                    "check": None,
+                    "set": {"origen_clasificacion": "usuario"},
+                },
                 "delete": {"filter": vinculo_filter},
             },
             "documentos": {
@@ -253,6 +339,48 @@ def main() -> int:
                     "check": None,
                 },
                 "delete": {"filter": partida_filter},
+            },
+            "correos_proveedor": {
+                "select": {
+                    "columns": ["id", "solicitud_id", "proveedor_id", "gmail_message_id", "gmail_thread_id", "remitente", "destinatarios", "asunto", "cuerpo_texto", "adjuntos", "recibido_at", "fuera_plazo", "analisis_agente", "created_at"],
+                    "filter": seguimiento_filter,
+                    "allow_aggregations": False,
+                },
+            },
+            "aclaraciones_proveedor": {
+                "select": {
+                    "columns": ["id", "solicitud_id", "proveedor_id", "correo_id", "dedupe_key", "descripcion", "estado", "resuelta_por", "resuelta_at", "created_at"],
+                    "filter": seguimiento_filter,
+                    "allow_aggregations": False,
+                },
+                "update": {"columns": ["estado"], "filter": seguimiento_filter, "check": None},
+            },
+            "coordinaciones_proveedor": {
+                "select": {
+                    "columns": ["id", "solicitud_id", "proveedor_id", "medio", "comentario", "registrado_por", "created_at"],
+                    "filter": seguimiento_filter,
+                    "allow_aggregations": False,
+                },
+                "insert": {
+                    "columns": ["solicitud_id", "proveedor_id", "medio", "comentario"],
+                    "check": seguimiento_filter,
+                    "set": {"registrado_por": SESSION_USER},
+                },
+            },
+            "historial_respuestas_proveedor": {
+                "select": {
+                    "columns": ["id", "solicitud_id", "proveedor_id", "correo_id", "estado_anterior", "estado_nuevo", "detalle_anterior", "detalle_nuevo", "considerado_anterior", "considerado_nuevo", "origen", "confianza", "evidencia", "cambiado_por", "created_at"],
+                    "filter": seguimiento_filter,
+                    "allow_aggregations": False,
+                },
+            },
+            "notificaciones": {
+                "select": {
+                    "columns": ["id", "usuario_id", "solicitud_id", "proveedor_id", "tipo", "titulo", "mensaje", "estado", "datos", "created_at", "leida_at", "atendida_at"],
+                    "filter": notificacion_filter,
+                    "allow_aggregations": False,
+                },
+                "update": {"columns": ["estado"], "filter": notificacion_filter, "check": None},
             },
         }
 

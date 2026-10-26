@@ -34,3 +34,6 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
 - `004_proyectos_y_correlativos.sql`: códigos `MA` y `SC` por proyecto.
 - `005_fechas_y_partida_critica.sql`: fecha límite y frecuencia de avisos según
   la ruta crítica.
+- `006_estados_solicitudes.sql`: estados de la solicitud y cierre validado.
+- `007_seguimiento_proveedores.sql`: respuestas, correos, aclaraciones,
+  coordinaciones, auditoría y notificaciones persistentes.
