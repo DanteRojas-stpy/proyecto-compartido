@@ -1,0 +1,132 @@
+{
+  "name": "CostFlow - Seguimiento diario de proveedores",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "id": "88d151b1-8a7f-4c0a-9694-7a1dfbcda9d7",
+      "name": "Seguimiento a las 9:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: `query DatosSeguimiento($inicioDia: timestamptz!) {\n  solicitudes_cotizacion(where: { estado: { _eq: \"inicio\" }, preparada_para_envio: { _eq: true } }) {\n    id codigo nombre creado_por fecha_limite frecuencia_aviso_dias partida_critica\n  }\n  solicitud_proveedores(where: { solicitud_cotizacion: { estado: { _eq: \"inicio\" } } }) {\n    solicitud_id proveedor_id estado_respuesta detalle_respuesta considerado numero_coordinaciones\n    proveedor_asociado { nombre correo }\n  }\n  envios_solicitud(where: { estado: { _eq: \"enviado\" } }) {\n    solicitud_id proveedor_id enviado_at\n  }\n  notificaciones(where: { created_at: { _gte: $inicioDia } }) { dedupe_key }\n}`, variables: { inicioDia: $now.setZone('America/Lima').startOf('day').toISO() } } }}",
+        "options": {}
+      },
+      "id": "64a5ff90-17dd-4650-be4f-d5bd9a40b7ed",
+      "name": "Consultar estado de proveedores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const datos = $json.data;\nif (!datos) throw new Error('Nhost no devolvió datos para el seguimiento.');\nconst hoy = $now.setZone('America/Lima').toISODate();\nconst solicitudes = new Map((datos.solicitudes_cotizacion ?? []).map((item) => [item.id, item]));\nconst envios = new Map((datos.envios_solicitud ?? []).map((item) => [`${item.solicitud_id}:${item.proveedor_id}`, item.enviado_at]));\nconst existentes = new Set((datos.notificaciones ?? []).map((item) => item.dedupe_key));\nconst grupos = new Map();\nfor (const participacion of datos.solicitud_proveedores ?? []) {\n  if (!solicitudes.has(participacion.solicitud_id)) continue;\n  if (!grupos.has(participacion.solicitud_id)) grupos.set(participacion.solicitud_id, []);\n  grupos.get(participacion.solicitud_id).push(participacion);\n}\nconst fechaLima = (valor) => /^\\d{4}-\\d{2}-\\d{2}$/.test(String(valor))\n  ? String(valor)\n  : new Date(valor).toLocaleDateString('en-CA', { timeZone: 'America/Lima' });\nconst fechaDia = (valor) => Date.parse(`${fechaLima(valor)}T12:00:00Z`);\nconst etiquetas = {\n  no_envio_cotizacion: 'No envió cotización',\n  envio_cotizacion_con_aclaracion: 'Envió cotización con aclaración',\n  envio_cotizacion: 'Envió cotización',\n};\nconst items = [];\nfor (const [solicitudId, participantes] of grupos) {\n  const solicitud = solicitudes.get(solicitudId);\n  const excluidos = [];\n  let primerEnvio = null;\n  const estados = participantes.map((participacion) => {\n    const envio = envios.get(`${solicitudId}:${participacion.proveedor_id}`);\n    if (envio && (!primerEnvio || envio < primerEnvio)) primerEnvio = envio;\n    const sinCotizacion = participacion.estado_respuesta === 'no_envio_cotizacion';\n    const excluir = participacion.considerado && sinCotizacion && (\n      participacion.numero_coordinaciones >= 3 || solicitud.fecha_limite < hoy\n    );\n    if (excluir) excluidos.push(participacion.proveedor_id);\n    return {\n      proveedor: participacion.proveedor_asociado.nombre,\n      correo: participacion.proveedor_asociado.correo,\n      estado: excluir ? 'No envió cotización' : etiquetas[participacion.estado_respuesta],\n      coordinaciones: participacion.numero_coordinaciones,\n      considerado: excluir ? false : participacion.considerado,\n    };\n  });\n  if (!primerEnvio) continue;\n  const dias = Math.floor((fechaDia(hoy) - fechaDia(primerEnvio)) / 86400000);\n  const frecuencia = solicitud.frecuencia_aviso_dias;\n  const corresponde = dias >= frecuencia && dias % frecuencia === 0;\n  if (!corresponde && !excluidos.length) continue;\n  const clave = `seguimiento:${solicitudId}:${hoy}`;\n  if (existentes.has(clave)) continue;\n  const resumen = estados.map((item) => `${item.proveedor}: ${item.estado}`).join(' · ');\n  items.push({ json: {\n    solicitudId,\n    excluidos,\n    notificacion: {\n      usuario_id: solicitud.creado_por,\n      solicitud_id: solicitudId,\n      tipo: 'resumen_seguimiento',\n      titulo: `Seguimiento ${solicitud.codigo} — ${solicitud.nombre}`,\n      mensaje: resumen,\n      datos: { fecha: hoy, partida_critica: solicitud.partida_critica, proveedores: estados },\n      dedupe_key: clave,\n    },\n  }});\n}\nreturn items;"
+      },
+      "id": "67ef19b8-fd12-4023-81ca-00cc7808da72",
+      "name": "Preparar resumen y exclusiones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: `mutation RegistrarSeguimiento($solicitudId: uuid!, $excluidos: [uuid!]!, $notificacion: notificaciones_insert_input!) {\n  update_solicitud_proveedores(\n    where: { solicitud_id: { _eq: $solicitudId }, proveedor_id: { _in: $excluidos } }\n    _set: {\n      estado_respuesta: \"no_envio_cotizacion\"\n      detalle_respuesta: \"plazo_vencido\"\n      considerado: false\n      origen_clasificacion: \"sistema\"\n    }\n  ) { affected_rows }\n  insert_notificaciones_one(\n    object: $notificacion\n    on_conflict: { constraint: notificaciones_dedupe_key_key, update_columns: [] }\n  ) { id }\n}`, variables: { solicitudId: $json.solicitudId, excluidos: $json.excluidos, notificacion: $json.notificacion } } }}",
+        "options": {}
+      },
+      "id": "26447a23-2657-4d28-8f6e-f7e083f95d51",
+      "name": "Guardar notificación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        752,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REEMPLAZAR_NHOST",
+          "name": "Nhost Admin"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Seguimiento a las 9:00": {
+      "main": [
+        [
+          {
+            "node": "Consultar estado de proveedores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar estado de proveedores": {
+      "main": [
+        [
+          {
+            "node": "Preparar resumen y exclusiones",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar resumen y exclusiones": {
+      "main": [
+        [
+          {
+            "node": "Guardar notificación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima"
+  },
+  "versionId": "3372eeca-bfb6-487d-9c8a-0de3e32f1c3b",
+  "tags": []
+}

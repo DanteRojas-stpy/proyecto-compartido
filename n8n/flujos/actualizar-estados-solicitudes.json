@@ -7,7 +7,7 @@
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 8 * * *"
+              "expression": "15 9 * * *"
             }
           ]
         }
@@ -29,7 +29,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { query: \"query SolicitudesVencidas($hoy: date!) {\\n  solicitudes_cotizacion(where: { estado: { _eq: \\\"inicio\\\" }, fecha_limite: { _lt: $hoy } }) { id codigo }\\n  solicitud_proveedores(where: { estado: { _eq: \\\"respondio\\\" } }) { solicitud_id }\\n  documentos(where: { tipo: { _eq: \\\"cotizacion_proveedor\\\" }, documento_estado: { _eq: \\\"vigente\\\" } }) { solicitud_id }\\n}\", variables: { hoy: $now.setZone('America/Lima').toISODate() } } }}",
+        "jsonBody": "={{ { query: \"query SolicitudesVencidas($hoy: date!) {\\n  solicitudes_cotizacion(where: { estado: { _eq: \\\"inicio\\\" }, fecha_limite: { _lt: $hoy } }) { id codigo }\\n  solicitud_proveedores(where: { estado_respuesta: { _in: [\\\"envio_cotizacion\\\", \\\"envio_cotizacion_con_aclaracion\\\"] } }) { solicitud_id }\\n  documentos(where: { tipo: { _eq: \\\"cotizacion_proveedor\\\" }, documento_estado: { _eq: \\\"vigente\\\" } }) { solicitud_id }\\n}\", variables: { hoy: $now.setZone('America/Lima').toISODate() } } }}",
         "options": {}
       },
       "id": "8c152218-9e60-42e0-86bb-8dcc030202b5",

@@ -26,3 +26,15 @@ siguen igual que en `docs/CONTEXTO_COSTFLOW.md`.
 todavía menciona Supabase. No se edita, porque es la referencia acordada con el
 especialista. Si cambia la arquitectura de forma más profunda, se revisa en un
 nuevo registro.
+
+## 2026-10-26: seguimiento y notificaciones en la plataforma
+
+**Decisión:** n8n ejecuta el calendario y recibe Gmail; un agente de IA clasifica
+el contexto de la respuesta; PostgreSQL conserva estado y auditoría; CostFlow
+muestra todas las notificaciones. No se envían resúmenes internos por correo.
+
+**Reglas:** el seguimiento comienza con el envío exitoso, usa días calendario y
+se ejecuta a las 09:00 de Lima. Las respuestas se notifican al llegar. La IA
+requiere revisión del usuario cuando su confianza es menor de 0.8. Tres
+coordinaciones sin cotización o la fecha límite excluyen al proveedor. Una
+cotización con aclaraciones sí cuenta como proveedor obtenido.

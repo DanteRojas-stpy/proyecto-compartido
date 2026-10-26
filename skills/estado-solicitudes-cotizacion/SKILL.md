@@ -14,7 +14,7 @@ solicitud de cotización.
 |---|---|---|
 | Inicio | `inicio` | Se asigna al crear la solicitud y se mantiene durante el envío, seguimiento y recepción de ofertas. |
 | Cerrado | `cerrado` | El usuario lo selecciona cuando existe un documento vigente de tipo `cuadro_comparativo`. |
-| Cerrado sin proveedores | `cerrado_sin_proveedores` | Se asigna automáticamente después de la fecha fin cuando no existe respuesta ni cotización vigente de ningún proveedor. |
+| Cerrado sin proveedores | `cerrado_sin_proveedores` | Se asigna automáticamente después de la fecha fin cuando ningún proveedor envió una cotización, con o sin aclaraciones. |
 
 Los estados de cierre son finales. No reabrir ni cambiar una solicitud después
 del cierre.
@@ -30,7 +30,8 @@ del cierre.
    fin debe ser anterior al día de ejecución.
 5. Considerar que se consiguió un proveedor cuando existe al menos uno de estos
    registros para la solicitud:
-   - un vínculo en `solicitud_proveedores` con estado `respondio`;
+   - un vínculo en `solicitud_proveedores` con `estado_respuesta` igual a
+     `envio_cotizacion` o `envio_cotizacion_con_aclaracion`;
    - un documento vigente de tipo `cotizacion_proveedor`.
 6. Si no se consiguió ningún proveedor, cambiar el estado a
    `cerrado_sin_proveedores`.
