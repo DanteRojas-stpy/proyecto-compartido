@@ -22,6 +22,7 @@ negocio y conserva la trazabilidad.
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
 | `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor y registra el mensaje | Evento de Nhost cuando `preparada_para_envio` cambia a `true` | Listo para configurar |
+| `flujos/lectura-cotizacion-pdf-claude.json` | Lee un PDF de cotización con Claude (`claude-opus-5-5`) y devuelve cabecera e ítems en JSON. Marca para revisión lo ambiguo | Evento de Nhost al subir un documento de tipo `cotizacion` | Borrador, sin activar |
 | `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, clasifica la respuesta y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
 | `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
 | `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |

@@ -1,0 +1,120 @@
+{
+  "name": "Lectura de cotizaciones PDF con Claude",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "cotizacion-subida",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "evento-nhost",
+      "name": "Evento de Nhost (cotización subida)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "cotizacion-subida",
+      "credentials": {
+        "httpHeaderAuth": { "id": "PENDIENTE", "name": "CostFlow Webhook" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst doc = body.event?.data?.new ?? body;\n\nif (doc.tipo !== 'cotizacion') {\n  throw new Error('El documento no es una cotización');\n}\nif (doc.mime_type !== 'application/pdf') {\n  throw new Error('Esta versión solo lee PDF; el archivo es ' + doc.mime_type);\n}\n\nreturn [{ json: {\n  documento_id: doc.id,\n  solicitud_id: doc.solicitud_id,\n  proveedor_id: doc.proveedor_id,\n  version_recibida: doc.version ?? null\n} }];"
+      },
+      "id": "validar-documento",
+      "name": "Validar que sea cotización PDF",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.NHOST_STORAGE_URL }}/files/{{ $json.documento_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "response": { "response": { "responseFormat": "file" } },
+          "timeout": 60000
+        }
+      },
+      "id": "descargar-pdf",
+      "name": "Descargar PDF de Nhost Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "PENDIENTE", "name": "Nhost Admin" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const buf = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst MAX = 32 * 1024 * 1024;\nif (buf.length > MAX) {\n  throw new Error('El PDF supera 32 MB; dividirlo antes de leerlo');\n}\n\nconst instrucciones = `Eres un asistente que extrae datos de cotizaciones de obra en soles o dólares.\nLee el PDF adjunto y devuelve SOLO los datos que aparecen escritos.\n\nReglas:\n- No inventes valores. Si un dato no aparece, devuelve null.\n- Copia los precios tal como figuran. Indica en igv_incluido si el documento dice que el precio incluye IGV; si no lo dice, usa null.\n- Indica la página de cada ítem en pagina.\n- Si una línea es ambigua o ilegible, marca requiere_revision como true y explícalo en observacion.\n- version: usa \"preliminar\", \"corregida\" o \"final\" solo si el documento lo dice; si no, null.`;\n\nreturn [{ json: {\n  model: 'claude-opus-5-5',\n  max_tokens: 16000,\n  output_config: {\n    effort: 'low',\n    format: {\n      type: 'json_schema',\n      schema: {\n        type: 'object',\n        additionalProperties: false,\n        required: ['cabecera', 'items', 'requiere_revision'],\n        properties: {\n          cabecera: {\n            type: 'object',\n            additionalProperties: false,\n            required: ['proveedor_nombre', 'ruc', 'fecha', 'moneda', 'validez_dias', 'plazo_dias', 'forma_pago', 'garantia_meses', 'version'],\n            properties: {\n              proveedor_nombre: { type: ['string', 'null'] },\n              ruc: { type: ['string', 'null'] },\n              fecha: { type: ['string', 'null'] },\n              moneda: { type: ['string', 'null'] },\n              validez_dias: { type: ['integer', 'null'] },\n              plazo_dias: { type: ['integer', 'null'] },\n              forma_pago: { type: ['string', 'null'] },\n              garantia_meses: { type: ['integer', 'null'] },\n              version: { type: ['string', 'null'], enum: ['preliminar', 'corregida', 'final', null] }\n            }\n          },\n          items: {\n            type: 'array',\n            items: {\n              type: 'object',\n              additionalProperties: false,\n              required: ['codigo', 'descripcion', 'unidad', 'cantidad', 'precio_unitario', 'total', 'igv_incluido', 'pagina', 'observacion'],\n              properties: {\n                codigo: { type: ['string', 'null'] },\n                descripcion: { type: 'string' },\n                unidad: { type: ['string', 'null'] },\n                cantidad: { type: ['number', 'null'] },\n                precio_unitario: { type: ['number', 'null'] },\n                total: { type: ['number', 'null'] },\n                igv_incluido: { type: ['boolean', 'null'] },\n                pagina: { type: ['integer', 'null'] },\n                observacion: { type: ['string', 'null'] }\n              }\n            }\n          },\n          requiere_revision: { type: 'boolean' }\n        }\n      }\n    }\n  },\n  messages: [{\n    role: 'user',\n    content: [\n      { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } },\n      { type: 'text', text: instrucciones }\n    ]\n  }]\n} }];"
+      },
+      "id": "preparar-peticion",
+      "name": "Preparar petición a Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": { "timeout": 300000 }
+      },
+      "id": "leer-con-claude",
+      "name": "Leer PDF con Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "credentials": {
+        "httpHeaderAuth": { "id": "PENDIENTE", "name": "Anthropic API" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\n\nif (r.stop_reason === 'refusal') {\n  return [{ json: { estado: 'revision_manual', motivo: 'Claude declinó procesar el documento', ...r.stop_details } }];\n}\nif (r.stop_reason === 'max_tokens') {\n  return [{ json: { estado: 'revision_manual', motivo: 'La respuesta se cortó: el documento tiene demasiados ítems' } }];\n}\n\nconst texto = r.content.find(b => b.type === 'text')?.text;\nconst datos = JSON.parse(texto);\n\nreturn [{ json: {\n  estado: datos.requiere_revision ? 'revision_manual' : 'extraido',\n  cabecera: datos.cabecera,\n  items: datos.items,\n  uso: r.usage\n} }];"
+      },
+      "id": "interpretar-respuesta",
+      "name": "Interpretar respuesta",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    }
+  ],
+  "connections": {
+    "Evento de Nhost (cotización subida)": {
+      "main": [[{ "node": "Validar que sea cotización PDF", "type": "main", "index": 0 }]]
+    },
+    "Validar que sea cotización PDF": {
+      "main": [[{ "node": "Descargar PDF de Nhost Storage", "type": "main", "index": 0 }]]
+    },
+    "Descargar PDF de Nhost Storage": {
+      "main": [[{ "node": "Preparar petición a Claude", "type": "main", "index": 0 }]]
+    },
+    "Preparar petición a Claude": {
+      "main": [[{ "node": "Leer PDF con Claude", "type": "main", "index": 0 }]]
+    },
+    "Leer PDF con Claude": {
+      "main": [[{ "node": "Interpretar respuesta", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false,
+  "tags": []
+}
