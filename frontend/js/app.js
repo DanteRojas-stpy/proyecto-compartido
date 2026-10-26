@@ -4,8 +4,20 @@ import { createClient as createSubscriptionClient } from "https://esm.sh/graphql
 const ui = {
   configuracion: document.querySelector("#configuracion"),
   acceso: document.querySelector("#acceso"),
+  proyectos: document.querySelector("#proyectos"),
+  listaProyectos: document.querySelector("#lista-proyectos"),
   registro: document.querySelector("#registro"),
   solicitudes: document.querySelector("#solicitudes"),
+  nuevoProyecto: document.querySelector("#nuevo-proyecto"),
+  cancelarProyecto: document.querySelector("#cancelar-proyecto"),
+  irInicio: document.querySelector("#ir-inicio"),
+  volverProyectos: document.querySelector("#volver-proyectos"),
+  nuevaSolicitud: document.querySelector("#nueva-solicitud"),
+  cancelarSolicitud: document.querySelector("#cancelar-solicitud"),
+  panelNuevaSolicitud: document.querySelector("#panel-nueva-solicitud"),
+  proyectoActivoCodigo: document.querySelector("#proyecto-activo-codigo"),
+  proyectoActivoNombre: document.querySelector("#proyecto-activo-nombre"),
+  proyectoActivoResumen: document.querySelector("#proyecto-activo-resumen"),
   formProyecto: document.querySelector("#form-proyecto"),
   resultadoProyecto: document.querySelector("#resultado-proyecto"),
   proyectoId: document.querySelector("#proyecto-id"),
@@ -16,7 +28,6 @@ const ui = {
   fechaInicio: document.querySelector("#fecha-inicio"),
   fechaLimite: document.querySelector("#fecha-limite"),
   estadoSolicitudes: document.querySelector("#estado-solicitudes"),
-  seguimientoProveedores: document.querySelector("#seguimiento-proveedores"),
   notificaciones: document.querySelector("#notificaciones"),
   contadorNotificaciones: document.querySelector("#contador-notificaciones"),
   dialogoCoordinacion: document.querySelector("#dialogo-coordinacion"),
@@ -41,6 +52,8 @@ let configuracionNhost;
 let clienteSuscripcion;
 let detenerSuscripcion;
 let intervaloNotificaciones;
+let usuarioSesionId;
+let proyectoActivoId = "";
 const opcionesRolUsuario = { headers: { "x-hasura-role": "user" } };
 
 const etiquetasRespuesta = {
@@ -132,17 +145,27 @@ function leerProveedores() {
 
 function mostrarSesion(session) {
   const conectado = Boolean(session?.user);
+  const nuevaSesion = conectado && usuarioSesionId !== session.user.id;
+  usuarioSesionId = conectado ? session.user.id : undefined;
   ui.acceso.classList.toggle("oculto", conectado);
-  ui.registro.classList.toggle("oculto", !conectado);
-  ui.solicitudes.classList.toggle("oculto", !conectado);
   ui.cerrarSesion.classList.toggle("oculto", !conectado);
   ui.usuarioActivo.textContent = conectado ? session.user.email : "";
   if (conectado) {
-    cargarProyectos().catch((error) => mostrarResultado(mensajeError(error), "error"));
+    if (nuevaSesion) {
+      proyectosDisponibles = [];
+      ui.listaProyectos.replaceChildren();
+      mostrarDashboard();
+      cargarProyectos().catch((error) => mostrarResultado(mensajeError(error), "error"));
+    }
     iniciarNotificacionesEnTiempoReal();
   } else {
     detenerNotificacionesEnTiempoReal();
+    ui.proyectos.classList.add("oculto");
+    ui.registro.classList.add("oculto");
+    ui.solicitudes.classList.add("oculto");
     ui.proyectoId.replaceChildren();
+    ui.listaProyectos.replaceChildren();
+    proyectoActivoId = "";
   }
 }
 
@@ -181,22 +204,136 @@ async function autenticar(crear = false) {
   if (crear && !respuesta.body.session) alert("Revisa tu correo para confirmar la cuenta antes de ingresar.");
 }
 
+function mostrarDashboard() {
+  ui.proyectos.classList.remove("oculto");
+  ui.registro.classList.add("oculto");
+  ui.solicitudes.classList.add("oculto");
+  ui.panelNuevaSolicitud.classList.add("oculto");
+  document.title = "CostFlow | Proyectos";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function metricasProyecto(proyectoId) {
+  const solicitudes = proyectosDisponibles.find((item) => item.id === proyectoId)?.solicitudes ?? [];
+  return {
+    total: solicitudes.length,
+    criticas: solicitudes.filter((item) => item.partida_critica).length,
+    activas: solicitudes.filter((item) => item.estado === "inicio").length,
+  };
+}
+
+function actualizarCabeceraProyecto() {
+  const proyecto = proyectosDisponibles.find((item) => item.id === proyectoActivoId);
+  if (!proyecto) return;
+  const metricas = metricasProyecto(proyecto.id);
+  ui.proyectoActivoCodigo.textContent = proyecto.codigo;
+  ui.proyectoActivoNombre.textContent = proyecto.nombre;
+  ui.proyectoActivoResumen.textContent = `${metricas.total} solicitud${metricas.total === 1 ? "" : "es"} · ${metricas.criticas} crítica${metricas.criticas === 1 ? "" : "s"}`;
+}
+
+function renderizarProyectos() {
+  ui.listaProyectos.replaceChildren();
+  for (const proyecto of proyectosDisponibles) {
+    const metricas = metricasProyecto(proyecto.id);
+    const tarjeta = document.createElement("button");
+    tarjeta.type = "button";
+    tarjeta.className = "tarjeta-proyecto";
+    tarjeta.setAttribute("aria-label", `Abrir proyecto ${proyecto.nombre}`);
+
+    const cabecera = document.createElement("span");
+    const codigo = document.createElement("span");
+    codigo.className = "codigo";
+    codigo.textContent = proyecto.codigo;
+    const nombre = document.createElement("span");
+    nombre.className = "titulo";
+    nombre.textContent = proyecto.nombre;
+    const estado = document.createElement("span");
+    estado.className = `estado-proyecto${metricas.total && !metricas.activas ? " completo" : ""}`;
+    estado.textContent = metricas.activas
+      ? `${metricas.activas} activa${metricas.activas === 1 ? "" : "s"}`
+      : metricas.total ? "Sin solicitudes activas" : "Sin solicitudes";
+    cabecera.append(codigo, nombre, estado);
+
+    const metricasElemento = document.createElement("span");
+    metricasElemento.className = "metricas-proyecto";
+    for (const [valor, etiqueta] of [[metricas.total, "Solicitudes"], [metricas.criticas, "Críticas"]]) {
+      const metrica = document.createElement("span");
+      metrica.className = "metrica";
+      const cifra = document.createElement("strong");
+      cifra.textContent = valor;
+      const texto = document.createElement("span");
+      texto.textContent = etiqueta;
+      metrica.append(cifra, texto);
+      metricasElemento.append(metrica);
+    }
+
+    const pie = document.createElement("span");
+    pie.className = "pie-tarjeta";
+    const actividad = document.createElement("span");
+    actividad.className = "ayuda";
+    actividad.textContent = `Actualizado ${formatearFecha(proyecto.actividad_at)}`;
+    const enlace = document.createElement("span");
+    enlace.className = "enlace-tarjeta";
+    enlace.textContent = "Abrir →";
+    pie.append(actividad, enlace);
+    tarjeta.append(cabecera, metricasElemento, pie);
+    tarjeta.addEventListener("click", () => abrirProyecto(proyecto.id));
+    ui.listaProyectos.append(tarjeta);
+  }
+  if (!proyectosDisponibles.length) {
+    const vacio = document.createElement("div");
+    vacio.className = "vacio-proyectos";
+    vacio.innerHTML = "<h2>Aún no hay proyectos</h2><p>Crea el primer proyecto para comenzar a gestionar solicitudes de cotización.</p>";
+    ui.listaProyectos.append(vacio);
+  }
+}
+
+async function abrirProyecto(proyectoId) {
+  const proyecto = proyectosDisponibles.find((item) => item.id === proyectoId);
+  if (!proyecto) return;
+  proyectoActivoId = proyectoId;
+  ui.proyectoId.value = proyectoId;
+  ui.guardarSolicitud.disabled = false;
+  mostrarProyectoSeleccionado();
+  ui.proyectos.classList.add("oculto");
+  ui.registro.classList.add("oculto");
+  ui.solicitudes.classList.remove("oculto");
+  ui.panelNuevaSolicitud.classList.add("oculto");
+  actualizarCabeceraProyecto();
+  document.title = `CostFlow | ${proyecto.nombre}`;
+  await Promise.all([cargarDetalleProyecto(), cargarNotificaciones(), actualizarCodigoSugerido()]);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 async function cargarProyectos(seleccionarId = ui.proyectoId.value) {
   const respuesta = await graphql(`query ProyectosDisponibles {
-    proyectos(order_by: { codigo: asc }) { id codigo nombre }
+    proyectos(order_by: { codigo: asc }) { id codigo nombre updated_at }
+    solicitudes_cotizacion(order_by: { created_at: desc }) {
+      id proyecto_id estado partida_critica updated_at
+    }
   }`);
-  proyectosDisponibles = respuesta.proyectos;
+  const solicitudesPorProyecto = new Map();
+  for (const solicitud of respuesta.solicitudes_cotizacion) {
+    if (!solicitudesPorProyecto.has(solicitud.proyecto_id)) solicitudesPorProyecto.set(solicitud.proyecto_id, []);
+    solicitudesPorProyecto.get(solicitud.proyecto_id).push(solicitud);
+  }
+  proyectosDisponibles = respuesta.proyectos.map((proyecto) => ({
+    ...proyecto,
+    solicitudes: solicitudesPorProyecto.get(proyecto.id) ?? [],
+    actividad_at: (solicitudesPorProyecto.get(proyecto.id) ?? []).reduce(
+      (ultima, solicitud) => solicitud.updated_at > ultima ? solicitud.updated_at : ultima,
+      proyecto.updated_at,
+    ),
+  }));
   ui.proyectoId.replaceChildren(new Option("Selecciona un proyecto", ""));
   for (const proyecto of respuesta.proyectos) {
     ui.proyectoId.add(new Option(`${proyecto.codigo} — ${proyecto.nombre}`, proyecto.id));
   }
   if (respuesta.proyectos.some((proyecto) => proyecto.id === seleccionarId)) ui.proyectoId.value = seleccionarId;
   ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+  renderizarProyectos();
   mostrarProyectoSeleccionado();
-  await actualizarCodigoSugerido();
-  await cargarEstadoSolicitudes();
-  await cargarSeguimientoProveedores();
-  await cargarNotificaciones();
+  if (!ui.solicitudes.classList.contains("oculto")) actualizarCabeceraProyecto();
 }
 
 function mostrarProyectoSeleccionado() {
@@ -211,6 +348,16 @@ function formatearFechaHora(valor) {
     timeZone: "America/Lima",
     dateStyle: "short",
     timeStyle: "short",
+  });
+}
+
+function formatearFecha(valor) {
+  if (!valor) return "sin actividad";
+  return new Date(valor).toLocaleDateString("es-PE", {
+    timeZone: "America/Lima",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
   });
 }
 
@@ -243,7 +390,7 @@ async function registrarCoordinacion(evento) {
     );
     ui.dialogoCoordinacion.close();
     mostrarResultado("Coordinación registrada correctamente.", "exito");
-    await cargarSeguimientoProveedores();
+    await cargarDetalleProyecto();
     await cargarNotificaciones();
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
@@ -277,7 +424,7 @@ async function corregirEstadoRespuesta(participacion, estado) {
       },
     );
     mostrarResultado("Clasificación corregida y registrada en el historial.", "exito");
-    await cargarSeguimientoProveedores();
+    await cargarDetalleProyecto();
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
   }
@@ -295,17 +442,109 @@ async function resolverAclaracion(id) {
       { id },
     );
     mostrarResultado("Aclaración marcada como resuelta.", "exito");
-    await cargarSeguimientoProveedores();
+    await cargarDetalleProyecto();
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
   }
 }
 
-async function cargarSeguimientoProveedores() {
+function crearTarjetaProveedor(participacion, aclaraciones) {
+  const tarjeta = document.createElement("article");
+  tarjeta.className = `seguimiento-proveedor${participacion.considerado ? "" : " excluido"}`;
+  const cabecera = document.createElement("div");
+  cabecera.className = "seguimiento-cabecera";
+  const identidad = document.createElement("div");
+  const titulo = document.createElement("h3");
+  titulo.textContent = participacion.proveedor_asociado.nombre;
+  const correo = document.createElement("p");
+  correo.className = "ayuda";
+  correo.textContent = participacion.proveedor_asociado.correo || "Sin correo";
+  identidad.append(titulo, correo);
+  const estado = document.createElement("span");
+  estado.className = `estado-respuesta${participacion.estado_respuesta === "no_envio_cotizacion" ? " pendiente" : ""}`;
+  estado.textContent = etiquetasRespuesta[participacion.estado_respuesta];
+  cabecera.append(identidad, estado);
+
+  const detalle = document.createElement("p");
+  detalle.textContent = `${etiquetasDetalle[participacion.detalle_respuesta]}. Coordinaciones: ${participacion.numero_coordinaciones}/3. Último correo: ${formatearFechaHora(participacion.ultimo_correo_at)}.`;
+  tarjeta.append(cabecera, detalle);
+
+  if (aclaraciones.length) {
+    const bloqueAclaraciones = document.createElement("div");
+    bloqueAclaraciones.className = "aclaraciones-pendientes";
+    const tituloAclaraciones = document.createElement("strong");
+    tituloAclaraciones.textContent = "Aclaraciones pendientes";
+    const lista = document.createElement("ul");
+    for (const aclaracion of aclaraciones) {
+      const item = document.createElement("li");
+      const texto = document.createElement("span");
+      texto.textContent = aclaracion.descripcion;
+      const resolver = document.createElement("button");
+      resolver.type = "button";
+      resolver.className = "secundario compacto";
+      resolver.textContent = "Resolver";
+      resolver.addEventListener("click", () => resolverAclaracion(aclaracion.id));
+      item.append(texto, resolver);
+      lista.append(item);
+    }
+    bloqueAclaraciones.append(tituloAclaraciones, lista);
+    tarjeta.append(bloqueAclaraciones);
+  }
+
+  if (participacion.considerado && participacion.solicitud_cotizacion.estado === "inicio") {
+    const acciones = document.createElement("div");
+    acciones.className = "seguimiento-acciones";
+    if (participacion.estado_respuesta !== "envio_cotizacion") {
+      const botonCoordinacion = document.createElement("button");
+      botonCoordinacion.type = "button";
+      botonCoordinacion.className = "secundario";
+      botonCoordinacion.textContent = "Coordinación";
+      botonCoordinacion.addEventListener("click", () => abrirCoordinacion(participacion));
+      acciones.append(botonCoordinacion);
+    }
+
+    const etiquetaSelector = document.createElement("label");
+    etiquetaSelector.textContent = "Corrección del usuario";
+    const selector = document.createElement("select");
+    for (const [valor, etiqueta] of Object.entries(etiquetasRespuesta)) {
+      selector.add(new Option(etiqueta, valor, false, valor === participacion.estado_respuesta));
+    }
+    etiquetaSelector.append(selector);
+    const botonCorregir = document.createElement("button");
+    botonCorregir.type = "button";
+    botonCorregir.className = "secundario";
+    botonCorregir.textContent = "Guardar corrección";
+    botonCorregir.addEventListener("click", () => corregirEstadoRespuesta(participacion, selector.value));
+    acciones.append(etiquetaSelector, botonCorregir);
+    tarjeta.append(acciones);
+  }
+  return tarjeta;
+}
+
+function crearDatoResumen(etiqueta, valor) {
+  const elemento = document.createElement("span");
+  elemento.className = "dato-resumen";
+  elemento.textContent = etiqueta;
+  const dato = document.createElement("strong");
+  dato.textContent = valor;
+  elemento.append(dato);
+  return elemento;
+}
+
+async function cargarDetalleProyecto() {
   const proyectoId = ui.proyectoId.value;
-  ui.seguimientoProveedores.replaceChildren();
+  const abiertos = new Set(
+    [...ui.estadoSolicitudes.querySelectorAll("details[open]")].map((item) => item.dataset.solicitudId),
+  );
+  ui.estadoSolicitudes.replaceChildren();
   if (!proyectoId) return;
-  const respuesta = await graphql(`query SeguimientoProveedores($id: uuid!) {
+  const respuesta = await graphql(`query DetalleProyecto($id: uuid!) {
+    solicitudes_cotizacion(
+      where: { proyecto_id: { _eq: $id } }
+      order_by: { created_at: desc }
+    ) {
+      id codigo nombre fecha_limite estado preparada_para_envio partida_critica
+    }
     solicitud_proveedores(
       where: { solicitud_cotizacion: { proyecto_id: { _eq: $id } } }
       order_by: { created_at: desc }
@@ -324,6 +563,7 @@ async function cargarSeguimientoProveedores() {
     ) { id solicitud_id proveedor_id descripcion created_at }
   }`, { id: proyectoId });
   if (ui.proyectoId.value !== proyectoId) return;
+
   const aclaracionesPorProveedor = new Map();
   for (const aclaracion of respuesta.aclaraciones_proveedor) {
     const clave = `${aclaracion.solicitud_id}:${aclaracion.proveedor_id}`;
@@ -331,85 +571,84 @@ async function cargarSeguimientoProveedores() {
     aclaracionesPorProveedor.get(clave).push(aclaracion);
   }
 
+  const participantesPorSolicitud = new Map();
   for (const participacion of respuesta.solicitud_proveedores) {
-    const tarjeta = document.createElement("article");
-    tarjeta.className = `seguimiento-proveedor${participacion.considerado ? "" : " excluido"}`;
-    const cabecera = document.createElement("div");
-    cabecera.className = "seguimiento-cabecera";
-    const identidad = document.createElement("div");
-    const titulo = document.createElement("h3");
-    titulo.textContent = `${participacion.solicitud_cotizacion.codigo} — ${participacion.proveedor_asociado.nombre}`;
-    const correo = document.createElement("p");
-    correo.className = "ayuda";
-    correo.textContent = participacion.proveedor_asociado.correo || "Sin correo";
-    identidad.append(titulo, correo);
-    const estado = document.createElement("span");
-    estado.className = `estado-respuesta${participacion.estado_respuesta === "no_envio_cotizacion" ? " pendiente" : ""}`;
-    estado.textContent = etiquetasRespuesta[participacion.estado_respuesta];
-    cabecera.append(identidad, estado);
-
-    const detalle = document.createElement("p");
-    detalle.textContent = `${etiquetasDetalle[participacion.detalle_respuesta]}. Coordinaciones: ${participacion.numero_coordinaciones}/3. Último correo: ${formatearFechaHora(participacion.ultimo_correo_at)}.`;
-    tarjeta.append(cabecera, detalle);
-
-    const claveParticipacion = `${participacion.solicitud_id}:${participacion.proveedor_id}`;
-    const aclaraciones = aclaracionesPorProveedor.get(claveParticipacion) ?? [];
-    if (aclaraciones.length) {
-      const bloqueAclaraciones = document.createElement("div");
-      bloqueAclaraciones.className = "aclaraciones-pendientes";
-      const tituloAclaraciones = document.createElement("strong");
-      tituloAclaraciones.textContent = "Aclaraciones pendientes";
-      const lista = document.createElement("ul");
-      for (const aclaracion of aclaraciones) {
-        const item = document.createElement("li");
-        const texto = document.createElement("span");
-        texto.textContent = aclaracion.descripcion;
-        const resolver = document.createElement("button");
-        resolver.type = "button";
-        resolver.className = "secundario compacto";
-        resolver.textContent = "Resolver";
-        resolver.addEventListener("click", () => resolverAclaracion(aclaracion.id));
-        item.append(texto, resolver);
-        lista.append(item);
-      }
-      bloqueAclaraciones.append(tituloAclaraciones, lista);
-      tarjeta.append(bloqueAclaraciones);
-    }
-
-    if (participacion.considerado && participacion.solicitud_cotizacion.estado === "inicio") {
-      const acciones = document.createElement("div");
-      acciones.className = "seguimiento-acciones";
-      if (participacion.estado_respuesta !== "envio_cotizacion") {
-        const botonCoordinacion = document.createElement("button");
-        botonCoordinacion.type = "button";
-        botonCoordinacion.className = "secundario";
-        botonCoordinacion.textContent = "Coordinación";
-        botonCoordinacion.addEventListener("click", () => abrirCoordinacion(participacion));
-        acciones.append(botonCoordinacion);
-      }
-
-      const etiquetaSelector = document.createElement("label");
-      etiquetaSelector.textContent = "Corrección del usuario";
-      const selector = document.createElement("select");
-      for (const [valor, etiqueta] of Object.entries(etiquetasRespuesta)) {
-        selector.add(new Option(etiqueta, valor, false, valor === participacion.estado_respuesta));
-      }
-      etiquetaSelector.append(selector);
-      const botonCorregir = document.createElement("button");
-      botonCorregir.type = "button";
-      botonCorregir.className = "secundario";
-      botonCorregir.textContent = "Guardar corrección";
-      botonCorregir.addEventListener("click", () => corregirEstadoRespuesta(participacion, selector.value));
-      acciones.append(etiquetaSelector, botonCorregir);
-      tarjeta.append(acciones);
-    }
-    ui.seguimientoProveedores.append(tarjeta);
+    if (!participantesPorSolicitud.has(participacion.solicitud_id)) participantesPorSolicitud.set(participacion.solicitud_id, []);
+    participantesPorSolicitud.get(participacion.solicitud_id).push(participacion);
   }
 
-  if (!ui.seguimientoProveedores.children.length) {
+  for (const solicitud of respuesta.solicitudes_cotizacion) {
+    const participantes = participantesPorSolicitud.get(solicitud.id) ?? [];
+    const respuestas = participantes.filter((item) => item.ultimo_correo_at).length;
+    const cotizaciones = participantes.filter((item) => item.estado_respuesta !== "no_envio_cotizacion").length;
+    const accordion = document.createElement("details");
+    accordion.className = `solicitud-accordion${solicitud.partida_critica ? " critica" : ""}`;
+    accordion.dataset.solicitudId = solicitud.id;
+    accordion.open = abiertos.has(solicitud.id);
+
+    const resumen = document.createElement("summary");
+    resumen.className = "solicitud-resumen";
+    const identidad = document.createElement("span");
+    identidad.className = "solicitud-identidad";
+    const titulo = document.createElement("strong");
+    titulo.textContent = `${solicitud.codigo} · ${solicitud.nombre}`;
+    const estadoTexto = document.createElement("span");
+    estadoTexto.textContent = solicitud.estado === "inicio" ? "En recepción de ofertas" : "Solicitud cerrada";
+    identidad.append(titulo, estadoTexto);
+    resumen.append(
+      identidad,
+      crearDatoResumen("Proveedores", String(participantes.length)),
+      crearDatoResumen("Respuestas", `${respuestas} de ${participantes.length}`),
+      crearDatoResumen("Cotizaciones", String(cotizaciones)),
+    );
+    const indicador = document.createElement("span");
+    indicador.className = `badge ${solicitud.partida_critica ? "critica" : cotizaciones ? "respondio" : "pendiente"}`;
+    indicador.textContent = solicitud.partida_critica ? "CRÍTICA" : cotizaciones ? "CON RESPUESTA" : "PENDIENTE";
+    const chevron = document.createElement("span");
+    chevron.className = "chevron";
+    chevron.textContent = "⌄";
+    resumen.append(indicador, chevron);
+
+    const contenido = document.createElement("div");
+    contenido.className = "solicitud-contenido";
+    const barra = document.createElement("div");
+    barra.className = "barra-solicitud";
+    const fecha = document.createElement("p");
+    fecha.className = "ayuda";
+    fecha.textContent = `Fecha límite: ${solicitud.fecha_limite || "Sin fecha"}`;
+    barra.append(fecha);
+    if (solicitud.estado === "inicio" && solicitud.preparada_para_envio) {
+      const cerrar = document.createElement("button");
+      cerrar.type = "button";
+      cerrar.className = "secundario";
+      cerrar.textContent = "Cerrar solicitud";
+      cerrar.addEventListener("click", () => cerrarSolicitud(solicitud));
+      barra.append(cerrar);
+    }
+    contenido.append(barra);
+
+    const proveedores = document.createElement("div");
+    proveedores.className = "proveedores-solicitud";
+    for (const participacion of participantes) {
+      const clave = `${participacion.solicitud_id}:${participacion.proveedor_id}`;
+      proveedores.append(crearTarjetaProveedor(participacion, aclaracionesPorProveedor.get(clave) ?? []));
+    }
+    if (!participantes.length) {
+      const vacio = document.createElement("p");
+      vacio.className = "ayuda";
+      vacio.textContent = "No hay proveedores vinculados con esta solicitud.";
+      proveedores.append(vacio);
+    }
+    contenido.append(proveedores);
+    accordion.append(resumen, contenido);
+    ui.estadoSolicitudes.append(accordion);
+  }
+
+  if (!respuesta.solicitudes_cotizacion.length) {
     const vacio = document.createElement("p");
-    vacio.textContent = "No hay proveedores vinculados a solicitudes de este proyecto.";
-    ui.seguimientoProveedores.append(vacio);
+    vacio.className = "ayuda";
+    vacio.textContent = "Este proyecto todavía no tiene solicitudes de cotización.";
+    ui.estadoSolicitudes.append(vacio);
   }
 }
 
@@ -530,8 +769,9 @@ function iniciarNotificacionesEnTiempoReal() {
     },
   );
   intervaloNotificaciones = setInterval(() => {
+    if (ui.solicitudes.classList.contains("oculto")) return;
     cargarNotificaciones().catch(() => {});
-    cargarSeguimientoProveedores().catch(() => {});
+    cargarDetalleProyecto().catch(() => {});
   }, 30000);
 }
 
@@ -554,54 +794,10 @@ async function cerrarSolicitud(solicitud) {
       throw new Error("No se pudo cerrar la solicitud.");
     }
     mostrarResultado(`Solicitud ${solicitud.codigo} cerrada correctamente.`, "exito");
-    await cargarEstadoSolicitudes();
-    await cargarSeguimientoProveedores();
+    await cargarDetalleProyecto();
+    await cargarProyectos(ui.proyectoId.value);
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
-  }
-}
-
-async function cargarEstadoSolicitudes() {
-  const proyectoId = ui.proyectoId.value;
-  ui.estadoSolicitudes.replaceChildren();
-  if (!proyectoId) return;
-  const respuesta = await graphql(`query EstadoSolicitudes($id: uuid!) {
-    solicitudes_cotizacion(
-      where: { proyecto_id: { _eq: $id } }
-      order_by: { created_at: desc }
-    ) { id codigo nombre fecha_limite estado preparada_para_envio }
-  }`, { id: proyectoId });
-  if (ui.proyectoId.value !== proyectoId) return;
-  const etiquetas = {
-    inicio: "Inicio",
-    cerrado: "Cerrado",
-    cerrado_sin_proveedores: "Cerrado sin proveedores",
-  };
-  for (const solicitud of respuesta.solicitudes_cotizacion) {
-    const item = document.createElement("li");
-    item.className = "solicitud-inicio";
-    const detalle = document.createElement("div");
-    const nombre = document.createElement("p");
-    nombre.textContent = `${solicitud.codigo} — ${solicitud.nombre} · Fecha fin: ${solicitud.fecha_limite}`;
-    const estado = document.createElement("span");
-    estado.className = "estado-solicitud";
-    estado.textContent = etiquetas[solicitud.estado] ?? solicitud.estado;
-    detalle.append(nombre, estado);
-    item.append(detalle);
-    if (solicitud.estado === "inicio" && solicitud.preparada_para_envio) {
-      const boton = document.createElement("button");
-      boton.type = "button";
-      boton.className = "secundario";
-      boton.textContent = "Cerrar solicitud";
-      boton.addEventListener("click", () => cerrarSolicitud(solicitud));
-      item.append(boton);
-    }
-    ui.estadoSolicitudes.append(item);
-  }
-  if (!ui.estadoSolicitudes.children.length) {
-    const vacio = document.createElement("li");
-    vacio.textContent = "No hay solicitudes para este proyecto.";
-    ui.estadoSolicitudes.append(vacio);
   }
 }
 
@@ -631,8 +827,8 @@ async function registrarProyecto(evento) {
     const proyectoId = await crearProyecto(datos);
     await cargarProyectos(proyectoId);
     ui.formProyecto.reset();
-    ui.resultadoProyecto.textContent = "Proyecto guardado. Ya puedes crear solicitudes para él.";
-    ui.resultadoProyecto.className = "resultado exito";
+    await abrirProyecto(proyectoId);
+    ui.panelNuevaSolicitud.classList.remove("oculto");
   } catch (error) {
     ui.resultadoProyecto.textContent = mensajeError(error);
     ui.resultadoProyecto.className = "resultado error";
@@ -789,7 +985,7 @@ async function registrarSolicitud(evento) {
     const proveedores = leerProveedores();
     if (!proveedores.length) throw new Error("Agrega al menos un proveedor.");
 
-    const proyectoId = datos.get("proyecto_id");
+    const proyectoId = proyectoActivoId;
     if (!proyectoId) throw new Error("Selecciona un proyecto registrado.");
     mostrarResultado("Guardando la solicitud…");
     const solicitud = await crearSolicitud(proyectoId, datos);
@@ -818,16 +1014,16 @@ async function registrarSolicitud(evento) {
     );
 
     mostrarResultado(`Solicitud ${solicitud.codigo} creada correctamente. Identificador: ${solicitudId}`, "exito");
-    cargarEstadoSolicitudes().catch((error) => mostrarResultado(mensajeError(error), "error"));
-    cargarSeguimientoProveedores().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.formSolicitud.reset();
     actualizarFechaInicio();
     ui.proyectoId.value = proyectoId;
     mostrarProyectoSeleccionado();
     ui.guardarSolicitud.disabled = false;
-    actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
     ui.proveedores.replaceChildren();
     agregarProveedor();
+    ui.panelNuevaSolicitud.classList.add("oculto");
+    await cargarProyectos(proyectoId);
+    await Promise.all([cargarDetalleProyecto(), actualizarCodigoSugerido()]);
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
   } finally {
@@ -851,13 +1047,28 @@ ui.agregarProveedor.addEventListener("click", agregarProveedor);
 ui.formCoordinacion.addEventListener("submit", registrarCoordinacion);
 ui.cancelarCoordinacion.addEventListener("click", () => ui.dialogoCoordinacion.close());
 ui.formProyecto.addEventListener("submit", registrarProyecto);
-ui.proyectoId.addEventListener("change", () => {
-  ui.guardarSolicitud.disabled = !ui.proyectoId.value;
+ui.nuevoProyecto.addEventListener("click", () => {
+  ui.registro.classList.remove("oculto");
+  ui.registro.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+ui.cancelarProyecto.addEventListener("click", () => {
+  ui.registro.classList.add("oculto");
+  ui.formProyecto.reset();
+});
+ui.irInicio.addEventListener("click", () => {
+  if (nhost?.getUserSession()?.user) mostrarDashboard();
+});
+ui.volverProyectos.addEventListener("click", mostrarDashboard);
+ui.nuevaSolicitud.addEventListener("click", () => {
+  ui.panelNuevaSolicitud.classList.remove("oculto");
+  ui.panelNuevaSolicitud.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+ui.cancelarSolicitud.addEventListener("click", () => {
+  ui.panelNuevaSolicitud.classList.add("oculto");
+  ui.formSolicitud.reset();
+  actualizarFechaInicio();
+  ui.proyectoId.value = proyectoActivoId;
   mostrarProyectoSeleccionado();
-  actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error"));
-  cargarEstadoSolicitudes().catch((error) => mostrarResultado(mensajeError(error), "error"));
-  cargarSeguimientoProveedores().catch((error) => mostrarResultado(mensajeError(error), "error"));
-  cargarNotificaciones().catch((error) => mostrarResultado(mensajeError(error), "error"));
 });
 ui.tipoSolicitud.addEventListener("change", () => actualizarCodigoSugerido().catch((error) => mostrarResultado(mensajeError(error), "error")));
 ui.formSolicitud.addEventListener("submit", registrarSolicitud);

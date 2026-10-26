@@ -25,16 +25,22 @@ La cuenta usada para administrar Nhost no es una cuenta de la aplicación. En
 la pantalla de CostFlow, usa **Crear cuenta** una vez o crea un usuario desde
 **Nhost > Auth > Users**.
 
-Primero registra el proyecto. Después selecciónalo para crear tantas solicitudes
-como necesites. El código sugerido se muestra en pantalla y PostgreSQL asigna
+Después de ingresar, la página inicial muestra todos los proyectos de la cuenta
+como tarjetas con la cantidad de solicitudes activas y críticas. Desde **Nuevo
+proyecto** se conserva el formulario de registro existente. Al abrir una tarjeta
+se accede al seguimiento del proyecto y a la acción **Nueva solicitud**.
+
+El código sugerido se muestra en pantalla y PostgreSQL asigna
 el definitivo al guardar, con correlativos separados por proyecto y por tipo
 de cotización (`MA` para materiales y `SC` para subcontratas), ambos con tres
 dígitos mínimos. La fecha de inicio se toma automáticamente al crear; el
 especialista selecciona la fecha fin y si la partida es crítica. Para ello
 deben estar aplicados `db/migraciones/004_proyectos_y_correlativos.sql`,
 `db/migraciones/005_fechas_y_partida_critica.sql` y los permisos nuevos.
-Al abrir un proyecto, el front muestra el estado de todas sus solicitudes, el
-estado de respuesta de cada proveedor y las notificaciones persistentes. El
+Al abrir un proyecto, el front agrupa la información en un acordeón por solicitud.
+El resumen muestra fecha, criticidad y cantidades de proveedores, respuestas y
+cotizaciones. Al expandirlo aparece el estado de cada proveedor. Las
+notificaciones persistentes se muestran al final del proyecto. El
 especialista puede registrar una **Coordinación**, resolver aclaraciones,
 corregir una clasificación automática y cerrar una solicitud cuando ya existe
 su cuadro comparativo vigente. Las notificaciones nuevas llegan mediante una

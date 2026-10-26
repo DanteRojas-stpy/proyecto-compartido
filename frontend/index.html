@@ -3,16 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CostFlow | Nueva solicitud</title>
+    <title>CostFlow | Proyectos</title>
     <link rel="stylesheet" href="./css/styles.css" />
   </head>
   <body>
     <header class="cabecera">
-      <div>
-        <p class="marca">COSTFLOW</p>
-        <h1>Registro de solicitud de cotización</h1>
+      <button id="ir-inicio" class="identidad" type="button" aria-label="Ir a proyectos">
+        <span class="logotipo" aria-hidden="true">CF</span>
+        <span>
+          <strong>COSTFLOW</strong>
+          <small>Procurement &amp; Cost Control</small>
+        </span>
+      </button>
+      <div class="sesion-cabecera">
+        <span id="usuario-activo"></span>
+        <button id="cerrar-sesion" class="secundario inverso oculto" type="button">Cerrar sesión</button>
       </div>
-      <button id="cerrar-sesion" class="secundario oculto" type="button">Cerrar sesión</button>
     </header>
 
     <main>
@@ -36,8 +42,26 @@
         </form>
       </section>
 
-      <section id="registro" class="panel oculto">
-        <h2>Proyectos</h2>
+      <section id="proyectos" class="oculto" aria-labelledby="titulo-proyectos">
+        <div class="cabecera-pagina">
+          <div>
+            <p class="paso">PORTAFOLIO</p>
+            <h1 id="titulo-proyectos">Proyectos</h1>
+            <p class="ayuda">Consulta la actividad de cotizaciones y entra al seguimiento de cada proyecto.</p>
+          </div>
+          <button id="nuevo-proyecto" type="button">+ Nuevo proyecto</button>
+        </div>
+        <div id="lista-proyectos" class="rejilla-proyectos" aria-live="polite"></div>
+      </section>
+
+      <section id="registro" class="panel panel-formulario oculto" aria-labelledby="titulo-nuevo-proyecto">
+        <div class="encabezado-seccion">
+          <div>
+            <p class="paso">NUEVO</p>
+            <h2 id="titulo-nuevo-proyecto">Registrar proyecto</h2>
+          </div>
+          <button id="cancelar-proyecto" class="secundario" type="button">Cancelar</button>
+        </div>
         <p class="ayuda">Registra cada proyecto una vez. Después podrás crear varias solicitudes para el mismo proyecto.</p>
         <form id="form-proyecto">
           <div class="rejilla dos-columnas">
@@ -53,20 +77,36 @@
         <p id="resultado-proyecto" class="resultado" aria-live="polite"></p>
       </section>
 
-      <section id="solicitudes" class="panel oculto">
-        <div class="encabezado-seccion">
-          <div>
-            <p class="paso">ETAPA 1</p>
-            <h2>Nueva solicitud</h2>
+      <section id="solicitudes" class="oculto" aria-labelledby="proyecto-activo-nombre">
+        <div class="detalle-proyecto-cabecera">
+          <div class="acciones-navegacion">
+            <button id="volver-proyectos" class="boton-texto" type="button">← Todos los proyectos</button>
           </div>
-          <span id="usuario-activo"></span>
+          <div class="encabezado-seccion">
+            <div>
+              <p id="proyecto-activo-codigo" class="paso"></p>
+              <h1 id="proyecto-activo-nombre">Proyecto</h1>
+              <p id="proyecto-activo-resumen" class="ayuda"></p>
+            </div>
+            <button id="nueva-solicitud" type="button">+ Nueva solicitud</button>
+          </div>
         </div>
+        <div id="resultado" class="resultado" aria-live="polite"></div>
+
+        <div id="panel-nueva-solicitud" class="panel oculto">
+          <div class="encabezado-seccion">
+            <div>
+              <p class="paso">NUEVA</p>
+              <h2>Solicitud de cotización</h2>
+            </div>
+            <button id="cancelar-solicitud" class="secundario" type="button">Cancelar</button>
+          </div>
 
         <form id="form-solicitud">
           <fieldset>
             <legend>Proyecto registrado</legend>
-            <label>Selecciona el proyecto
-              <select name="proyecto_id" id="proyecto-id" required></select>
+            <label>Proyecto
+              <select id="proyecto-id" disabled></select>
             </label>
             <div class="rejilla dos-columnas">
               <label>Código del proyecto
@@ -79,7 +119,7 @@
           </fieldset>
 
           <fieldset>
-            <legend>Solicitud de cotización</legend>
+            <legend>Datos de la solicitud</legend>
             <div class="rejilla tres-columnas">
               <label>Tipo de cotización
                 <select name="tipo" id="tipo-solicitud" required>
@@ -136,20 +176,19 @@
             <div id="proveedores"></div>
           </fieldset>
 
-          <div id="resultado" class="resultado" aria-live="polite"></div>
           <button id="guardar-solicitud" type="submit">Crear solicitud</button>
         </form>
-        <section aria-labelledby="titulo-estado-solicitudes">
-          <h2 id="titulo-estado-solicitudes">Estado de solicitudes</h2>
-          <p class="ayuda">La solicitud permanece en Inicio durante la recepción de ofertas. Podrás cerrarla cuando tenga un cuadro comparativo vigente.</p>
-          <ul id="estado-solicitudes" class="lista-solicitudes" aria-live="polite"></ul>
+        </div>
+
+        <section class="panel" aria-labelledby="titulo-estado-solicitudes">
+          <div>
+            <p class="paso">SEGUIMIENTO</p>
+            <h2 id="titulo-estado-solicitudes">Solicitudes de cotización</h2>
+            <p class="ayuda">Abre una solicitud para consultar sus proveedores, respuestas y acciones pendientes.</p>
+          </div>
+          <div id="estado-solicitudes" class="lista-solicitudes" aria-live="polite"></div>
         </section>
-        <section aria-labelledby="titulo-seguimiento">
-          <h2 id="titulo-seguimiento">Seguimiento de proveedores</h2>
-          <p class="ayuda">Consulta el estado de cada respuesta, registra coordinaciones y corrige una clasificación cuando sea necesario.</p>
-          <div id="seguimiento-proveedores" class="seguimiento-proveedores" aria-live="polite"></div>
-        </section>
-        <section aria-labelledby="titulo-notificaciones">
+        <section class="panel" aria-labelledby="titulo-notificaciones">
           <div class="encabezado-seccion">
             <div>
               <h2 id="titulo-notificaciones">Notificaciones</h2>
