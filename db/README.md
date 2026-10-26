@@ -24,8 +24,6 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
   proveedor dentro de una solicitud, con versión y estado.
 - `003_envios_solicitud.sql`: registra el envío a cada proveedor para evitar
   duplicados y permitir el seguimiento.
-- `004_proyectos_y_correlativos.sql`: incorpora los tipos `MA` y `SC`.
+- `004_proyectos_y_correlativos.sql`: códigos `MA` y `SC` por proyecto.
 - `005_fechas_y_partida_critica.sql`: fecha límite y frecuencia de avisos según
   la ruta crítica.
-- `006_codigos_unicos_solicitud.sql`: códigos correlativos únicos por usuario y
-  tipo entre todos sus proyectos.
