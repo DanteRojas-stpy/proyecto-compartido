@@ -65,6 +65,10 @@ button.peligro { align-self: end; background: transparent; color: var(--peligro)
 .resultado { min-height: 1.5rem; font-weight: 650; }
 .resultado.error { color: var(--peligro); }
 .resultado.exito { color: var(--verde-oscuro); }
+.lista-solicitudes { display: grid; gap: .75rem; padding-left: 0; list-style: none; }
+.solicitud-inicio { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .9rem; border: 1px solid var(--borde); border-radius: 10px; background: #f5f8f6; }
+.solicitud-inicio p { margin: 0; }
+.estado-solicitud { display: inline-block; margin-top: .25rem; color: var(--verde-oscuro); font-size: .9rem; font-weight: 750; }
 
 @media (min-width: 760px) {
   .dos-columnas { grid-template-columns: repeat(2, 1fr); }
@@ -78,4 +82,5 @@ button.peligro { align-self: end; background: transparent; color: var(--peligro)
 @media (max-width: 560px) {
   .cabecera, .encabezado-seccion { align-items: flex-start; flex-direction: column; }
   .proveedor { grid-template-columns: 1fr; }
+  .solicitud-inicio { align-items: stretch; flex-direction: column; }
 }
