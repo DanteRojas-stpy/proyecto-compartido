@@ -1,7 +1,8 @@
 # n8n: flujos de orquestación
 
-n8n coordina los pasos del proceso: envía solicitudes, revisa la bandeja de correo,
-llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa vive en `app/`.
+n8n coordina los pasos del proceso: envía solicitudes, revisa la bandeja de
+correo, llama al modelo y guarda resultados. PostgreSQL valida las reglas de
+negocio y conserva la trazabilidad.
 
 ## Qué va aquí
 
@@ -21,14 +22,16 @@ llama a la app y guarda el estado. **No ejecuta la lógica de negocio**: esa viv
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
 | `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor y registra el mensaje | Evento de Nhost cuando `preparada_para_envio` cambia a `true` | Listo para configurar |
-| `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron respuestas ni ofertas | Todos los días a las 08:00, hora de Lima | Listo para configurar |
+| `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, clasifica la respuesta y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
+| `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
+| `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |
 
 ## Configurar el primer envío
 
 ### 1. Preparar Nhost
 
-1. Ejecuta `db/migraciones/003_envios_solicitud.sql` y
-   `db/migraciones/006_estados_solicitudes.sql` desde **Database > SQL Console**
+1. Ejecuta las migraciones hasta `db/migraciones/007_seguimiento_proveedores.sql`
+   desde **Database > SQL Console**
    con **Track this** activado.
 2. En n8n crea una credencial **Header Auth** llamada `Nhost Admin`:
    - Name: `x-hasura-admin-secret`
@@ -77,10 +80,35 @@ Por cada proveedor pendiente, n8n:
 2. Selecciona `Nhost Admin` en sus dos nodos HTTP.
 3. Confirma que el workflow use la zona horaria `America/Lima` y actívalo.
 
-Cada día consulta las solicitudes cuya fecha fin ya pasó. Cuando no existe un
-proveedor con estado `respondio` ni una cotización de proveedor vigente, cambia
-el estado a `cerrado_sin_proveedores`. PostgreSQL vuelve a validar la regla antes
-de aceptar el cambio.
+Cada día consulta las solicitudes cuya fecha fin ya pasó. Cuando ningún
+proveedor tiene `envio_cotizacion` o `envio_cotizacion_con_aclaracion` y tampoco
+existe una cotización vigente, cambia el estado a `cerrado_sin_proveedores`.
+PostgreSQL vuelve a validar la regla antes de aceptar el cambio.
+
+## Configurar el seguimiento
+
+1. Ejecuta `scripts/configurar_nhost.py` después de la migración 007 para crear
+   relaciones y permisos.
+2. Importa `flujos/seguimiento-diario-proveedores.json` y selecciona la
+   credencial `Nhost Admin` en sus dos nodos HTTP. Configura la zona horaria del
+   workflow como `America/Lima` y publícalo.
+3. Importa `flujos/analizar-respuestas-proveedores.json`. Selecciona `Nhost
+   Admin` en los dos nodos HTTP, la cuenta Gmail que recibe las respuestas en
+   `Correo nuevo en Gmail` y una credencial de OpenAI en `Modelo de lenguaje`.
+4. Publica ambos workflows. La credencial de IA debe reemplazar el marcador
+   `OpenAI CostFlow`; el archivo exportado no contiene ninguna clave.
+
+El flujo diario cuenta desde el primer envío exitoso. Crea una notificación a
+las 09:00 cada día para partidas críticas y cada dos días calendario para las
+demás. También excluye a quien llega a tres coordinaciones sin cotización o
+vence el plazo. El cierre automático se ejecuta quince minutos después.
+
+El flujo de Gmail deduplica por `message_id`, correlaciona primero por
+`thread_id` y usa correo, empresa, asunto, código y contexto como respaldo. Una
+confianza menor de 0.8 crea una solicitud de revisión sin modificar el estado.
+Los correos posteriores a la fecha límite quedan registrados, pero no generan
+notificaciones ni reincorporan al proveedor. Todas las notificaciones se
+muestran en CostFlow; este proceso no envía un resumen por correo al usuario.
 
 La versión del flujo en este repositorio ya omite la antigua vigencia en días
 del mensaje. Después de aplicar la migración 005, actualiza el flujo publicado

@@ -71,6 +71,13 @@ durante el envío y la recepción de ofertas. El especialista la cambia a
 respuesta ni cotización de proveedores, n8n la cambia a **Cerrado sin
 proveedores**. Los dos estados de cierre son finales.
 
+**Regla de seguimiento:** el calendario comienza con el envío inicial exitoso.
+A las 09:00, hora de Lima, la plataforma genera un resumen diario para partidas
+críticas y cada dos días calendario para las demás. Cada correo nuevo se
+analiza al llegar y genera una notificación en la plataforma; no se envía un
+resumen interno por correo. Tres coordinaciones sin cotización o el vencimiento
+del plazo excluyen al proveedor, lo que ocurra primero.
+
 ## 5. Fases
 
 ### Fase 0: preparación (1 semana)

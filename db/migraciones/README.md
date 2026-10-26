@@ -34,11 +34,17 @@ Console** de un proyecto Nhost nuevo.
    comparativo vigente para el cierre manual. También habilita el tipo de
    documento `cuadro_comparativo`.
 
+7. `007_seguimiento_proveedores.sql`: agrega los estados de respuesta por
+   proveedor, correos recibidos, aclaraciones, coordinaciones, historial de
+   clasificaciones y notificaciones en la plataforma. Después de tres
+   coordinaciones sin cotización excluye al proveedor y conserva la evidencia.
+
 Después de las migraciones, actualiza los permisos de GraphQL con
-`scripts/configurar_nhost.py` y recarga la metadata. El front muestra avisos al
-abrir un proyecto, tomando la fecha de creación como inicio: cada día para
-solicitudes críticas y cada 2 días para las demás. Los correos automáticos de
-seguimiento aún no forman parte de este flujo.
+`scripts/configurar_nhost.py` y recarga la metadata. El seguimiento empieza con
+el primer envío exitoso. n8n crea una notificación persistente a las 09:00,
+hora de Lima: cada día para solicitudes críticas y cada dos días calendario
+para las demás. Las respuestas recibidas generan notificaciones en tiempo real
+en la plataforma.
 
 ## Permisos automatizados
 

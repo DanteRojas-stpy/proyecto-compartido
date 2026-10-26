@@ -33,10 +33,12 @@ dígitos mínimos. La fecha de inicio se toma automáticamente al crear; el
 especialista selecciona la fecha fin y si la partida es crítica. Para ello
 deben estar aplicados `db/migraciones/004_proyectos_y_correlativos.sql`,
 `db/migraciones/005_fechas_y_partida_critica.sql` y los permisos nuevos.
-Al abrir un proyecto, el front muestra el estado de todas sus solicitudes y los
-avisos de seguimiento para las que están en `inicio`: diarios para partidas
-críticas y cada 2 días para las demás. El especialista puede cerrar una
-solicitud desde esa lista cuando ya existe su cuadro comparativo vigente.
+Al abrir un proyecto, el front muestra el estado de todas sus solicitudes, el
+estado de respuesta de cada proveedor y las notificaciones persistentes. El
+especialista puede registrar una **Coordinación**, resolver aclaraciones,
+corregir una clasificación automática y cerrar una solicitud cuando ya existe
+su cuadro comparativo vigente. Las notificaciones nuevas llegan mediante una
+suscripción GraphQL, con actualización de respaldo cada 30 segundos.
 
 El formulario crea una solicitud en estado `inicio`, busca cada proveedor por
 RUC o correo y reutiliza su ficha si ya existe. El mismo proveedor puede quedar
