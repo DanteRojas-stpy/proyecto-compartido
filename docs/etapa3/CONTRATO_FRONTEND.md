@@ -6,8 +6,10 @@ El cuerpo no debe enviar una identidad confiable ni una clave administrativa.
 
 ## Consultas de pantalla
 
-Pendiente publicar estas vistas con `scripts/configurar_etapa3_nhost.py` y verificar
-el acceso con el JWT del usuario. Todas las consultas se hacen con rol `user`.
+Estas vistas ya se publicaron en la instalación del equipo mediante la preparación
+de `scripts/configurar_etapa3_nhost.py`. Se comprobaron sus permisos por propietario;
+falta probar el recorrido completo con el JWT del usuario. Todas las consultas del
+frontend se hacen con rol `user`.
 
 Lista de versiones de una solicitud y proveedor:
 
@@ -165,5 +167,6 @@ ni Excel. Si existen finales históricas inconsistentes, la vista selecciona la 
 correo final más reciente; un registro en `e3_inconsistencias` conserva la incidencia.
 La base no exige que la final seleccionada por el usuario sea la versión más nueva.
 
-**Pendiente de validación:** la consulta real por GraphQL y las pantallas integradas
-necesitan la credencial administrativa correcta y el trabajo del encargado del frontend.
+**Pendiente de validación:** las pantallas integradas y una decisión con JWT real.
+Las consultas reales de GraphQL ya respondieron. Falta definir la dirección pública
+HTTPS de n8n y completar el trabajo del encargado del frontend.

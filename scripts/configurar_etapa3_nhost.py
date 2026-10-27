@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import getpass
 import json
 import urllib.request
@@ -49,6 +50,33 @@ def operations(metadata: dict) -> list[dict]:
     return actions
 
 
+def replacement(snapshot: dict) -> dict:
+    """Prepara un cambio atómico y rechaza sobrescribir una revisión concurrente."""
+    if not isinstance(snapshot.get("resource_version"), int) or "metadata" not in snapshot:
+        raise ValueError("Hasura debe exportar la revisión de configuración (export_metadata versión 2).")
+    metadata = copy.deepcopy(snapshot["metadata"])
+    actions = operations(metadata)
+    source = next(x for x in metadata["sources"] if x["name"] == "default")
+    tables = {t["table"]["name"]: t for t in source["tables"] if t["table"].get("schema") == "public"}
+    for action in actions:
+        kind, args = action["type"], action["args"]
+        name = args["table"]["name"]
+        if kind == "pg_track_table":
+            table = {"table": args["table"]}
+            source["tables"].append(table)
+            tables[name] = table
+        elif kind == "pg_create_object_relationship":
+            tables[name].setdefault("object_relationships", []).append({"name": args["name"], "using": args["using"]})
+        elif kind == "pg_drop_select_permission":
+            tables[name]["select_permissions"] = [p for p in tables[name].get("select_permissions", []) if p["role"] != args["role"]]
+        elif kind == "pg_create_select_permission":
+            tables[name].setdefault("select_permissions", []).append({"role": args["role"], "permission": args["permission"]})
+        else:
+            raise ValueError("La preparación de E3 contiene una operación no admitida.")
+    return {"type": "replace_metadata", "version": 2, "resource_version": snapshot["resource_version"],
+            "args": {"allow_inconsistent_metadata": False, "metadata": metadata}}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", required=True, help="Base Hasura administrativa, sin /v1/metadata")
@@ -64,9 +92,9 @@ def main():
             headers={"Content-Type": "application/json", "x-hasura-admin-secret": secret})
         with urllib.request.urlopen(request, timeout=60) as response:
             return json.load(response)
-    metadata = send({"type": "export_metadata", "args": {}})
-    args.respaldo.write_text(json.dumps(metadata, indent=2), encoding="utf-8")
-    send({"type": "bulk_atomic", "args": operations(metadata)})
+    snapshot = send({"type": "export_metadata", "version": 2, "args": {}})
+    args.respaldo.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+    send(replacement(snapshot))
     send({"type": "reload_metadata", "args": {"reload_sources": True}})
     print("Consultas E3/E4 publicadas. Los usuarios solo pueden leer sus solicitudes; las decisiones siguen por n8n.")
 

@@ -13,18 +13,24 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
 
 **La instalación todavía no está lista para una corrida completa de producción.**
 
-- El usuario decidió configurar Gemini después: no existe aún su credencial en n8n.
-- La credencial HTTP existente devuelve 403 al descargar un archivo real de Storage
-  y 401 en la administración de Hasura. La conexión PostgreSQL sí funciona.
+- Las credenciales de Gemini, Gmail, PostgreSQL y Nhost ya están configuradas.
+- Storage permite descargar originales y cargar un archivo temporal. Se corrigió
+  una respuesta 404 guardada en caché que impedía descargar inmediatamente archivos nuevos.
+- Hasura ya permite administrar la configuración. Las consultas y permisos de E3/E4
+  se publicaron y sus consultas GraphQL respondieron sin errores.
+- Gemini permite consultar el catálogo de modelos, pero las pruebas pequeñas de
+  generación con el modelo configurado devuelven 503 por alta demanda. La lectura real
+  todavía no se ha validado y no se han enviado cotizaciones a Gemini en estas pruebas.
 - Por ello `recepcion_habilitada=false` y `gemini_habilitado=false`. Los eventos se
-  conservan pendientes y no se gastan intentos por una configuración incompleta.
-- Falta publicar las consultas y permisos de GraphQL con la clave administrativa
-  correcta y probarlos con la sesión real del especialista.
+  conservan pendientes hasta superar las pruebas restantes.
+- Falta una dirección pública HTTPS de n8n para el frontend del equipo; el servicio
+  de procesamiento sigue privado. También falta probar una decisión con JWT real del especialista.
 - El frontend del compañero requiere integrar las vistas y acciones descritas en
   [CONTRATO_FRONTEND.md](CONTRATO_FRONTEND.md). No se sustituyó su interfaz existente.
 
 Estos pendientes impiden dar por terminados los casos de aceptación relativos a
-Gemini real, visualización en el frontend y consulta de E4 por GraphQL.
+Gemini real y la interfaz integrada. El detalle de conexiones comprobadas está en
+[AUDITORIA_CONEXIONES.md](AUDITORIA_CONEXIONES.md).
 
 ## Los cinco flujos
 
@@ -99,7 +105,7 @@ Los cinco JSON compartibles no llevan claves ni referencias personales de creden
 El instalador hace una copia local con las referencias existentes. El paso de retiro
 solo afecta los identificadores anteriores de E3 de esta instalación; no toca E1/E2/E4/E5.
 
-## Credenciales pendientes: siguiente sesión
+## Configuración de credenciales para otra instalación
 
 **Nhost / Hasura / Storage.** El administrador debe aportar la clave administrativa
 correcta del mismo proyecto. No es la contraseña de Gmail, de la cuenta Nhost ni el
@@ -114,8 +120,10 @@ Para publicar GraphQL, ejecutar el script que pide la clave sin mostrarla ni gua
 .venv\Scripts\python.exe scripts/configurar_etapa3_nhost.py --url https://SUBDOMINIO.hasura.REGION.nhost.run --respaldo C:\ruta-privada\metadata-anterior.json
 ```
 
-Revisar los permisos antes y después. El script agrega lectura restringida a las
-solicitudes del usuario; no habilita escrituras directas de las tablas E3 desde el frontend.
+Revisar los permisos antes y después. El script conserva las demás etapas y agrega
+lectura restringida a las solicitudes del usuario; no habilita escrituras directas
+de las tablas E3 desde el frontend. Aplica el cambio de forma atómica con control
+de revisión para evitar sobrescribir una modificación concurrente del equipo.
 
 **Gemini.** Crear una clave del proyecto de Google AI Studio. Guardarla directamente
 en una nueva credencial Header Auth de n8n: cabecera `x-goog-api-key`, valor la clave.
@@ -133,18 +141,22 @@ WHERE id;
 
 ## Pruebas y límites de lo verificado
 
-- La suite Python completa pasó: 49 pruebas y una omitida en Windows por no tener
+- La suite Python completa pasó: 51 pruebas y una omitida en Windows por no tener
   Tesseract en el sistema anfitrión. Tesseract se instala dentro del contenedor.
-- Dentro de Docker pasaron las 26 pruebas de E3, incluida OCR, sin omisiones.
+- Dentro de Docker pasaron las 28 pruebas de E3, incluida OCR, sin omisiones.
 - La búsqueda vectorial real respondió a los siete criterios con vectores de 384 dimensiones.
 - `tests/etapa3/integracion.sql` se ejecutó en la base real dentro de una transacción
   revertida: trece grupos de pruebas de negocio pasaron, sin conservar registros ficticios.
 - Las entradas de n8n respondieron: petición de decisión sin sesión → 401; servicio
   interno sin su credencial → 403; consulta interna autorizada → 200; prevalidación
   del navegador para `http://127.0.0.1:8001` → 204.
-- Storage real devolvió 403: no se cargó ni borró un archivo de prueba.
-- No se llamó Gemini sin clave ni se enviaron correos. No se probó una decisión
-  positiva con JWT real ni la publicación GraphQL sin la credencial correcta.
+- Storage permitió descargar un original y cargar/descargar un CSV ficticio; los
+  archivos temporales se retiraron después, sin borrar cotizaciones reales.
+- Las consultas GraphQL de E3/E4 ya respondieron. Con el rol de usuario, el propietario
+  pudo consultar sus versiones y una cuenta ajena no obtuvo ninguna. Esta prueba de
+  permisos no sustituye la prueba pendiente con JWT real desde el frontend.
+- Gemini devolvió 503 en la generación de un JSON pequeño. No se enviaron correos
+  ni se ejecutó el procesamiento completo de cotizaciones.
 
 Los grupos SQL comprueban: correo sin documentos, una versión por correo,
 repetición sin duplicados, dos archivos en la misma versión, falta de Gemini sin

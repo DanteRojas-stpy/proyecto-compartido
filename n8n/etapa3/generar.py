@@ -161,10 +161,13 @@ result.push({json:{contexto,archivos,error:item.json.error??null},pairedItem:{it
     router = fifth.switch("Servicio requerido", "body.operacion", ["storage_head", "storage_get", "storage_upload"])
     respond = fifth.respond("Responder servicio interno")
     api = fifth.postgres("Operación transaccional Nhost", "SELECT public.e3_operar($1::text,$2::jsonb) AS respuesta;", "={{ [$json.body.operacion,JSON.stringify($json.body.datos||{})] }}")
-    head = fifth.node("Comprobar archivo por huella", "httpRequest", {"method": "HEAD", "url": "={{ '" + NHOST + "/'+$json.body.datos.storage_file_id }}",
+    uncached_url = "={{ '" + NHOST + "/'+$json.body.datos.storage_file_id+'?e3_revision='+Date.now()+'-'+Math.random().toString(36).slice(2) }}"
+    no_cache = {"sendHeaders": True, "headerParameters": {"parameters": [
+        {"name": "Cache-Control", "value": "no-cache"}, {"name": "Pragma", "value": "no-cache"}]}}
+    head = fifth.node("Comprobar archivo por huella", "httpRequest", {"method": "HEAD", "url": uncached_url, **no_cache,
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "options": {
             "timeout": 30000, "response": {"response": {"fullResponse": True, "neverError": True, "responseFormat": "text"}}}}, 4.2, "storage")
-    get = fifth.node("Recuperar original desde Storage", "httpRequest", {"method": "GET", "url": "={{ '" + NHOST + "/'+$json.body.datos.storage_file_id }}",
+    get = fifth.node("Recuperar original desde Storage", "httpRequest", {"method": "GET", "url": uncached_url, **no_cache,
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "options": {
             "timeout": 120000, "response": {"response": {"responseFormat": "file", "outputPropertyName": "data"}}}}, 4.2, "storage")
     binary = fifth.code("Devolver contenido al lector", "const b=await this.helpers.getBinaryDataBuffer(0,'data');return [{json:{contenido_base64:b.toString('base64')}}];")

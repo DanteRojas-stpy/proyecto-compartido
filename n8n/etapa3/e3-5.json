@@ -532,7 +532,20 @@
       "typeVersion": 4.2,
       "parameters": {
         "method": "HEAD",
-        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/'+$json.body.datos.storage_file_id }}",
+        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/'+$json.body.datos.storage_file_id+'?e3_revision='+Date.now()+'-'+Math.random().toString(36).slice(2) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            }
+          ]
+        },
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
@@ -559,7 +572,20 @@
       "typeVersion": 4.2,
       "parameters": {
         "method": "GET",
-        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/'+$json.body.datos.storage_file_id }}",
+        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/'+$json.body.datos.storage_file_id+'?e3_revision='+Date.now()+'-'+Math.random().toString(36).slice(2) }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            }
+          ]
+        },
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "options": {
