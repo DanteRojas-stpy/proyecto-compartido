@@ -34,3 +34,6 @@ Thumbs.db
 datos_reales/
 storage/
 cotizaciones_reales/
+
+# Resultados generados localmente (comparativos, CSV de prueba)
+salidas/
