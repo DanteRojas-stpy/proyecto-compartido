@@ -1,0 +1,199 @@
+{
+  "_nota": "EJEMPLO FICTICIO. Postores, montos y contactos inventados solo para mostrar el formato.",
+  "proyecto": {
+    "codigo": "PROYX",
+    "obra": "OBRA: EDIFICIO MULTIFAMILIAR EJEMPLO - TORRE 1",
+    "fecha": "2026-10-26",
+    "revision": 0
+  },
+  "especialidad": {
+    "codigo": "GAS",
+    "nombre": "Inst. Gas Natural",
+    "titulo": "COMPARATIVO - SISTEMA DE INSTALACIONES DE GAS",
+    "titulo_total": "INSTALACIONES DE GAS"
+  },
+  "moneda": "S/",
+  "igv": 0.18,
+  "umbral_alto_impacto": 10000,
+  "base_homologacion": "B",
+  "ratios": [
+    {"nombre": "COSTO POR DEPARTAMENTO (S/, SIN IGV)", "divisor": 120},
+    {"nombre": "COSTO POR PUNTO DE CONSUMO (S/, SIN IGV)", "divisor": 360}
+  ],
+  "criterios_hoja1": [
+    "ADELANTO / TIPO DE GARANTIA", "FRECUENCIA DE VALORIZACIONES", "FONDO DE GARANTIA",
+    "CONTACTO MANO DE OBRA", "CONSIDERACIONES:", "N° DE OBRAS ACTUALES EN EJECUCION",
+    "VALIDEZ DE LA OFERTA", "PLAZO DE EJECUCION", "GARANTIA DE LA INSTALACION"
+  ],
+  "criterios_hoja2_extra": ["PRUEBAS DE HERMETICIDAD", "EXPEDIENTE / GESTIÓN CON LA CONCESIONARIA"],
+  "postores": [
+    {
+      "id": "A", "corto": "Postor A", "nombre": "POSTOR A S.A.C.", "estado": "normal",
+      "ruc": null, "gg": 0, "utilidad": 0,
+      "total_declarado_sin_igv": 126000,
+      "referencia_cotizacion": "Cotización N° 001-2026 del 10/10/2026.",
+      "modalidad": {"texto": "Suma alzada en 2 partidas globales (montante y red interna por dpto). Sin metrados.", "tono": "faltante"},
+      "contacto": "Empresa: POSTOR A S.A.C.\nContacto: (nombre)\nCorreo: ventas@postor-a.example",
+      "criterios": {
+        "ADELANTO / TIPO DE GARANTIA": {"texto": "No indica adelanto", "tono": "faltante"},
+        "FRECUENCIA DE VALORIZACIONES": {"texto": "Valorizaciones quincenales", "tono": "info"},
+        "FONDO DE GARANTIA": {"texto": "5% devuelto a los 12 meses", "tono": "ventaja"},
+        "N° DE OBRAS ACTUALES EN EJECUCION": {"texto": "No indica", "tono": "faltante"},
+        "VALIDEZ DE LA OFERTA": {"texto": "10 días: vence pronto, confirmar vigencia", "tono": "riesgo"},
+        "PLAZO DE EJECUCION": {"texto": "Según avance de obra", "tono": "info"},
+        "GARANTIA DE LA INSTALACION": {"texto": "2 años", "tono": "riesgo"},
+        "PRUEBAS DE HERMETICIDAD": {"texto": "Una por montante y una por dpto.", "tono": "info"},
+        "EXPEDIENTE / GESTIÓN CON LA CONCESIONARIA": {"texto": "Incluye expediente y habilitación.", "tono": "ventaja"}
+      },
+      "consideraciones": [
+        "Precio global por departamento y por montante, sin desagregar.",
+        "No incluye rejillas de ventilación ni obra civil."
+      ],
+      "cotizacion": {
+        "titulo": "POSTOR A S.A.C. - COTIZACIÓN N° 001-2026 (transcrita del PDF)",
+        "encabezado": {"RUC": "Por confirmar", "Fecha": "10/10/2026"},
+        "filas": [
+          {"item": "1.0", "desc": "Red montante (global)", "und": "glb", "cant": 1, "pu": 18000},
+          {"item": "2.0", "desc": "Redes internas por departamento (global)", "und": "dpto", "cant": 120, "pu": 900}
+        ],
+        "notas": ["No incluye rejillas de ventilación.", "Validez: 10 días."]
+      }
+    },
+    {
+      "id": "B", "corto": "Postor B", "nombre": "POSTOR B S.A.C.", "estado": "recomendado",
+      "ruc": "20000000001", "gg": 0, "utilidad": 0,
+      "total_declarado_sin_igv": 122000,
+      "referencia_cotizacion": "Presupuesto Rev. 01 del 15/10/2026 (la más reciente).",
+      "modalidad": {"texto": "Suma alzada con metrado y P.U. por partida.", "tono": "ventaja"},
+      "contacto": "Empresa: POSTOR B S.A.C.\nContacto: (nombre)\nCorreo: costos@postor-b.example",
+      "criterios": {
+        "ADELANTO / TIPO DE GARANTIA": {"texto": "Adelanto 0%", "tono": "ventaja"},
+        "FRECUENCIA DE VALORIZACIONES": {"texto": "Quincenal; pago a 15 días", "tono": "info"},
+        "FONDO DE GARANTIA": {"texto": "5% devuelto a los 18 meses", "tono": "ventaja"},
+        "N° DE OBRAS ACTUALES EN EJECUCION": {"texto": "Por confirmar", "tono": "faltante"},
+        "VALIDEZ DE LA OFERTA": {"texto": "No indica", "tono": "faltante"},
+        "PLAZO DE EJECUCION": {"texto": "Según cronograma de obra", "tono": "info"},
+        "GARANTIA DE LA INSTALACION": {"texto": "3 años", "tono": "ventaja"},
+        "PRUEBAS DE HERMETICIDAD": {"texto": "3 por dpto y 2 en montante.", "tono": "ventaja"},
+        "EXPEDIENTE / GESTIÓN CON LA CONCESIONARIA": {"texto": "Incluye expediente y su aprobación.", "tono": "info"}
+      },
+      "consideraciones": [
+        "Presupuesto con metrados y P.U. desagregados.",
+        "Incluye gabinetes y pintura de tubería de cobre.",
+        "No incluye rejillas de ventilación ni arena y cemento."
+      ],
+      "cotizacion": {
+        "titulo": "POSTOR B S.A.C. - PRESUPUESTO REV. 01 (transcrito)",
+        "encabezado": {"RUC": "20000000001", "Fecha": "15/10/2026"},
+        "filas": [
+          {"item": "1", "desc": "RED MONTANTE"},
+          {"item": "1.01", "desc": "Tubería Cu tipo L 3/4\"", "und": "m", "cant": 30, "pu": 90},
+          {"item": "1.02", "desc": "Tubería Cu tipo L 1\"", "und": "m", "cant": 40, "pu": 105},
+          {"item": "1.03", "desc": "Pintura de tubería Cu", "und": "glb", "cant": 1, "pu": 600},
+          {"item": "1.04", "desc": "Prueba de hermeticidad de montante", "und": "glb", "cant": 1, "pu": 500},
+          {"item": "2", "desc": "REDES INTERNAS"},
+          {"item": "2.01", "desc": "Tubería PE-AL-PE 2025", "und": "m", "cant": 2000, "pu": 20},
+          {"item": "2.02", "desc": "Tubería PE-AL-PE 1216", "und": "m", "cant": 2600, "pu": 18},
+          {"item": "2.03", "desc": "Salidas para terma, cocina y horno", "und": "pto", "cant": 360, "pu": 32},
+          {"item": "2.04", "desc": "Válvula de corte de artefacto", "und": "und", "cant": 240, "pu": 33},
+          {"item": "2.05", "desc": "Prueba de hermeticidad de departamentos", "und": "und", "cant": 120, "pu": 45},
+          {"item": "3", "desc": "CENTRO DE MEDICIÓN"},
+          {"item": "3.01", "desc": "Gabinetes", "und": "und", "cant": 2, "pu": 160},
+          {"item": "3.02", "desc": "Meter conector", "und": "und", "cant": 120, "pu": 17}
+        ],
+        "notas": ["Garantía 3 años.", "Adelanto 0%; fondo de garantía 5% a 18 meses."]
+      }
+    },
+    {
+      "id": "C", "corto": "Postor C", "nombre": "POSTOR C S.A.C.", "estado": "caro",
+      "ruc": "20000000002", "gg": 0, "utilidad": 0, "descuento": 0.05,
+      "total_declarado_sin_igv": 131917,
+      "referencia_cotizacion": "Propuesta del 12/10/2026 con 5% de descuento.",
+      "modalidad": {"texto": "Suma alzada con metrado y P.U.; descuento 5% sobre el total.", "tono": "info"},
+      "contacto": "Empresa: POSTOR C S.A.C.\nContacto: (nombre)\nCorreo: propuestas@postor-c.example",
+      "criterios": {
+        "ADELANTO / TIPO DE GARANTIA": {"texto": "Adelanto 30% contra carta fianza", "tono": "riesgo"},
+        "FRECUENCIA DE VALORIZACIONES": {"texto": "Mensual; pago a 7 días", "tono": "riesgo"},
+        "FONDO DE GARANTIA": {"texto": "No acepta fondo de garantía", "tono": "riesgo"},
+        "N° DE OBRAS ACTUALES EN EJECUCION": {"texto": "4 obras en ejecución (según carta)", "tono": "info"},
+        "VALIDEZ DE LA OFERTA": {"texto": "30 días", "tono": "ventaja"},
+        "PLAZO DE EJECUCION": {"texto": "No indica", "tono": "faltante"},
+        "GARANTIA DE LA INSTALACION": {"texto": "3 años", "tono": "ventaja"},
+        "PRUEBAS DE HERMETICIDAD": {"texto": "4 por dpto y 1 por montante.", "tono": "ventaja"},
+        "EXPEDIENTE / GESTIÓN CON LA CONCESIONARIA": {"texto": "No incluye la habilitación del servicio.", "tono": "riesgo"}
+      },
+      "consideraciones": [
+        "Metrado de PE-AL-PE 2025 15% mayor que la base.",
+        "Cotiza válvula de corte general de montante (no está en la base).",
+        "No incluye pintura de tubería de cobre."
+      ],
+      "cotizacion": {
+        "titulo": "POSTOR C S.A.C. - PROPUESTA (transcrita del PDF)",
+        "encabezado": {"RUC": "20000000002", "Fecha": "12/10/2026"},
+        "filas": [
+          {"item": "01.01", "desc": "Tubería cobre 3/4\"", "und": "m", "cant": 25, "pu": 110},
+          {"item": "01.02", "desc": "Tubería cobre 1\"", "und": "m", "cant": 40, "pu": 140},
+          {"item": "01.03", "desc": "Válvula de corte general de montante", "und": "und", "cant": 1, "pu": 120},
+          {"item": "01.04", "desc": "Prueba de hermeticidad", "und": "glb", "cant": 1, "pu": 650},
+          {"item": "02.01", "desc": "Tubería PE-AL-PE 2025", "und": "m", "cant": 2300, "pu": 24},
+          {"item": "02.02", "desc": "Tubería PE-AL-PE 1216", "und": "m", "cant": 2600, "pu": 19},
+          {"item": "02.03", "desc": "Salidas", "und": "pto", "cant": 360, "pu": 30},
+          {"item": "02.04", "desc": "Válvula de artefacto", "und": "und", "cant": 240, "pu": 35},
+          {"item": "02.05", "desc": "Prueba de hermeticidad por dpto", "und": "und", "cant": 120, "pu": 45},
+          {"item": "03.01", "desc": "Gabinetes", "und": "und", "cant": 3, "pu": 180}
+        ],
+        "notas": ["Descuento 5% sobre el total: S/ 138,860.00 - 5% = S/ 131,917.00 + IGV."]
+      }
+    }
+  ],
+  "partidas": [
+    {
+      "titulo": "INSTALACION EN LA RED MONTANTE", "und": "glb",
+      "bloques": {"A": {"cant": 1, "pu": 18000, "texto": "Precio global de la montante (1 glb x S/ 18,000.00): incluye tubería de cobre, válvulas y prueba de hermeticidad, sin desagregar.", "comentario": "Postor A: 1 glb x S/ 18,000.00."}},
+      "items": [
+        {"desc": "Tubería Cu tipo L 3/4\" vertical en ducto técnico", "und": "m",
+         "precios": {"B": {"cant": 30, "pu": 90, "ref": "1.01"}, "C": {"cant": 25, "pu": 110, "ref": "01.01"}}},
+        {"desc": "Tubería Cu tipo L 1\" vertical en ducto técnico", "und": "m",
+         "precios": {"B": {"cant": 40, "pu": 105, "ref": "1.02"}, "C": {"cant": 40, "pu": 140, "ref": "01.02", "observado": true, "nota": "P.U. 33% sobre el Postor B."}}},
+        {"desc": "Válvula de corte general de montante", "und": "und",
+         "precios": {"C": {"cant": 1, "pu": 120, "ref": "01.03"}}},
+        {"desc": "Pintura para tubería Cu en ducto técnico", "und": "glb",
+         "precios": {"B": {"cant": 1, "pu": 600, "ref": "1.03"}}},
+        {"desc": "Prueba de hermeticidad de línea montante", "und": "glb",
+         "precios": {"B": {"cant": 1, "pu": 500, "ref": "1.04"}, "C": {"cant": 1, "pu": 650, "ref": "01.04"}}}
+      ]
+    },
+    {
+      "titulo": "INSTALACION DE LAS REDES INTERNAS", "und": "dpto",
+      "bloques": {"A": {"cant": 120, "pu": 900, "texto": "Precio global por departamento (120 und x S/ 900.00): incluye tuberías PE-AL-PE, salidas, válvulas y pruebas, sin desagregar.", "comentario": "Postor A: 120 dptos x S/ 900.00."}},
+      "items": [
+        {"desc": "Tubería PE-AL-PE 2025 empotrada en losa y muro", "und": "m",
+         "precios": {"B": {"cant": 2000, "pu": 20, "ref": "2.01"}, "C": {"cant": 2300, "pu": 24, "ref": "02.01"}}},
+        {"desc": "Tubería PE-AL-PE 1216 empotrada en losa y muro", "und": "m",
+         "precios": {"B": {"cant": 2600, "pu": 18, "ref": "2.02"}, "C": {"cant": 2600, "pu": 19, "ref": "02.02"}}},
+        {"desc": "Salidas para terma, cocina y horno", "und": "pto",
+         "precios": {"B": {"cant": 360, "pu": 32, "ref": "2.03"}, "C": {"cant": 360, "pu": 30, "ref": "02.03"}}},
+        {"desc": "Válvula de corte de artefacto", "und": "und",
+         "precios": {"B": {"cant": 240, "pu": 33, "ref": "2.04"}, "C": {"cant": 240, "pu": 35, "ref": "02.04"}}},
+        {"desc": "Prueba de hermeticidad departamentos", "und": "und",
+         "precios": {"B": {"cant": 120, "pu": 45, "ref": "2.05"}, "C": {"cant": 120, "pu": 45, "ref": "02.05"}}}
+      ]
+    },
+    {
+      "titulo": "CENTRO DE MEDICIÓN Y GABINETES", "und": "glb",
+      "bloques": {"A": {"texto": "No especifica gabinetes ni meter conector (verificar alcance)."}},
+      "items": [
+        {"desc": "Suministro e instalación de gabinetes", "und": "und",
+         "precios": {"B": {"cant": 2, "pu": 160, "ref": "3.01"}, "C": {"cant": 3, "pu": 180, "ref": "03.01"}}},
+        {"desc": "Meter conector para gabinetes", "und": "und",
+         "precios": {"B": {"cant": 120, "pu": 17, "ref": "3.02"}, "C": {"incluido": "Incluido en su partida de gabinetes (según su texto)."}}}
+      ]
+    }
+  ],
+  "conclusiones": [
+    "Postor B es la menor oferta (S/ 122,000 sin IGV) y la única con metrado completo: es la base de homologación.",
+    "Postor A queda 3.3% arriba y cotiza en globales: no permite controlar valorizaciones ni adicionales.",
+    "Postor C es el más caro aun con 5% de descuento y pide 30% de adelanto sin fondo de garantía."
+  ],
+  "recomendacion": "1° Postor B (VERDE INTENSO, RECOMENDADO): menor precio, metrado y P.U. por partida, adelanto 0% y garantía de 3 años. Confirmar validez de la oferta y obras en ejecución. 2° Postor A como alternativa si desagrega su precio."
+}
