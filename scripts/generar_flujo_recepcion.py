@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DESTINO = ROOT / 'n8n/flujos/detectar-respuestas-proveedores.json'
 REGLAS = (ROOT / 'app/correo/deteccion.js').read_text(encoding='utf-8').split('module.exports =')[0]
 REGLAS_PDF = (ROOT / 'app/recepcion/adjuntos.js').read_text(encoding='utf-8').split('module.exports =')[0]
-URL_NHOST = 'https://zgorsmkvfyytsouacrpa.graphql.sa-east-1.nhost.run/v1'
+URL_NHOST = 'https://zgorsmkvfyytsouacrpa.hasura.sa-east-1.nhost.run/v1/graphql'
 URL_STORAGE = 'https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files'
 
 
