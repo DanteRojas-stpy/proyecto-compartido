@@ -1,0 +1,53 @@
+{
+  "name": "E5: llenar el comparativo con el generador de Python",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "inicio-manual",
+      "name": "Iniciar comparativo",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "repo", "name": "ruta_repo", "value": "REEMPLAZAR_RUTA_DEL_REPOSITORIO", "type": "string" },
+            { "id": "python", "name": "python", "value": "REEMPLAZAR_RUTA_A_PYTHON_DEL_VENV", "type": "string" },
+            { "id": "plantilla", "name": "plantilla", "value": "REEMPLAZAR_RUTA_A_LA_PLANTILLA_DEL_USUARIO.xlsx", "type": "string" },
+            { "id": "salida", "name": "salida", "value": "REEMPLAZAR_RUTA_DE_SALIDA.xlsx", "type": "string" },
+            { "id": "tc", "name": "tipo_cambio", "value": "", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "parametros",
+      "name": "Parámetros del comparativo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "command": "={{ 'cd /d \"' + $json.ruta_repo + '\" && \"' + $json.python + '\" -m app.comparativo --plantilla \"' + $json.plantilla + '\" --salida \"' + $json.salida + '\"' + ($json.tipo_cambio ? ' --tipo-cambio ' + $json.tipo_cambio : '') + ' --cotizacion \"PROVEEDOR 2=REEMPLAZAR_RUTA_COTIZACION_1.xlsx\" --cotizacion \"PROVEEDOR 3 (TIPO 1)=REEMPLAZAR_RUTA_COTIZACION_2.xlsx\"' }}"
+      },
+      "id": "ejecutar-python",
+      "name": "Ejecutar generador Python",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [440, 200]
+    }
+  ],
+  "connections": {
+    "Iniciar comparativo": {
+      "main": [[{ "node": "Parámetros del comparativo", "type": "main", "index": 0 }]]
+    },
+    "Parámetros del comparativo": {
+      "main": [[{ "node": "Ejecutar generador Python", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "America/Lima" },
+  "active": false,
+  "tags": []
+}
