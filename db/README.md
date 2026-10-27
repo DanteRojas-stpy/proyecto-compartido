@@ -41,3 +41,6 @@ La base de datos es **Nhost** (decisión registrada en `docs/DECISIONES.md`).
   correos y clasificaciones y la validación de respuestas recibidas a tiempo.
 - `009_respuestas_con_ficha_tecnica.sql`: diferencia una ficha técnica sin
   oferta económica de una ausencia de respuesta.
+- `010_estados_por_correo.sql`: registra los tres estados acordados por cada
+  correo, su actor e historial, y vincula documentos de proveedor con el correo
+  de origen.

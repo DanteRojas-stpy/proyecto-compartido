@@ -275,15 +275,15 @@ Mantén:
 - estado;
 - coordinaciones;
 - última comunicación;
-- clasificación;
-- corrección;
+- historial de correos;
+- estado de cada correo;
 - observaciones;
 - acciones existentes.
 
 Mantén especialmente los controles actuales como:
 
 - Coordinación;
-- Guardar corrección;
+- Guardar estado;
 - Cerrar solicitud;
 
 y cualquier otra acción funcional existente.

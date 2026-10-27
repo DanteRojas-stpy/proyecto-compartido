@@ -46,6 +46,14 @@ Console** de un proyecto Nhost nuevo.
 9. `009_respuestas_con_ficha_tecnica.sql`: distingue al proveedor que respondió
    con documentación técnica pero todavía no envió una cotización económica.
 
+10. `010_estados_por_correo.sql`: guarda un estado independiente para cada
+    correo, conserva la propuesta preliminar de n8n y las decisiones del
+    especialista, añade su historial y permite vincular los documentos que E3
+    recuperará con el correo de origen. Por seguridad, cualquier clasificación
+    antigua de “cotización definitiva” se migra como documentación recibida; el
+    especialista debe aceptarla nuevamente después de que E3 registre el
+    documento del correo.
+
 Después de las migraciones, actualiza los permisos de GraphQL con
 `scripts/configurar_nhost.py` y recarga la metadata. El seguimiento empieza con
 el primer envío exitoso. n8n crea una notificación persistente a las 09:00,

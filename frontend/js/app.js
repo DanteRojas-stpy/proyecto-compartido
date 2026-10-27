@@ -56,23 +56,11 @@ let usuarioSesionId;
 let proyectoActivoId = "";
 const opcionesRolUsuario = { headers: { "x-hasura-role": "user" } };
 
-const etiquetasRespuesta = {
-  no_envio_cotizacion: "No envió cotización",
-  envio_cotizacion_con_aclaracion: "Envió cotización con aclaración",
-  envio_cotizacion: "Envió cotización",
-};
-
-const etiquetasDetalle = {
-  sin_respuesta: "Sin respuesta",
-  confirmo_recepcion: "Confirmó recepción",
-  ficha_tecnica_sin_cotizacion: "Respondió con ficha técnica, sin cotización",
-  consulta_previa: "Realizó una consulta previa",
-  rechazo_participar: "Rechazó participar",
-  aclaraciones_pendientes: "Tiene aclaraciones pendientes",
-  cotizacion_definitiva: "Cotización definitiva",
-  tres_coordinaciones: "Excluido después de tres coordinaciones",
-  plazo_vencido: "Excluido por vencimiento del plazo",
-};
+const estadosCorreo = [
+  ["respuesta_sin_nueva_cotizacion_ni_ficha_tecnica", "Respuesta sin nueva cotización ni ficha técnica"],
+  ["cotizacion_o_ficha_tecnica_recibida", "Cotización o ficha técnica recibida"],
+  ["cotizacion_o_ficha_tecnica_aceptada_final", "Cotización o ficha técnica aceptada como final"],
+];
 
 function mostrarResultado(mensaje, tipo = "") {
   ui.resultado.textContent = mensaje;
@@ -398,32 +386,30 @@ async function registrarCoordinacion(evento) {
   }
 }
 
-async function corregirEstadoRespuesta(participacion, clasificacion) {
-  const [estado, detalle] = clasificacion.split("|");
+async function guardarEstadoCorreo(correo, estado, boton) {
+  if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
+    const confirmado = window.confirm(
+      "¿Confirmas que esta cotización o ficha técnica no tiene aclaraciones y debe aceptarse como final?",
+    );
+    if (!confirmado) return;
+  }
+  boton.disabled = true;
   try {
     await graphql(
-      `mutation CorregirEstadoProveedor(
-        $solicitudId: uuid!, $proveedorId: uuid!, $estado: String!, $detalle: String!
-      ) {
-        update_solicitud_proveedores_by_pk(
-          pk_columns: { solicitud_id: $solicitudId, proveedor_id: $proveedorId }
-          _set: {
-            estado_respuesta: $estado
-            detalle_respuesta: $detalle
-          }
-        ) { solicitud_id estado_respuesta }
+      `mutation GuardarEstadoCorreo($id: uuid!, $estado: String!) {
+        update_correos_proveedor_by_pk(
+          pk_columns: { id: $id }
+          _set: { estado_correo: $estado }
+        ) { id estado_correo origen_estado estado_asignado_at }
       }`,
-      {
-        solicitudId: participacion.solicitud_id,
-        proveedorId: participacion.proveedor_id,
-        estado,
-        detalle,
-      },
+      { id: correo.id, estado },
     );
-    mostrarResultado("Clasificación corregida y registrada en el historial.", "exito");
+    mostrarResultado("Estado del correo guardado en Nhost y registrado en el historial.", "exito");
     await cargarDetalleProyecto();
   } catch (error) {
     mostrarResultado(mensajeError(error), "error");
+  } finally {
+    boton.disabled = false;
   }
 }
 
@@ -445,7 +431,116 @@ async function resolverAclaracion(id) {
   }
 }
 
-function crearTarjetaProveedor(participacion, aclaraciones) {
+function crearTarjetaCorreo(correo, esMasReciente) {
+  const tarjeta = document.createElement("article");
+  tarjeta.className = "correo-proveedor";
+  const cabecera = document.createElement("div");
+  cabecera.className = "correo-cabecera";
+  const asunto = document.createElement("strong");
+  asunto.textContent = correo.asunto || "Correo sin asunto";
+  const fecha = document.createElement("time");
+  fecha.dateTime = correo.recibido_at;
+  fecha.textContent = formatearFechaHora(correo.recibido_at);
+  cabecera.append(asunto, fecha);
+  if (esMasReciente) {
+    const reciente = document.createElement("span");
+    reciente.className = "badge respondio";
+    reciente.textContent = "MÁS RECIENTE";
+    cabecera.append(reciente);
+  }
+
+  const contenido = document.createElement("details");
+  contenido.className = "contenido-correo";
+  const abrir = document.createElement("summary");
+  abrir.textContent = "Ver contenido del correo";
+  const cuerpo = document.createElement("p");
+  cuerpo.className = "cuerpo-correo";
+  cuerpo.textContent = correo.cuerpo_texto || "El correo no contiene texto disponible.";
+  contenido.append(abrir, cuerpo);
+
+  const adjuntos = Array.isArray(correo.adjuntos) ? correo.adjuntos : [];
+  const bloqueAdjuntos = document.createElement("div");
+  bloqueAdjuntos.className = "adjuntos-correo";
+  const tituloAdjuntos = document.createElement("strong");
+  tituloAdjuntos.textContent = `Adjuntos (${adjuntos.length})`;
+  bloqueAdjuntos.append(tituloAdjuntos);
+  if (adjuntos.length) {
+    const lista = document.createElement("ul");
+    for (const adjunto of adjuntos) {
+      const item = document.createElement("li");
+      item.textContent = adjunto.nombre || "Archivo adjunto";
+      lista.append(item);
+    }
+    bloqueAdjuntos.append(lista);
+  } else {
+    const vacio = document.createElement("span");
+    vacio.className = "ayuda";
+    vacio.textContent = "Sin archivos adjuntos registrados.";
+    bloqueAdjuntos.append(vacio);
+  }
+
+  const documentos = Array.isArray(correo.documentos) ? correo.documentos : [];
+  const bloqueDocumentos = document.createElement("div");
+  bloqueDocumentos.className = "documentos-correo";
+  const tituloDocumentos = document.createElement("strong");
+  tituloDocumentos.textContent = `Documentos recuperados por E3 (${documentos.length})`;
+  bloqueDocumentos.append(tituloDocumentos);
+  if (documentos.length) {
+    const lista = document.createElement("ul");
+    for (const documento of documentos) {
+      const item = document.createElement("li");
+      const tipo = documento.tipo === "cotizacion_proveedor" ? "Cotización" : "Ficha técnica";
+      item.textContent = `${tipo} · versión ${documento.version} · ${documento.nombre_original}`;
+      lista.append(item);
+    }
+    bloqueDocumentos.append(lista);
+  } else {
+    const vacio = document.createElement("span");
+    vacio.className = "ayuda";
+    vacio.textContent = "E3 todavía no ha registrado documentos de este correo.";
+    bloqueDocumentos.append(vacio);
+  }
+
+  const acciones = document.createElement("div");
+  acciones.className = "estado-correo-acciones";
+  const etiqueta = document.createElement("label");
+  etiqueta.textContent = "Estado del correo";
+  const selector = document.createElement("select");
+  for (const [valor, texto] of estadosCorreo) {
+    selector.add(new Option(texto, valor, false, valor === correo.estado_correo));
+  }
+  etiqueta.append(selector);
+  const origen = document.createElement("span");
+  origen.className = "ayuda estado-correo-origen";
+  origen.textContent = correo.origen_estado === "usuario"
+    ? `Asignado por el especialista · ${formatearFechaHora(correo.estado_asignado_at)}`
+    : "Asignación preliminar de n8n";
+  const guardar = document.createElement("button");
+  guardar.type = "button";
+  guardar.className = "secundario";
+  guardar.textContent = "Guardar estado";
+  guardar.addEventListener("click", () => guardarEstadoCorreo(correo, selector.value, guardar));
+  acciones.append(etiqueta, origen, guardar);
+  tarjeta.append(cabecera, contenido, bloqueAdjuntos, bloqueDocumentos, acciones);
+  return tarjeta;
+}
+
+function resumenEstadoProveedor(correos, participacion) {
+  if (!correos.length) {
+    return participacion.considerado
+      ? { texto: "Sin respuesta", pendiente: true }
+      : { texto: "No envió cotización ni ficha técnica", pendiente: true };
+  }
+  if (correos.some((correo) => correo.estado_correo === "cotizacion_o_ficha_tecnica_aceptada_final")) {
+    return { texto: "Cotización o ficha técnica aceptada como final", pendiente: false };
+  }
+  if (correos.some((correo) => correo.estado_correo === "cotizacion_o_ficha_tecnica_recibida")) {
+    return { texto: "Cotización o ficha técnica recibida", pendiente: false };
+  }
+  return { texto: "Respuesta sin nueva cotización ni ficha técnica", pendiente: true };
+}
+
+function crearTarjetaProveedor(participacion, aclaraciones, correos) {
   const tarjeta = document.createElement("article");
   tarjeta.className = `seguimiento-proveedor${participacion.considerado ? "" : " excluido"}`;
   const cabecera = document.createElement("div");
@@ -458,13 +553,24 @@ function crearTarjetaProveedor(participacion, aclaraciones) {
   correo.textContent = participacion.proveedor_asociado.correo || "Sin correo";
   identidad.append(titulo, correo);
   const estado = document.createElement("span");
-  estado.className = `estado-respuesta${participacion.estado_respuesta === "no_envio_cotizacion" ? " pendiente" : ""}`;
-  estado.textContent = etiquetasRespuesta[participacion.estado_respuesta];
+  const resumenEstado = resumenEstadoProveedor(correos, participacion);
+  estado.className = `estado-respuesta${resumenEstado.pendiente ? " pendiente" : ""}`;
+  estado.textContent = resumenEstado.texto;
   cabecera.append(identidad, estado);
 
   const detalle = document.createElement("p");
-  detalle.textContent = `${etiquetasDetalle[participacion.detalle_respuesta]}. Coordinaciones: ${participacion.numero_coordinaciones}/3. Último correo: ${formatearFechaHora(participacion.ultimo_correo_at)}.`;
+  detalle.textContent = `${correos.length} correo${correos.length === 1 ? "" : "s"}. Coordinaciones: ${participacion.numero_coordinaciones}/3. Último correo: ${formatearFechaHora(participacion.ultimo_correo_at)}.`;
   tarjeta.append(cabecera, detalle);
+
+  if (correos.length) {
+    const historial = document.createElement("div");
+    historial.className = "historial-correos";
+    const tituloHistorial = document.createElement("h4");
+    tituloHistorial.textContent = "Correos del proveedor";
+    historial.append(tituloHistorial);
+    correos.forEach((correoItem, indice) => historial.append(crearTarjetaCorreo(correoItem, indice === 0)));
+    tarjeta.append(historial);
+  }
 
   if (aclaraciones.length) {
     const bloqueAclaraciones = document.createElement("div");
@@ -500,30 +606,7 @@ function crearTarjetaProveedor(participacion, aclaraciones) {
       acciones.append(botonCoordinacion);
     }
 
-    const etiquetaSelector = document.createElement("label");
-    etiquetaSelector.textContent = "Corrección del usuario";
-    const selector = document.createElement("select");
-    const correcciones = [
-      ["no_envio_cotizacion|sin_respuesta", "Sin respuesta"],
-      ["no_envio_cotizacion|confirmo_recepcion", "Confirmó recepción"],
-      ["no_envio_cotizacion|ficha_tecnica_sin_cotizacion", "Respondió con ficha técnica, sin cotización"],
-      ["no_envio_cotizacion|consulta_previa", "Realizó una consulta previa"],
-      ["no_envio_cotizacion|rechazo_participar", "Rechazó participar"],
-      ["envio_cotizacion_con_aclaracion|aclaraciones_pendientes", "Envió cotización con aclaraciones"],
-      ["envio_cotizacion|cotizacion_definitiva", "Envió cotización definitiva"],
-    ];
-    const clasificacionActual = `${participacion.estado_respuesta}|${participacion.detalle_respuesta}`;
-    for (const [valor, etiqueta] of correcciones) {
-      selector.add(new Option(etiqueta, valor, false, valor === clasificacionActual));
-    }
-    etiquetaSelector.append(selector);
-    const botonCorregir = document.createElement("button");
-    botonCorregir.type = "button";
-    botonCorregir.className = "secundario";
-    botonCorregir.textContent = "Guardar corrección";
-    botonCorregir.addEventListener("click", () => corregirEstadoRespuesta(participacion, selector.value));
-    acciones.append(etiquetaSelector, botonCorregir);
-    tarjeta.append(acciones);
+    if (acciones.children.length) tarjeta.append(acciones);
   }
   return tarjeta;
 }
@@ -568,6 +651,21 @@ async function cargarDetalleProyecto() {
       }
       order_by: { created_at: asc }
     ) { id solicitud_id proveedor_id descripcion created_at }
+    correos_proveedor(
+      where: { solicitud_cotizacion: { proyecto_id: { _eq: $id } } }
+      order_by: { recibido_at: desc }
+    ) {
+      id solicitud_id proveedor_id asunto cuerpo_texto adjuntos recibido_at fuera_plazo
+      estado_correo origen_estado estado_asignado_at
+    }
+    documentos(
+      where: {
+        correo_id: { _is_null: false }
+        solicitud_cotizacion: { proyecto_id: { _eq: $id } }
+        tipo: { _in: ["cotizacion_proveedor", "ficha_tecnica_proveedor"] }
+      }
+      order_by: { created_at: desc }
+    ) { id correo_id tipo nombre_original version documento_estado }
   }`, { id: proyectoId });
   if (ui.proyectoId.value !== proyectoId) return;
 
@@ -584,10 +682,27 @@ async function cargarDetalleProyecto() {
     participantesPorSolicitud.get(participacion.solicitud_id).push(participacion);
   }
 
+  const documentosPorCorreo = new Map();
+  for (const documento of respuesta.documentos) {
+    if (!documentosPorCorreo.has(documento.correo_id)) documentosPorCorreo.set(documento.correo_id, []);
+    documentosPorCorreo.get(documento.correo_id).push(documento);
+  }
+
+  const correosPorProveedor = new Map();
+  for (const correo of respuesta.correos_proveedor) {
+    correo.documentos = documentosPorCorreo.get(correo.id) ?? [];
+    const clave = `${correo.solicitud_id}:${correo.proveedor_id}`;
+    if (!correosPorProveedor.has(clave)) correosPorProveedor.set(clave, []);
+    correosPorProveedor.get(clave).push(correo);
+  }
+
   for (const solicitud of respuesta.solicitudes_cotizacion) {
     const participantes = participantesPorSolicitud.get(solicitud.id) ?? [];
     const respuestas = participantes.filter((item) => item.ultimo_correo_at).length;
-    const cotizaciones = participantes.filter((item) => item.estado_respuesta !== "no_envio_cotizacion").length;
+    const conDocumentos = participantes.filter((item) => {
+      const correos = correosPorProveedor.get(`${item.solicitud_id}:${item.proveedor_id}`) ?? [];
+      return correos.some((correo) => correo.estado_correo !== "respuesta_sin_nueva_cotizacion_ni_ficha_tecnica");
+    }).length;
     const accordion = document.createElement("details");
     accordion.className = `solicitud-accordion${solicitud.partida_critica ? " critica" : ""}`;
     accordion.dataset.solicitudId = solicitud.id;
@@ -606,11 +721,11 @@ async function cargarDetalleProyecto() {
       identidad,
       crearDatoResumen("Proveedores", String(participantes.length)),
       crearDatoResumen("Respuestas", `${respuestas} de ${participantes.length}`),
-      crearDatoResumen("Cotizaciones", String(cotizaciones)),
+      crearDatoResumen("Con documentos", String(conDocumentos)),
     );
     const indicador = document.createElement("span");
-    indicador.className = `badge ${solicitud.partida_critica ? "critica" : cotizaciones ? "respondio" : "pendiente"}`;
-    indicador.textContent = solicitud.partida_critica ? "CRÍTICA" : cotizaciones ? "CON RESPUESTA" : "PENDIENTE";
+    indicador.className = `badge ${solicitud.partida_critica ? "critica" : conDocumentos ? "respondio" : "pendiente"}`;
+    indicador.textContent = solicitud.partida_critica ? "CRÍTICA" : conDocumentos ? "CON DOCUMENTOS" : "PENDIENTE";
     const chevron = document.createElement("span");
     chevron.className = "chevron";
     chevron.textContent = "⌄";
@@ -638,7 +753,11 @@ async function cargarDetalleProyecto() {
     proveedores.className = "proveedores-solicitud";
     for (const participacion of participantes) {
       const clave = `${participacion.solicitud_id}:${participacion.proveedor_id}`;
-      proveedores.append(crearTarjetaProveedor(participacion, aclaracionesPorProveedor.get(clave) ?? []));
+      proveedores.append(crearTarjetaProveedor(
+        participacion,
+        aclaracionesPorProveedor.get(clave) ?? [],
+        correosPorProveedor.get(clave) ?? [],
+      ));
     }
     if (!participantes.length) {
       const vacio = document.createElement("p");

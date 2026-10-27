@@ -9,13 +9,13 @@ Usar esta Skill para recibir y clasificar correos de proveedores, programar
 recordatorios, registrar coordinaciones o mostrar notificaciones de una
 solicitud de cotización.
 
-## Estados de respuesta
+## Estados de cada correo
 
 | Estado | Valor | Uso |
 |---|---|---|
-| No envió cotización | `no_envio_cotizacion` | No entregó una oferta válida. El detalle distingue falta de respuesta, confirmación, consulta, rechazo o exclusión. |
-| Envió cotización con aclaración | `envio_cotizacion_con_aclaracion` | Hay una oferta, pero mantiene aclaraciones abiertas. Cuenta como proveedor obtenido. |
-| Envió cotización | `envio_cotizacion` | Es la versión definitiva y no tiene aclaraciones abiertas. |
+| Respuesta sin nueva cotización ni ficha técnica | `respuesta_sin_nueva_cotizacion_ni_ficha_tecnica` | Confirmó recepción sin adjuntar esos documentos, realizó una consulta, rechazó participar o envió otra comunicación sin documentación nueva. |
+| Cotización o ficha técnica recibida | `cotizacion_o_ficha_tecnica_recibida` | n8n detectó documentación económica o técnica. El usuario confirma o cambia el estado y E3 recupera y verifica la información. |
+| Cotización o ficha técnica aceptada como final | `cotizacion_o_ficha_tecnica_aceptada_final` | El especialista acepta la información recuperada por E3 y no existen aclaraciones abiertas. n8n nunca asigna este estado. |
 
 ## Reglas
 
@@ -28,13 +28,12 @@ solicitud de cotización.
    empresa, asunto normalizado, código y contexto de la solicitud.
 5. Procesar cada `message_id` una sola vez para no duplicar estados,
    aclaraciones o notificaciones.
-6. Usar IA solo para interpretar el correo y comparar su contexto con el
-   historial. n8n controla fechas y PostgreSQL valida y conserva los estados.
-7. Marcar una cotización como definitiva únicamente con evidencia y sin
-   aclaraciones abiertas. Con confianza menor de 0.8, solicitar revisión del
-   usuario y no cambiar el estado automáticamente.
-8. Permitir que el usuario corrija una clasificación y conservar la original en
-   el historial de auditoría.
+6. Usar IA solo para asociar el correo y proponer si contiene cotización o ficha
+   técnica. n8n nunca acepta información como final.
+7. Mostrar todos los correos en el frontend. El usuario confirma o cambia el
+   estado de cada uno y PostgreSQL conserva la propuesta y cada decisión.
+8. Aceptar como final únicamente por decisión del especialista, con el documento
+   registrado por E3 y sin aclaraciones abiertas.
 9. El botón **Coordinación** registra medio, fecha, usuario y comentario. El
    envío automático inicial no cuenta. Después de tres coordinaciones sin
    cotización, excluir al proveedor.
