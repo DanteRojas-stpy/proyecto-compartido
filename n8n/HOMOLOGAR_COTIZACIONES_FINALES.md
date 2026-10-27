@@ -136,3 +136,21 @@ proyecto después de cambiar la skill, reglas o contrato. La exportación incluy
 esas instrucciones para que el agente las reciba sin acceso al disco de Windows.
 No reimportes ciegamente sobre ediciones de otra persona: exporta primero el
 flujo local y conserva sus conexiones.
+
+## Comprobaciones de esta entrega (27/10/2026)
+
+La ejecución local contra Nhost terminó en `esperando_insumos`: en esa consulta
+todavía no había versiones finales. También se verificó la consulta detallada
+contra el esquema real sin modificar registros.
+
+El recorrido positivo se ejecutó con una fuente aislada y dos PDF ficticios,
+utilizando extracción real de texto y Ollama local. Reunió ambos archivos y
+entregó una propuesta con 25 campos previstos, 9 encontrados, 12 citas y un
+ítem. Los demás datos y la correspondencia técnica quedaron pendientes para
+revisión. No se subieron documentos de prueba a Nhost ni se enviaron mensajes.
+La llamada de IA de esta prueba tardó aproximadamente 11 minutos por CPU; no
+es una garantía de tiempo para otras propuestas.
+
+Las pruebas automáticas incluyen ocho casos de versiones/estados, integridad
+de adjuntos, números ambiguos, citas y cambio de estado durante la lectura.
+Las 16 pruebas Python del repositorio y la revisión de GitHub aprobaron.
