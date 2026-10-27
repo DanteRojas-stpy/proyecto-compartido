@@ -19,7 +19,7 @@ def ejecutar_javascript(codigo, preambulo, tmp_path):
         encoding="utf-8",
     )
     resultado = subprocess.run(
-        ["node", ruta], capture_output=True, text=True, check=False
+        ["node", ruta], capture_output=True, text=True, encoding="utf-8", check=False
     )
     assert resultado.returncode == 0, resultado.stderr
     return json.loads(resultado.stdout)
