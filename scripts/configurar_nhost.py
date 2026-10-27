@@ -159,6 +159,7 @@ def main() -> int:
 
         tracked_tables = [
             "correos_proveedor",
+            "historial_estados_correo",
             "aclaraciones_proveedor",
             "coordinaciones_proveedor",
             "historial_respuestas_proveedor",
@@ -177,12 +178,16 @@ def main() -> int:
             ("solicitud_proveedores", "proveedor_asociado", "proveedor_id", None, None),
             ("documentos", "solicitud_cotizacion", "solicitud_id", None, None),
             ("documentos", "proveedor_asociado", "proveedor_id", None, None),
+            ("documentos", "correo_origen", "correo_id", None, None),
             ("partidas", "solicitud_cotizacion", "solicitud_id", None, None),
             ("envios_solicitud", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
             ("envios_solicitud", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
             ("envios_solicitud", "participacion_seguimiento", None, "solicitud_proveedores", {"solicitud_id": "solicitud_id", "proveedor_id": "proveedor_id"}),
             ("correos_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
             ("correos_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
+            ("historial_estados_correo", "correo_asociado", "correo_id", None, None),
+            ("historial_estados_correo", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
+            ("historial_estados_correo", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
             ("aclaraciones_proveedor", "solicitud_cotizacion", None, "solicitudes_cotizacion", {"solicitud_id": "id"}),
             ("aclaraciones_proveedor", "proveedor_asociado", None, "proveedores", {"proveedor_id": "id"}),
             ("aclaraciones_proveedor", "correo_asociado", "correo_id", None, None),
@@ -213,6 +218,18 @@ def main() -> int:
                 "aclaraciones_proveedor",
                 {"solicitud_id": "solicitud_id", "proveedor_id": "proveedor_id"},
             ))
+
+        correos_metadata = table_metadata(metadata, "public", "correos_proveedor")
+        relaciones_correo = [
+            ("documentos_recuperados", "documentos"),
+            ("historial_estados", "historial_estados_correo"),
+            ("aclaraciones_detectadas", "aclaraciones_proveedor"),
+        ]
+        for name, remote_table in relaciones_correo:
+            if not relationship_exists(correos_metadata, name):
+                operations.append(array_relationship_operation(
+                    "correos_proveedor", name, remote_table, {"id": "correo_id"}
+                ))
 
         proyecto_filter = owner_filter("responsable_id")
         solicitud_filter = owner_filter("creado_por")
@@ -307,12 +324,12 @@ def main() -> int:
             },
             "documentos": {
                 "select": {
-                    "columns": ["id", "solicitud_id", "proveedor_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version", "documento_estado", "subido_por", "created_at"],
+                    "columns": ["id", "solicitud_id", "proveedor_id", "correo_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version", "documento_estado", "subido_por", "created_at"],
                     "filter": documento_filter,
                     "allow_aggregations": False,
                 },
                 "insert": {
-                    "columns": ["solicitud_id", "proveedor_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version"],
+                    "columns": ["solicitud_id", "proveedor_id", "correo_id", "tipo", "nombre_original", "storage_file_id", "mime_type", "tamano_bytes", "version"],
                     "check": documento_filter,
                     "set": {"subido_por": SESSION_USER},
                 },
@@ -342,7 +359,19 @@ def main() -> int:
             },
             "correos_proveedor": {
                 "select": {
-                    "columns": ["id", "solicitud_id", "proveedor_id", "gmail_message_id", "gmail_thread_id", "remitente", "destinatarios", "asunto", "cuerpo_texto", "adjuntos", "recibido_at", "fuera_plazo", "analisis_agente", "created_at"],
+                    "columns": ["id", "solicitud_id", "proveedor_id", "gmail_message_id", "gmail_thread_id", "remitente", "destinatarios", "asunto", "cuerpo_texto", "adjuntos", "recibido_at", "fuera_plazo", "analisis_agente", "estado_correo", "origen_estado", "estado_asignado_por", "estado_asignado_at", "created_at"],
+                    "filter": seguimiento_filter,
+                    "allow_aggregations": False,
+                },
+                "update": {
+                    "columns": ["estado_correo"],
+                    "filter": seguimiento_filter,
+                    "check": None,
+                },
+            },
+            "historial_estados_correo": {
+                "select": {
+                    "columns": ["id", "correo_id", "solicitud_id", "proveedor_id", "estado_anterior", "estado_nuevo", "origen", "cambiado_por", "created_at"],
                     "filter": seguimiento_filter,
                     "allow_aggregations": False,
                 },

@@ -38,3 +38,21 @@ se ejecuta a las 09:00 de Lima. Las respuestas se notifican al llegar. La IA
 requiere revisión del usuario cuando su confianza es menor de 0.8. Tres
 coordinaciones sin cotización o la fecha límite excluyen al proveedor. Una
 cotización con aclaraciones sí cuenta como proveedor obtenido.
+
+## 2026-10-27: estado independiente por cada correo del proveedor
+
+**Decisión:** cada correo conserva uno de tres estados: **Respuesta sin nueva
+cotización ni ficha técnica**, **Cotización o ficha técnica recibida** o
+**Cotización o ficha técnica aceptada como final**.
+
+**Responsabilidad:** n8n solo propone preliminarmente uno de los dos primeros
+estados. El especialista confirma o cambia el estado desde el frontend. La
+aceptación final pertenece exclusivamente al especialista y exige que no haya
+aclaraciones abiertas y que E3 haya registrado la cotización o ficha técnica
+del correo.
+
+**Trazabilidad:** Nhost guarda el correo, el estado, su origen, el especialista,
+la fecha y todo cambio posterior. Una respuesta no reemplaza a las anteriores.
+Los documentos recuperados por E3 se vinculan con el correo de origen. Los
+correos con cotización o ficha técnica recibida son la entrada documental de
+E3.

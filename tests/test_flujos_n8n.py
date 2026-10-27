@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -103,7 +104,7 @@ def test_seguimiento_usa_endpoint_directo_y_calendario_por_proveedor():
     assert "primerEnvio" not in codigo
 
 
-def test_clasificacion_rechaza_confianza_invalida_y_exige_version_coherente():
+def test_clasificacion_rechaza_confianza_invalida_y_reserva_final_al_usuario():
     respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
     validar = next(
         nodo for nodo in respuestas["nodes"]
@@ -111,7 +112,12 @@ def test_clasificacion_rechaza_confianza_invalida_y_exige_version_coherente():
     )
     codigo = validar["parameters"]["jsCode"]
     assert "Number.isFinite(confianzaRecibida)" in codigo
-    assert "versionFinalCoherente" in codigo
+    assert "cotizacion_o_ficha_tecnica_aceptada_final" not in codigo
+    sistema = next(
+        nodo for nodo in respuestas["nodes"]
+        if nodo["name"] == "Clasificar respuesta"
+    )["parameters"]["messages"]["messageValues"][0]["message"]
+    assert "Nunca asignes cotizacion_o_ficha_tecnica_aceptada_final" in sistema
 
 
 def test_analisis_procesa_cada_correo_y_recupera_los_omitidos(tmp_path):
@@ -136,8 +142,10 @@ def test_analisis_procesa_cada_correo_y_recupera_los_omitidos(tmp_path):
     assert "_costflow_version" in nodos["Preparar contexto"]["parameters"]["jsCode"]
 
     registro = nodos["Registrar respuesta y notificación"]["parameters"]["jsonBody"]
-    assert "ultimo_correo_at: { _lte: $recibidoAt }" in registro
-    assert "update_solicitud_proveedores(" in registro
+    assert "estado_correo origen_estado" in registro
+    assert "update_solicitud_proveedores(" not in registro
+    assert "update_columns: [analisis_agente]" in registro
+    assert "correo_id: contexto.correoId" in nodos["Validar clasificación"]["parameters"]["jsCode"]
 
     filtro = nodos["Filtrar correos pendientes"]["parameters"]["jsCode"]
     preambulo = "const $input = { all: () => [{json: {id: 1}}, {json: {id: 2}}, {json: {omitir: true}}] };"
@@ -145,16 +153,55 @@ def test_analisis_procesa_cada_correo_y_recupera_los_omitidos(tmp_path):
     assert [item["json"]["id"] for item in salida] == [1, 2]
 
 
-def test_clasificacion_distingue_ficha_tecnica_sin_cotizacion():
+def test_clasificacion_detecta_cotizacion_o_ficha_sin_aceptarla_final():
     respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
     nodos = {nodo["name"]: nodo for nodo in respuestas["nodes"]}
     preparar = nodos["Preparar contexto"]["parameters"]["jsCode"]
     validar = nodos["Validar clasificación"]["parameters"]["jsCode"]
     sistema = nodos["Clasificar respuesta"]["parameters"]["messages"]["messageValues"][0]["message"]
 
-    assert "ficha_tecnica_sin_cotizacion" in preparar
-    assert "ficha_tecnica_sin_cotizacion" in validar
-    assert "ficha_tecnica_sin_cotizacion" in sistema
+    assert "cotizacion_o_ficha_tecnica_recibida" in preparar
+    assert "uuidCorreo" in preparar
+    assert "globalThis.crypto" not in preparar
+    assert "cotizacion_o_ficha_tecnica_recibida" in validar
+    assert "cotizacion_o_ficha_tecnica_recibida" in sistema
+    assert "Nunca propongas cotizacion_o_ficha_tecnica_aceptada_final" in preparar
+
+
+def test_preparar_contexto_asigna_identificador_estable_al_correo(tmp_path):
+    respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
+    preparar = next(
+        nodo for nodo in respuestas["nodes"]
+        if nodo["name"] == "Preparar contexto"
+    )["parameters"]["jsCode"]
+    correo = {
+        "messageId": "mensaje-gmail-123", "threadId": "hilo-1",
+        "remitente": "proveedor@example.com", "destinatarios": ["costflow@example.com"],
+        "asunto": "Cotización", "cuerpo": "Adjunto oferta", "adjuntos": [],
+        "recibidoAt": "2026-10-26T10:00:00-05:00",
+    }
+    datos = {
+        "correo_existente": [], "envios_solicitud": [], "correos_proveedor": [],
+        "solicitud_proveedores": [{
+            "solicitud_id": "s1", "proveedor_id": "p1", "considerado": True,
+            "proveedor_asociado": {"nombre": "Proveedor"},
+            "solicitud_cotizacion": {
+                "codigo": "MA-001", "estado": "inicio",
+                "fecha_limite": "2026-11-29", "creado_por": "u1",
+            },
+        }],
+    }
+    preambulo = (
+        f"const correoPrueba = {json.dumps(correo)};\n"
+        f"const $json = {{data: {json.dumps(datos)}}};\n"
+        "const $ = () => ({ item: { json: correoPrueba } });"
+    )
+    salida = ejecutar_javascript(preparar, preambulo, tmp_path)["json"]
+
+    assert re.fullmatch(
+        r"[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}",
+        salida["correoId"],
+    )
 
 
 def test_seguimiento_omite_proveedor_sin_envio_y_respeta_su_fecha(tmp_path):
@@ -198,13 +245,14 @@ def test_seguimiento_omite_proveedor_sin_envio_y_respeta_su_fecha(tmp_path):
     assert [item["proveedor"] for item in proveedores] == ["Con envío"]
 
 
-def test_confianza_invalida_solicita_revision_sin_aplicar(tmp_path):
+def test_confianza_invalida_solicita_revision_y_conserva_estado_preliminar(tmp_path):
     respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
     validar = next(
         nodo for nodo in respuestas["nodes"]
         if nodo["name"] == "Validar clasificación"
     )
     contexto = {
+        "correoId": "11111111-1111-4111-8111-111111111111",
         "messageId": "m1", "threadId": "t1", "remitente": "p@example.com",
         "destinatarios": ["c@example.com"], "asunto": "Respuesta", "cuerpo": "Recibido",
         "recibidoAt": "2026-10-26T10:00:00-05:00", "adjuntos": [],
@@ -219,8 +267,8 @@ def test_confianza_invalida_solicita_revision_sin_aplicar(tmp_path):
     }
     modelo = {
         "solicitudId": "s1", "proveedorId": "p1",
-        "estado": "no_envio_cotizacion", "detalle": "confirmo_recepcion",
-        "esVersionFinal": False, "aclaraciones": [], "evidencia": ["Acuse"],
+        "estadoCorreo": "respuesta_sin_nueva_cotizacion_ni_ficha_tecnica",
+        "aclaraciones": [], "evidencia": ["Acuse"],
         "confianza": "valor-invalido", "razon": "Solo confirmó recepción",
     }
     preambulo = (
@@ -229,23 +277,25 @@ def test_confianza_invalida_solicita_revision_sin_aplicar(tmp_path):
         "const $ = () => ({ item: { json: contextoPrueba } });"
     )
     salida = ejecutar_javascript(validar["parameters"]["jsCode"], preambulo, tmp_path)
-    assert salida["json"]["aplicar"] is False
     assert salida["json"]["notificar"] is True
-    assert salida["json"]["cambios"]["confianza_clasificacion"] == 0
+    assert salida["json"]["registrarAclaraciones"] is False
+    assert salida["json"]["correo"]["estado_correo"] == "respuesta_sin_nueva_cotizacion_ni_ficha_tecnica"
+    assert salida["json"]["correo"]["analisis_agente"]["confianza"] == "valor-invalido"
 
 
-def test_ficha_tecnica_cuenta_como_respuesta_sin_sumar_cotizacion(tmp_path):
+def test_ficha_tecnica_se_registra_como_documentacion_recibida(tmp_path):
     respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
     validar = next(
         nodo for nodo in respuestas["nodes"]
         if nodo["name"] == "Validar clasificación"
     )
     contexto = {
+        "correoId": "22222222-2222-4222-8222-222222222222",
         "messageId": "m-ficha", "threadId": "t1", "remitente": "p@example.com",
         "destinatarios": ["c@example.com"], "asunto": "Ficha técnica",
         "cuerpo": "Adjunto ficha técnica para revisión",
         "recibidoAt": "2026-10-25T10:00:00-05:00", "adjuntos": [{"nombre": "ficha.pdf"}],
-        "versionAnalisis": 2,
+        "versionAnalisis": 3,
         "candidatos": [{
             "solicitud_id": "s1", "proveedor_id": "p1", "considerado": True,
             "ultimo_correo_at": None,
@@ -258,8 +308,9 @@ def test_ficha_tecnica_cuenta_como_respuesta_sin_sumar_cotizacion(tmp_path):
     }
     modelo = {
         "solicitudId": "s1", "proveedorId": "p1",
-        "estado": "no_envio_cotizacion", "detalle": "ficha_tecnica_sin_cotizacion",
-        "esVersionFinal": False, "aclaraciones": [], "evidencia": ["Adjunta ficha técnica"],
+        "estadoCorreo": "cotizacion_o_ficha_tecnica_recibida",
+        "aclaraciones": ["Confirmar el alcance técnico"],
+        "evidencia": ["Adjunta ficha técnica"],
         "confianza": 0.96, "razon": "Envió una ficha técnica sin precios.",
     }
     preambulo = (
@@ -269,24 +320,25 @@ def test_ficha_tecnica_cuenta_como_respuesta_sin_sumar_cotizacion(tmp_path):
     )
     salida = ejecutar_javascript(validar["parameters"]["jsCode"], preambulo, tmp_path)["json"]
 
-    assert salida["aplicar"] is True
-    assert salida["cambios"]["estado"] == "respondio"
-    assert salida["cambios"]["estado_respuesta"] == "no_envio_cotizacion"
-    assert salida["cambios"]["detalle_respuesta"] == "ficha_tecnica_sin_cotizacion"
-    assert "ficha técnica, sin cotización" in salida["notificacion"]["titulo"]
-    assert salida["correo"]["analisis_agente"]["_costflow_version"] == 2
+    assert salida["correo"]["estado_correo"] == "cotizacion_o_ficha_tecnica_recibida"
+    assert salida["correo"]["origen_estado"] == "agente"
+    assert salida["correo"]["id"] == contexto["correoId"]
+    assert salida["aclaraciones"][0]["correo_id"] == contexto["correoId"]
+    assert "cotización o ficha técnica recibida" in salida["notificacion"]["titulo"]
+    assert salida["correo"]["analisis_agente"]["_costflow_version"] == 3
 
 
-def test_correo_antiguo_no_sobrescribe_el_ultimo_estado(tmp_path):
+def test_correo_antiguo_conserva_su_propio_estado(tmp_path):
     respuestas = cargar_flujos()["analizar-respuestas-proveedores.json"]
     validar = next(
         nodo for nodo in respuestas["nodes"]
         if nodo["name"] == "Validar clasificación"
     )
     contexto = {
+        "correoId": "33333333-3333-4333-8333-333333333333",
         "messageId": "m-antiguo", "threadId": "t1", "remitente": "p@example.com",
         "destinatarios": ["c@example.com"], "asunto": "Respuesta", "cuerpo": "Recibido",
-        "recibidoAt": "2026-10-24T10:00:00-05:00", "adjuntos": [], "versionAnalisis": 2,
+        "recibidoAt": "2026-10-24T10:00:00-05:00", "adjuntos": [], "versionAnalisis": 3,
         "candidatos": [{
             "solicitud_id": "s1", "proveedor_id": "p1", "considerado": True,
             "ultimo_correo_at": "2026-10-26T10:00:00-05:00",
@@ -299,8 +351,8 @@ def test_correo_antiguo_no_sobrescribe_el_ultimo_estado(tmp_path):
     }
     modelo = {
         "solicitudId": "s1", "proveedorId": "p1",
-        "estado": "no_envio_cotizacion", "detalle": "confirmo_recepcion",
-        "esVersionFinal": False, "aclaraciones": [], "evidencia": ["Confirmación"],
+        "estadoCorreo": "respuesta_sin_nueva_cotizacion_ni_ficha_tecnica",
+        "aclaraciones": [], "evidencia": ["Confirmación"],
         "confianza": 0.95, "razon": "Confirmó recepción.",
     }
     preambulo = (
@@ -310,7 +362,8 @@ def test_correo_antiguo_no_sobrescribe_el_ultimo_estado(tmp_path):
     )
     salida = ejecutar_javascript(validar["parameters"]["jsCode"], preambulo, tmp_path)["json"]
 
-    assert salida["aplicar"] is False
+    assert salida["correo"]["gmail_message_id"] == "m-antiguo"
+    assert salida["correo"]["estado_correo"] == "respuesta_sin_nueva_cotizacion_ni_ficha_tecnica"
     assert salida["notificar"] is True
 
 

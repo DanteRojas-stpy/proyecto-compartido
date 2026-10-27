@@ -22,7 +22,7 @@ negocio y conserva la trazabilidad.
 | Archivo | Qué hace | Se dispara con | Estado |
 |---|---|---|---|
 | `flujos/envio-solicitud-cotizacion.json` | Envía solo el itemizado y metrados a cada proveedor y registra el mensaje | Evento de Nhost cuando `preparada_para_envio` cambia a `true` | Listo para configurar |
-| `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, clasifica la respuesta y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
+| `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, propone si contiene cotización o ficha técnica y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
 | `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
 | `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |
 | `flujos/homologacion-e4.json` | E4: lee las versiones finales de Nhost, propone la homologación con el modelo local y la deja para revisión | Revisión manual por ahora | Borrador. Requiere itemizado cargado |
@@ -89,8 +89,8 @@ PostgreSQL vuelve a validar la regla antes de aceptar el cambio.
 
 ## Configurar el seguimiento
 
-1. Ejecuta `scripts/configurar_nhost.py` después de las migraciones 007, 008 y
-   009 para crear relaciones y permisos.
+1. Ejecuta `scripts/configurar_nhost.py` después de las migraciones 007, 008,
+   009 y 010 para crear relaciones y permisos.
 2. Importa `flujos/seguimiento-diario-proveedores.json` y selecciona la
    credencial `Nhost Admin` en sus dos nodos HTTP. Configura la zona horaria del
    workflow como `America/Lima` y publícalo.
@@ -114,13 +114,15 @@ con “Cotización” en el asunto para recuperar respuestas que llegaron cuando
 workflow estaba apagado. Deduplica por
 `message_id`, por lo que el barrido no repite clasificaciones ni alertas.
 Correlaciona primero por `thread_id` y usa correo, empresa, asunto, código y
-contexto como respaldo. Una confianza menor de 0.8 crea una solicitud de
-revisión sin modificar el estado. Los mensajes antiguos se registran sin
-sobrescribir el estado producido por un correo más reciente.
+contexto como respaldo. Para cada correo propone únicamente **Respuesta sin
+nueva cotización ni ficha técnica** o **Cotización o ficha técnica recibida**.
+La IA nunca propone la aceptación final. El especialista revisa todos los
+correos en CostFlow, confirma o cambia su estado y Nhost conserva el historial.
+Los mensajes antiguos permanecen como registros independientes y no se
+sobrescriben entre sí.
 
-Una ficha técnica sin precios cuenta como respuesta del proveedor y genera su
-propia notificación, pero permanece en `no_envio_cotizacion` con el detalle
-`ficha_tecnica_sin_cotizacion`. Los correos posteriores a la fecha límite
+Los correos con cotización o ficha técnica quedan disponibles para que E3
+recupere y verifique la información. Los correos posteriores a la fecha límite
 quedan registrados, pero no generan notificaciones ni reincorporan al
 proveedor. Todas las notificaciones se muestran en CostFlow; este proceso no
 envía un resumen por correo al usuario.
@@ -129,13 +131,13 @@ envía un resumen por correo al usuario.
 
 Después de reemplazar una versión anterior del flujo:
 
-1. Ejecuta las migraciones 008 y 009 que todavía no estén aplicadas.
+1. Ejecuta las migraciones 008, 009 y 010 que todavía no estén aplicadas.
 2. Vuelve a seleccionar las credenciales de Nhost, Gmail y Gemini y publica el
    workflow.
 3. Ejecuta una vez `Revisión horaria de correos` o espera al siguiente cambio
    de hora.
-4. Comprueba que cada proveedor que respondió tenga `Último correo`, una
-   notificación individual y un detalle distinto de `Sin respuesta`.
+4. Comprueba que cada proveedor que respondió muestre todos sus correos, una
+   notificación individual y un estado preliminar por correo.
 
 Los correos ya clasificados con la versión anterior se revisan una sola vez.
 Las notificaciones conservan su identificador y actualizan su texto, de modo

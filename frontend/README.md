@@ -39,10 +39,13 @@ deben estar aplicados `db/migraciones/004_proyectos_y_correlativos.sql`,
 `db/migraciones/005_fechas_y_partida_critica.sql` y los permisos nuevos.
 Al abrir un proyecto, el front agrupa la información en un acordeón por solicitud.
 El resumen muestra fecha, criticidad y cantidades de proveedores, respuestas y
-cotizaciones. Al expandirlo aparece el estado de cada proveedor. Las
+proveedores con documentos. Al expandirlo aparece el historial completo de
+correos de cada proveedor, su contenido, adjuntos y estado. n8n propone si el
+correo contiene cotización o ficha técnica; el especialista confirma o cambia
+ese estado mediante **Guardar estado** y la decisión queda auditada en Nhost. Las
 notificaciones persistentes se muestran al final del proyecto. El
-especialista puede registrar una **Coordinación**, resolver aclaraciones,
-corregir una clasificación automática y cerrar una solicitud cuando ya existe
+especialista puede registrar una **Coordinación**, resolver aclaraciones y
+cerrar una solicitud cuando ya existe
 su cuadro comparativo vigente. Las notificaciones nuevas llegan mediante una
 suscripción GraphQL, con actualización de respaldo cada 30 segundos.
 
