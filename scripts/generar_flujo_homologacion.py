@@ -181,6 +181,9 @@ Pagina debe ser null si el texto no demuestra su número. No adivines una págin
         http('Comprobar que sigue siendo final', QUERY_VIGENCIA,
              '{s: $json.solicitud_id, p: $json.proveedor_id, v: $json.version_id, numero: $json.postores[0].version.version}'),
         code('Entregar homologación para revisión', "return $input.all().map((x,i)=>({json:comprobarVigencia(x.json,$('Validar evidencia y conservar originales').itemMatching(i).json),pairedItem:{item:i}}));"),
+        nodo('Entregar a cuadro comparativo E5', 'executeWorkflow', {
+             'source': 'database', 'workflowId': {'__rl': True, 'value': 'costflowE5Cuadro01', 'mode': 'id'},
+             'mode': 'once', 'options': {'waitForSubWorkflow': True}}, version=1.3),
         nodo('Pendiente de insumos finales', 'noOp'),
         nodo('Alcance de este flujo', 'stickyNote', {'content':
             '## E4: homologación de cotizaciones finales\nSolo lee Nhost y Storage. Requiere estado envio_cotizacion, detalle cotizacion_definitiva y versión es_final vigente sin aclaraciones.\nSi falta la entrada en desarrollo, muestra esperando_insumos. Nunca utiliza una preliminar.\nSkill de homologación cargada en el nodo IA. Campos de negocio tomados de la plantilla de ascensores. No genera Excel ni cambia estados.\nGmail no se consulta ni se envían mensajes. Modelo local por CPU. Los datos faltantes quedan null. Toda correspondencia técnica se entrega para revisión.',
@@ -195,6 +198,7 @@ Pagina debe ser null si el texto no demuestra su número. No adivines una págin
         for a, b in zip(cadena, cadena[1:]): enlazar(c, a, b)
     for nombre in ['¿Hay cotización definitiva?', '¿Documentos listos para leer?', '¿Texto completo disponible?']:
         enlazar(c, nombre, 'Pendiente de insumos finales', 1)
+    enlazar(c, 'Entregar homologación para revisión', 'Entregar a cuadro comparativo E5')
     enlazar(c, 'Ollama local - homologación', 'Proponer homologación con la skill', tipo='ai_languageModel')
     enlazar(c, 'Formato de propuesta con evidencia', 'Proponer homologación con la skill', tipo='ai_outputParser')
     for i, node in enumerate(n): node['position'] = [(i % 7) * 260, (i // 7) * 260]

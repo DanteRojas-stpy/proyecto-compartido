@@ -25,7 +25,12 @@ def test_exportacion_homologacion_sin_mutaciones_y_con_lector_incluido():
         for n in w['nodes']:
             assert 'credentials' not in n
             if n['type'] == 'n8n-nodes-base.executeWorkflow':
-                workflows.append(json.loads(n['parameters']['workflowJson']))
+                if n['parameters']['source'] == 'parameter':
+                    workflows.append(json.loads(n['parameters']['workflowJson']))
+                else:
+                    assert n['parameters']['workflowId']['value'] == 'costflowE5Cuadro01'
+                    assert n['parameters']['mode'] == 'once'
+                    assert n['parameters']['options']['waitForSubWorkflow'] is True
             if n['type'] == 'n8n-nodes-base.httpRequest':
                 assert 'mutation ' not in n['parameters'].get('jsonBody', '')
             assert n['type'] not in ('n8n-nodes-base.gmail', 'n8n-nodes-base.gmailTrigger')

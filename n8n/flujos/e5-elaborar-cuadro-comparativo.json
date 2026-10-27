@@ -1,0 +1,462 @@
+{
+  "id": "costflowE5Cuadro01",
+  "name": "CostFlow - E5 Elaborar cuadro comparativo",
+  "active": false,
+  "nodes": [
+    {
+      "id": "b8986144-35b5-52d5-afbb-2097ae289cca",
+      "name": "Revisar entrada del cuadro",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "3526c679-65fb-580d-9850-87807fc8a199",
+      "name": "Recibir salida de homologación",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        280,
+        0
+      ],
+      "parameters": {
+        "inputSource": "passthrough"
+      }
+    },
+    {
+      "id": "12313f25-4885-52fc-b618-7e8b3b78c9ee",
+      "name": "Agrupar y comprobar validación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        0
+      ],
+      "parameters": {
+        "jsCode": "/* Coordinación de E5; los cálculos y el llenado pertenecen al servicio Excel. */\nfunction agrupar(entradas) {\n  const filas=entradas.flatMap(e=>Array.isArray(e.homologaciones)?e.homologaciones:[e]);\n  const grupos=new Map();\n  for(const f of filas){\n    const key=f.solicitud_id??'sin_solicitud';\n    if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(f);\n  }\n  return [...grupos.entries()].map(([solicitud_id,homologaciones])=>{\n    const motivos=[];\n    for(const f of homologaciones){\n      if(f.estado_revision!=='listo_para_cuadro'||f.habilitado_para_cuadro!==true)motivos.push('La homologación aún requiere revisión.');\n      if((f.pendientes??[]).some(p=>p.bloqueante))motivos.push('Hay pendientes bloqueantes.');\n      if(!f.plantilla?.storage_file_id)motivos.push('Falta la plantilla registrada en Nhost.');\n      if(!(f.decisiones??[]).some(d=>d.tipo==='homologacion_validada'&&d.version_id===f.version_id&&d.aprobado_por&&d.aprobado_at))motivos.push('Falta decisión de validación del especialista.');\n      if(!(f.partidas??[]).length||(f.partidas??[]).some(p=>p.correspondencia!=='validada_especialista'||!p.comparable))motivos.push('Faltan correspondencias y valores comparables validados.');\n    }\n    const vistos=new Set();for(const f of homologaciones){if(vistos.has(f.proveedor_id))motivos.push('Proveedor duplicado: resolver su versión o alternativa.');vistos.add(f.proveedor_id);}\n    if(homologaciones.length>7)motivos.push('La plantilla compartida admite siete bloques.');\n    if(homologaciones.some(f=>JSON.stringify(f.plantilla)!==JSON.stringify(homologaciones[0].plantilla)))motivos.push('No mezclar plantillas.');\n    return {estado:motivos.length?'pendiente_validacion':'verificar_fuente',solicitud_id,\n      motivos:[...new Set(motivos)],datos:{homologaciones,revision:entradas[0]?.revision??0,\n        presupuesto_meta:entradas[0]?.presupuesto_meta??null},\n      plantilla:homologaciones[0]?.plantilla??null};\n  });\n}\nfunction verificar(respuesta, grupo){\n  if(respuesta.errors?.length)throw new Error('Nhost: '+respuesta.errors.map(e=>e.message).join('; '));\n  const d=respuesta.data;if(!d)throw new Error('Nhost no devolvió datos.');\n  const motivos=[];\n  if(d.versiones.length>200)throw new Error('Demasiadas versiones: no se usará una consulta incompleta.');\n  if(!Array.isArray(d.plantillas)||d.plantillas.length!==1||d.plantillas[0].storage_file_id!==grupo.plantilla.storage_file_id)\n    motivos.push('La plantilla registrada cambió después de la homologación.');\n  const base=grupo.datos.homologaciones[0].base??[];\n  if(!Array.isArray(d.partidas)||base.length!==d.partidas.length||base.some(b=>!d.partidas.some(p=>\n    p.id===b.id&&p.descripcion===b.descripcion&&p.unidad===b.unidad&&Number(p.metrado)===Number(b.metrado))))\n    motivos.push('El itemizado cambió después de la homologación.');\n  for(const r of grupo.datos.homologaciones){\n    const p=d.participaciones.find(p=>p.proveedor_id===r.proveedor_id);\n    const v=d.versiones.find(v=>v.id===r.version_id&&v.proveedor_id===r.proveedor_id);\n    if(!p?.considerado||p.estado_respuesta!=='envio_cotizacion'||p.detalle_respuesta!=='cotizacion_definitiva')motivos.push('El proveedor ya no está en estado de cotización definitiva.');\n    if(!v?.es_final||v.estado!=='vigente'||v.origen!=='correo')motivos.push('La versión validada ya no es final vigente.');\n    if(v&&d.versiones.some(x=>x.proveedor_id===r.proveedor_id&&x.version>v.version&&x.estado!=='anulada'))motivos.push('Existe una versión posterior pendiente de resolver.');\n    if(d.aclaraciones.some(x=>x.proveedor_id===r.proveedor_id))motivos.push('Hay aclaraciones abiertas.');\n  }\n  return {...grupo,estado:motivos.length?'pendiente_validacion':'generar',motivos};\n}\n\nreturn agrupar($input.all().map(x=>x.json)).map(json=>({json}));"
+      }
+    },
+    {
+      "id": "a05c6c4d-887f-5ff0-a08f-a2938247d433",
+      "name": "¿Homologación validada?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        840,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.estado === 'verificar_fuente' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "dd34e554-76d0-5b64-b84d-7caec8ea87fa",
+      "name": "Revalidar finales en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://zgorsmkvfyytsouacrpa.hasura.sa-east-1.nhost.run/v1/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { query: \"query ValidarCuadro($s: uuid!) {\\n participaciones: solicitud_proveedores(where: {solicitud_id: {_eq: $s} }) {\\n  proveedor_id considerado estado_respuesta detalle_respuesta\\n }\\n versiones: versiones_cotizacion(where: {solicitud_id: {_eq: $s} }, limit: 201) {\\n  id proveedor_id version estado es_final origen\\n }\\n aclaraciones: aclaraciones_proveedor(where: {solicitud_id: {_eq: $s}, estado: {_eq: \\\"abierta\\\"} }) { proveedor_id }\\n plantillas: documentos(where: {solicitud_id: {_eq: $s}, tipo: {_eq: \\\"plantilla_comparativo\\\"} }, limit: 2) { storage_file_id }\\n partidas(where: {solicitud_id: {_eq: $s} }, limit: 1001) { id descripcion unidad metrado }\\n}\", variables: { s: $json.solicitud_id } } }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "46764814-20ba-5cc3-8d9b-11f69d69bfc8",
+      "name": "Comprobar vigencia de la fuente",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1400,
+        0
+      ],
+      "parameters": {
+        "jsCode": "/* Coordinación de E5; los cálculos y el llenado pertenecen al servicio Excel. */\nfunction agrupar(entradas) {\n  const filas=entradas.flatMap(e=>Array.isArray(e.homologaciones)?e.homologaciones:[e]);\n  const grupos=new Map();\n  for(const f of filas){\n    const key=f.solicitud_id??'sin_solicitud';\n    if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(f);\n  }\n  return [...grupos.entries()].map(([solicitud_id,homologaciones])=>{\n    const motivos=[];\n    for(const f of homologaciones){\n      if(f.estado_revision!=='listo_para_cuadro'||f.habilitado_para_cuadro!==true)motivos.push('La homologación aún requiere revisión.');\n      if((f.pendientes??[]).some(p=>p.bloqueante))motivos.push('Hay pendientes bloqueantes.');\n      if(!f.plantilla?.storage_file_id)motivos.push('Falta la plantilla registrada en Nhost.');\n      if(!(f.decisiones??[]).some(d=>d.tipo==='homologacion_validada'&&d.version_id===f.version_id&&d.aprobado_por&&d.aprobado_at))motivos.push('Falta decisión de validación del especialista.');\n      if(!(f.partidas??[]).length||(f.partidas??[]).some(p=>p.correspondencia!=='validada_especialista'||!p.comparable))motivos.push('Faltan correspondencias y valores comparables validados.');\n    }\n    const vistos=new Set();for(const f of homologaciones){if(vistos.has(f.proveedor_id))motivos.push('Proveedor duplicado: resolver su versión o alternativa.');vistos.add(f.proveedor_id);}\n    if(homologaciones.length>7)motivos.push('La plantilla compartida admite siete bloques.');\n    if(homologaciones.some(f=>JSON.stringify(f.plantilla)!==JSON.stringify(homologaciones[0].plantilla)))motivos.push('No mezclar plantillas.');\n    return {estado:motivos.length?'pendiente_validacion':'verificar_fuente',solicitud_id,\n      motivos:[...new Set(motivos)],datos:{homologaciones,revision:entradas[0]?.revision??0,\n        presupuesto_meta:entradas[0]?.presupuesto_meta??null},\n      plantilla:homologaciones[0]?.plantilla??null};\n  });\n}\nfunction verificar(respuesta, grupo){\n  if(respuesta.errors?.length)throw new Error('Nhost: '+respuesta.errors.map(e=>e.message).join('; '));\n  const d=respuesta.data;if(!d)throw new Error('Nhost no devolvió datos.');\n  const motivos=[];\n  if(d.versiones.length>200)throw new Error('Demasiadas versiones: no se usará una consulta incompleta.');\n  if(!Array.isArray(d.plantillas)||d.plantillas.length!==1||d.plantillas[0].storage_file_id!==grupo.plantilla.storage_file_id)\n    motivos.push('La plantilla registrada cambió después de la homologación.');\n  const base=grupo.datos.homologaciones[0].base??[];\n  if(!Array.isArray(d.partidas)||base.length!==d.partidas.length||base.some(b=>!d.partidas.some(p=>\n    p.id===b.id&&p.descripcion===b.descripcion&&p.unidad===b.unidad&&Number(p.metrado)===Number(b.metrado))))\n    motivos.push('El itemizado cambió después de la homologación.');\n  for(const r of grupo.datos.homologaciones){\n    const p=d.participaciones.find(p=>p.proveedor_id===r.proveedor_id);\n    const v=d.versiones.find(v=>v.id===r.version_id&&v.proveedor_id===r.proveedor_id);\n    if(!p?.considerado||p.estado_respuesta!=='envio_cotizacion'||p.detalle_respuesta!=='cotizacion_definitiva')motivos.push('El proveedor ya no está en estado de cotización definitiva.');\n    if(!v?.es_final||v.estado!=='vigente'||v.origen!=='correo')motivos.push('La versión validada ya no es final vigente.');\n    if(v&&d.versiones.some(x=>x.proveedor_id===r.proveedor_id&&x.version>v.version&&x.estado!=='anulada'))motivos.push('Existe una versión posterior pendiente de resolver.');\n    if(d.aclaraciones.some(x=>x.proveedor_id===r.proveedor_id))motivos.push('Hay aclaraciones abiertas.');\n  }\n  return {...grupo,estado:motivos.length?'pendiente_validacion':'generar',motivos};\n}\n\nreturn $input.all().map((x,i)=>({json:verificar(x.json,$('Agrupar y comprobar validación').itemMatching(i).json),pairedItem:{item:i}}));"
+      }
+    },
+    {
+      "id": "b45b1eb9-9913-5cf3-bdca-c3186c23addd",
+      "name": "¿Fuente vigente?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.estado === 'generar' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "83f75be2-e35b-583c-8270-112bb63cf418",
+      "name": "Descargar plantilla compartida",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        280,
+        260
+      ],
+      "parameters": {
+        "url": "={{ 'https://zgorsmkvfyytsouacrpa.storage.sa-east-1.nhost.run/v1/files/' + $json.plantilla.storage_file_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "plantilla"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "08875f26-1d88-5dcb-b87f-c7f10e2da40a",
+      "name": "Preparar pedido del Excel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        260
+      ],
+      "parameters": {
+        "jsCode": "/* Coordinación de E5; los cálculos y el llenado pertenecen al servicio Excel. */\nfunction agrupar(entradas) {\n  const filas=entradas.flatMap(e=>Array.isArray(e.homologaciones)?e.homologaciones:[e]);\n  const grupos=new Map();\n  for(const f of filas){\n    const key=f.solicitud_id??'sin_solicitud';\n    if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(f);\n  }\n  return [...grupos.entries()].map(([solicitud_id,homologaciones])=>{\n    const motivos=[];\n    for(const f of homologaciones){\n      if(f.estado_revision!=='listo_para_cuadro'||f.habilitado_para_cuadro!==true)motivos.push('La homologación aún requiere revisión.');\n      if((f.pendientes??[]).some(p=>p.bloqueante))motivos.push('Hay pendientes bloqueantes.');\n      if(!f.plantilla?.storage_file_id)motivos.push('Falta la plantilla registrada en Nhost.');\n      if(!(f.decisiones??[]).some(d=>d.tipo==='homologacion_validada'&&d.version_id===f.version_id&&d.aprobado_por&&d.aprobado_at))motivos.push('Falta decisión de validación del especialista.');\n      if(!(f.partidas??[]).length||(f.partidas??[]).some(p=>p.correspondencia!=='validada_especialista'||!p.comparable))motivos.push('Faltan correspondencias y valores comparables validados.');\n    }\n    const vistos=new Set();for(const f of homologaciones){if(vistos.has(f.proveedor_id))motivos.push('Proveedor duplicado: resolver su versión o alternativa.');vistos.add(f.proveedor_id);}\n    if(homologaciones.length>7)motivos.push('La plantilla compartida admite siete bloques.');\n    if(homologaciones.some(f=>JSON.stringify(f.plantilla)!==JSON.stringify(homologaciones[0].plantilla)))motivos.push('No mezclar plantillas.');\n    return {estado:motivos.length?'pendiente_validacion':'verificar_fuente',solicitud_id,\n      motivos:[...new Set(motivos)],datos:{homologaciones,revision:entradas[0]?.revision??0,\n        presupuesto_meta:entradas[0]?.presupuesto_meta??null},\n      plantilla:homologaciones[0]?.plantilla??null};\n  });\n}\nfunction verificar(respuesta, grupo){\n  if(respuesta.errors?.length)throw new Error('Nhost: '+respuesta.errors.map(e=>e.message).join('; '));\n  const d=respuesta.data;if(!d)throw new Error('Nhost no devolvió datos.');\n  const motivos=[];\n  if(d.versiones.length>200)throw new Error('Demasiadas versiones: no se usará una consulta incompleta.');\n  if(!Array.isArray(d.plantillas)||d.plantillas.length!==1||d.plantillas[0].storage_file_id!==grupo.plantilla.storage_file_id)\n    motivos.push('La plantilla registrada cambió después de la homologación.');\n  const base=grupo.datos.homologaciones[0].base??[];\n  if(!Array.isArray(d.partidas)||base.length!==d.partidas.length||base.some(b=>!d.partidas.some(p=>\n    p.id===b.id&&p.descripcion===b.descripcion&&p.unidad===b.unidad&&Number(p.metrado)===Number(b.metrado))))\n    motivos.push('El itemizado cambió después de la homologación.');\n  for(const r of grupo.datos.homologaciones){\n    const p=d.participaciones.find(p=>p.proveedor_id===r.proveedor_id);\n    const v=d.versiones.find(v=>v.id===r.version_id&&v.proveedor_id===r.proveedor_id);\n    if(!p?.considerado||p.estado_respuesta!=='envio_cotizacion'||p.detalle_respuesta!=='cotizacion_definitiva')motivos.push('El proveedor ya no está en estado de cotización definitiva.');\n    if(!v?.es_final||v.estado!=='vigente'||v.origen!=='correo')motivos.push('La versión validada ya no es final vigente.');\n    if(v&&d.versiones.some(x=>x.proveedor_id===r.proveedor_id&&x.version>v.version&&x.estado!=='anulada'))motivos.push('Existe una versión posterior pendiente de resolver.');\n    if(d.aclaraciones.some(x=>x.proveedor_id===r.proveedor_id))motivos.push('Hay aclaraciones abiertas.');\n  }\n  return {...grupo,estado:motivos.length?'pendiente_validacion':'generar',motivos};\n}\n\nconst out=[];for(const [i,x] of $input.all().entries()){const base=$('Comprobar vigencia de la fuente').itemMatching(i).json;const b=await this.helpers.getBinaryDataBuffer(i,'plantilla');out.push({json:{datos:base.datos,plantilla_base64:b.toString('base64')},pairedItem:{item:i}});}return out;"
+      }
+    },
+    {
+      "id": "31f7e89e-2722-5d0c-a64b-171cd26caf30",
+      "name": "Generar Excel con formato preservado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        840,
+        260
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:18775/generar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 240000
+        }
+      }
+    },
+    {
+      "id": "95cf7195-0331-5194-babb-33624912bf9d",
+      "name": "¿Archivo generado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1120,
+        260
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ ['generado_validado','generado_con_observaciones'].includes($json.estado) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "a4a5ea34-068e-538c-9299-f4de1d3f1f06",
+      "name": "Obtener cuadro comparativo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        260
+      ],
+      "parameters": {
+        "url": "={{ \"http://host.docker.internal:18775\" + $json.ruta_descarga }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "cuadro"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "fafe5499-2013-5e77-a7ff-c8a4fc182fb5",
+      "name": "Entregar cuadro y validación",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        520
+      ],
+      "parameters": {
+        "jsCode": "/* Coordinación de E5; los cálculos y el llenado pertenecen al servicio Excel. */\nfunction agrupar(entradas) {\n  const filas=entradas.flatMap(e=>Array.isArray(e.homologaciones)?e.homologaciones:[e]);\n  const grupos=new Map();\n  for(const f of filas){\n    const key=f.solicitud_id??'sin_solicitud';\n    if(!grupos.has(key))grupos.set(key,[]);grupos.get(key).push(f);\n  }\n  return [...grupos.entries()].map(([solicitud_id,homologaciones])=>{\n    const motivos=[];\n    for(const f of homologaciones){\n      if(f.estado_revision!=='listo_para_cuadro'||f.habilitado_para_cuadro!==true)motivos.push('La homologación aún requiere revisión.');\n      if((f.pendientes??[]).some(p=>p.bloqueante))motivos.push('Hay pendientes bloqueantes.');\n      if(!f.plantilla?.storage_file_id)motivos.push('Falta la plantilla registrada en Nhost.');\n      if(!(f.decisiones??[]).some(d=>d.tipo==='homologacion_validada'&&d.version_id===f.version_id&&d.aprobado_por&&d.aprobado_at))motivos.push('Falta decisión de validación del especialista.');\n      if(!(f.partidas??[]).length||(f.partidas??[]).some(p=>p.correspondencia!=='validada_especialista'||!p.comparable))motivos.push('Faltan correspondencias y valores comparables validados.');\n    }\n    const vistos=new Set();for(const f of homologaciones){if(vistos.has(f.proveedor_id))motivos.push('Proveedor duplicado: resolver su versión o alternativa.');vistos.add(f.proveedor_id);}\n    if(homologaciones.length>7)motivos.push('La plantilla compartida admite siete bloques.');\n    if(homologaciones.some(f=>JSON.stringify(f.plantilla)!==JSON.stringify(homologaciones[0].plantilla)))motivos.push('No mezclar plantillas.');\n    return {estado:motivos.length?'pendiente_validacion':'verificar_fuente',solicitud_id,\n      motivos:[...new Set(motivos)],datos:{homologaciones,revision:entradas[0]?.revision??0,\n        presupuesto_meta:entradas[0]?.presupuesto_meta??null},\n      plantilla:homologaciones[0]?.plantilla??null};\n  });\n}\nfunction verificar(respuesta, grupo){\n  if(respuesta.errors?.length)throw new Error('Nhost: '+respuesta.errors.map(e=>e.message).join('; '));\n  const d=respuesta.data;if(!d)throw new Error('Nhost no devolvió datos.');\n  const motivos=[];\n  if(d.versiones.length>200)throw new Error('Demasiadas versiones: no se usará una consulta incompleta.');\n  if(!Array.isArray(d.plantillas)||d.plantillas.length!==1||d.plantillas[0].storage_file_id!==grupo.plantilla.storage_file_id)\n    motivos.push('La plantilla registrada cambió después de la homologación.');\n  const base=grupo.datos.homologaciones[0].base??[];\n  if(!Array.isArray(d.partidas)||base.length!==d.partidas.length||base.some(b=>!d.partidas.some(p=>\n    p.id===b.id&&p.descripcion===b.descripcion&&p.unidad===b.unidad&&Number(p.metrado)===Number(b.metrado))))\n    motivos.push('El itemizado cambió después de la homologación.');\n  for(const r of grupo.datos.homologaciones){\n    const p=d.participaciones.find(p=>p.proveedor_id===r.proveedor_id);\n    const v=d.versiones.find(v=>v.id===r.version_id&&v.proveedor_id===r.proveedor_id);\n    if(!p?.considerado||p.estado_respuesta!=='envio_cotizacion'||p.detalle_respuesta!=='cotizacion_definitiva')motivos.push('El proveedor ya no está en estado de cotización definitiva.');\n    if(!v?.es_final||v.estado!=='vigente'||v.origen!=='correo')motivos.push('La versión validada ya no es final vigente.');\n    if(v&&d.versiones.some(x=>x.proveedor_id===r.proveedor_id&&x.version>v.version&&x.estado!=='anulada'))motivos.push('Existe una versión posterior pendiente de resolver.');\n    if(d.aclaraciones.some(x=>x.proveedor_id===r.proveedor_id))motivos.push('Hay aclaraciones abiertas.');\n  }\n  return {...grupo,estado:motivos.length?'pendiente_validacion':'generar',motivos};\n}\n\nreturn $input.all().map((x,i)=>{const informe=$('Generar Excel con formato preservado').itemMatching(i).json;return {json:informe,binary:{cuadro:{...x.binary.cuadro,fileName:informe.archivo}},pairedItem:{item:i}}});"
+      }
+    },
+    {
+      "id": "17c0ab0d-dc5d-5ac2-aa64-e86e849fa71c",
+      "name": "Pendiente de datos validados",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        280,
+        520
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "53a6dffe-890a-5c15-babe-7b7efc238e5c",
+      "name": "Skill de cuadro comparativo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        560,
+        520
+      ],
+      "parameters": {
+        "content": "## E5: elaborar cuadro comparativo\nSkill: elaborar-cuadro-comparativo/SKILL.md.\nRecibe los registros de E4; una propuesta sin revisar termina pendiente. No aprueba equivalencias.\nAgrupa proveedores de la misma solicitud, verifica finales en Nhost, descarga su plantilla y llama al servicio Excel local autenticado.\nEl servicio conserva formato, hojas, comentarios y extensiones; comprueba cálculos y totales.\nEl Excel se descarga en el nodo final. No se envía por correo ni se sube a Nhost. El #REF! previo en AP9 se informa como observación.\nConectar la cabecera Nhost a sus dos nodos HTTP y CostFlow Excel local a los tres del servicio.",
+        "width": 690,
+        "height": 320
+      }
+    }
+  ],
+  "connections": {
+    "Revisar entrada del cuadro": {
+      "main": [
+        [
+          {
+            "node": "Agrupar y comprobar validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recibir salida de homologación": {
+      "main": [
+        [
+          {
+            "node": "Agrupar y comprobar validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agrupar y comprobar validación": {
+      "main": [
+        [
+          {
+            "node": "¿Homologación validada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Homologación validada?": {
+      "main": [
+        [
+          {
+            "node": "Revalidar finales en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pendiente de datos validados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Revalidar finales en Nhost": {
+      "main": [
+        [
+          {
+            "node": "Comprobar vigencia de la fuente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar vigencia de la fuente": {
+      "main": [
+        [
+          {
+            "node": "¿Fuente vigente?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Fuente vigente?": {
+      "main": [
+        [
+          {
+            "node": "Descargar plantilla compartida",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pendiente de datos validados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar plantilla compartida": {
+      "main": [
+        [
+          {
+            "node": "Preparar pedido del Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar pedido del Excel": {
+      "main": [
+        [
+          {
+            "node": "Generar Excel con formato preservado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Excel con formato preservado": {
+      "main": [
+        [
+          {
+            "node": "¿Archivo generado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Archivo generado?": {
+      "main": [
+        [
+          {
+            "node": "Obtener cuadro comparativo",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Pendiente de datos validados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Obtener cuadro comparativo": {
+      "main": [
+        [
+          {
+            "node": "Entregar cuadro y validación",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "America/Lima",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all"
+  }
+}

@@ -363,12 +363,34 @@
       }
     },
     {
+      "id": "8459928d-33d1-5532-8cba-8bcc6ff71d6e",
+      "name": "Entregar a cuadro comparativo E5",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1300,
+        520
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "costflowE5Cuadro01",
+          "mode": "id"
+        },
+        "mode": "once",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+    {
       "id": "49997cce-eb29-52cd-adb4-44dcd30e00ef",
       "name": "Pendiente de insumos finales",
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [
-        1300,
+        1560,
         520
       ],
       "parameters": {}
@@ -379,8 +401,8 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1560,
-        520
+        0,
+        780
       ],
       "parameters": {
         "content": "## E4: homologación de cotizaciones finales\nSolo lee Nhost y Storage. Requiere estado envio_cotizacion, detalle cotizacion_definitiva y versión es_final vigente sin aclaraciones.\nSi falta la entrada en desarrollo, muestra esperando_insumos. Nunca utiliza una preliminar.\nSkill de homologación cargada en el nodo IA. Campos de negocio tomados de la plantilla de ascensores. No genera Excel ni cambia estados.\nGmail no se consulta ni se envían mensajes. Modelo local por CPU. Los datos faltantes quedan null. Toda correspondencia técnica se entrega para revisión.",
@@ -581,6 +603,17 @@
         [
           {
             "node": "Entregar homologación para revisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entregar homologación para revisión": {
+      "main": [
+        [
+          {
+            "node": "Entregar a cuadro comparativo E5",
             "type": "main",
             "index": 0
           }
