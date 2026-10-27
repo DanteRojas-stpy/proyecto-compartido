@@ -1,0 +1,172 @@
+{
+  "id": "ascensores-plantilla-5.2-v1",
+  "archivo": "HISTORICO_COMPARATIVO_ASCENSOR_5.2-aecode - plantilla.xlsx",
+  "sha256_origen": "e3a870cfa16978f152cb433b337c3eca6bc572ef2429fc1119b7a0a9ca6e3636",
+  "hoja": "PLANTILLA",
+  "uso": "Identificar datos de negocio que se comparan; no genera ni modifica Excel.",
+  "no_son_datos_cotizados": [
+    "ceros de relleno",
+    "texto entre corchetes",
+    "TC F5",
+    "presupuesto meta D13/E13"
+  ],
+  "campos_item": [
+    "descripcion",
+    "unidad",
+    "cantidad",
+    "precio_unitario_original",
+    "parcial_original"
+  ],
+  "campos": [
+    {
+      "id": "moneda",
+      "descripcion": "Moneda original de la cotización, tal como está expresada.",
+      "celda_referencia": "I7/J7",
+      "obligatorio": true
+    },
+    {
+      "id": "parcial_sin_igv",
+      "descripcion": "Parcial sin IGV",
+      "celda_referencia": "E16",
+      "obligatorio": true
+    },
+    {
+      "id": "gastos_generales",
+      "descripcion": "Gastos generales declarados",
+      "celda_referencia": "E17",
+      "obligatorio": false
+    },
+    {
+      "id": "utilidades",
+      "descripcion": "Utilidades declaradas",
+      "celda_referencia": "E18",
+      "obligatorio": false
+    },
+    {
+      "id": "subtotal_sin_igv",
+      "descripcion": "Subtotal sin IGV",
+      "celda_referencia": "E19",
+      "obligatorio": true
+    },
+    {
+      "id": "igv",
+      "descripcion": "Tratamiento del IGV y tasa indicada por el proveedor",
+      "celda_referencia": "E20",
+      "obligatorio": true
+    },
+    {
+      "id": "total_con_igv",
+      "descripcion": "Total con IGV",
+      "celda_referencia": "E21",
+      "obligatorio": false
+    },
+    {
+      "id": "adelanto_garantia",
+      "descripcion": "ADELANTO / TIPO DE GARANTIA",
+      "celda_referencia": "F26",
+      "obligatorio": false
+    },
+    {
+      "id": "fondo_garantia",
+      "descripcion": "FONDO DE GARANTIA",
+      "celda_referencia": "F27",
+      "obligatorio": false
+    },
+    {
+      "id": "contacto",
+      "descripcion": "CONTACTO:",
+      "celda_referencia": "F28",
+      "obligatorio": false
+    },
+    {
+      "id": "viga_divisoria",
+      "descripcion": "VIGA DIVISORIA",
+      "celda_referencia": "F29",
+      "obligatorio": true
+    },
+    {
+      "id": "plazo_envio",
+      "descripcion": "PLAZO DE ENVÍO",
+      "celda_referencia": "F30",
+      "obligatorio": true
+    },
+    {
+      "id": "garantia",
+      "descripcion": "GARANTÍA",
+      "celda_referencia": "F31",
+      "obligatorio": true
+    },
+    {
+      "id": "mantenimiento_gratuito",
+      "descripcion": "MANTENIMIENTO GRATUITO",
+      "celda_referencia": "F32",
+      "obligatorio": false
+    },
+    {
+      "id": "forma_pago",
+      "descripcion": "FORMA DE PAGO",
+      "celda_referencia": "F33",
+      "obligatorio": false
+    },
+    {
+      "id": "caracteristicas_cabina",
+      "descripcion": "CARACTERISTICAS DE LAS CABINAS",
+      "celda_referencia": "F34",
+      "obligatorio": true
+    },
+    {
+      "id": "consideraciones",
+      "descripcion": "CONSIDERACIONES:",
+      "celda_referencia": "F36",
+      "obligatorio": false
+    },
+    {
+      "id": "obras_en_ejecucion",
+      "descripcion": "N° DE OBRAS ACTUALES EN EJECUCION",
+      "celda_referencia": "F39",
+      "obligatorio": false
+    },
+    {
+      "id": "modelo",
+      "descripcion": "Marca y modelo",
+      "celda_referencia": "H34",
+      "obligatorio": false
+    },
+    {
+      "id": "capacidad",
+      "descripcion": "Capacidad en personas y/o kg",
+      "celda_referencia": "H34",
+      "obligatorio": true
+    },
+    {
+      "id": "velocidad",
+      "descripcion": "Velocidad en m/s",
+      "celda_referencia": "H34",
+      "obligatorio": true
+    },
+    {
+      "id": "recorrido",
+      "descripcion": "Recorrido",
+      "celda_referencia": "H34",
+      "obligatorio": false
+    },
+    {
+      "id": "paradas",
+      "descripcion": "Número de paradas",
+      "celda_referencia": "H34",
+      "obligatorio": true
+    },
+    {
+      "id": "cuarto_maquinas",
+      "descripcion": "Requisito de cuarto de máquinas",
+      "celda_referencia": "H34",
+      "obligatorio": false
+    },
+    {
+      "id": "comando",
+      "descripcion": "Tipo de comando",
+      "celda_referencia": "H34",
+      "obligatorio": false
+    }
+  ]
+}
