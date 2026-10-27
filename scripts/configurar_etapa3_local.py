@@ -32,10 +32,12 @@ def bindings() -> dict:
     code = """const{DatabaseSync}=require('node:sqlite');const db=new DatabaseSync('/home/node/.n8n/database.sqlite',{readOnly:true});
 const creds=db.prepare('SELECT id,name,type FROM credentials_entity').all();
 const rows=db.prepare('SELECT id,nodes FROM workflow_entity').all();const source=rows.find(x=>x.id==='1ZkKft0tTPY0oeC7');
-const storage=source?JSON.parse(source.nodes).find(n=>n.type==='n8n-nodes-base.httpRequest'&&n.credentials?.httpHeaderAuth)?.credentials.httpHeaderAuth:null;
+const configured=kind=>rows.filter(w=>/^costflowEtapa3_[1-5]$/.test(w.id)).flatMap(w=>JSON.parse(w.nodes)).find(n=>n.notes==='CREDENCIAL_E3:'+kind&&n.credentials);
+const reference=kind=>{const n=configured(kind);return n?.credentials?.[kind==='gmail'?'gmailOAuth2':kind==='postgres'?'postgres':'httpHeaderAuth'];};
+const storage=reference('storage')||(source?JSON.parse(source.nodes).find(n=>n.type==='n8n-nodes-base.httpRequest'&&n.credentials?.httpHeaderAuth)?.credentials.httpHeaderAuth:null);
 const headers=creds.filter(c=>c.type==='httpHeaderAuth'&&!/gemini|interno/i.test(c.name));
-console.log(JSON.stringify({postgres:creds.find(c=>c.type==='postgres'),gmail:creds.find(c=>c.type==='gmailOAuth2'),storage:storage||headers.find(c=>/nhost|storage|hasura/i.test(c.name))||(headers.length===1?headers[0]:null),
-gemini:creds.find(c=>c.type==='httpHeaderAuth'&&/gemini/i.test(c.name)),running:db.prepare("SELECT count(*) n FROM execution_entity WHERE status='running' AND deletedAt IS NULL").get().n}));"""
+console.log(JSON.stringify({postgres:reference('postgres')||creds.find(c=>c.type==='postgres'),gmail:reference('gmail')||creds.find(c=>c.type==='gmailOAuth2'),storage:storage||headers.find(c=>/nhost|storage|hasura/i.test(c.name))||(headers.length===1?headers[0]:null),
+gemini:reference('gemini')||creds.find(c=>c.type==='httpHeaderAuth'&&/gemini/i.test(c.name)),running:db.prepare("SELECT count(*) n FROM execution_entity WHERE status='running' AND deletedAt IS NULL").get().n}));"""
     return json.loads(docker("exec", "n8n", "node", "-e", code, capture=True))
 
 
