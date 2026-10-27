@@ -1,0 +1,82 @@
+{
+  "_nota": "EJEMPLO FICTICIO en dólares con tipo de cambio. Postores y montos inventados.",
+  "proyecto": {"codigo": "PROYX", "obra": "OBRA: EDIFICIO MULTIFAMILIAR EJEMPLO - TORRE 1", "fecha": "2026-10-26", "revision": 0},
+  "especialidad": {"codigo": "ASCENSORES", "nombre": "Ascensores", "titulo": "COMPARATIVO - SUMINISTRO E INSTALACION DE ASCENSOR", "titulo_total": "CD - SUPERESTRUCTURAS"},
+  "moneda": "S/",
+  "tipo_cambio": 3.70,
+  "igv": 0.18,
+  "base_homologacion": "A",
+  "umbral_alto_impacto": 20000,
+  "ratios": [{"nombre": "COSTO POR ASCENSOR (S/, SIN IGV)", "divisor": 2}],
+  "criterios_hoja1": ["ADELANTO / TIPO DE GARANTIA", "FONDO DE GARANTIA", "CONTACTO:", "VIGA DIVISORIA",
+    "PLAZO DE ENVÍO / ENTREGA", "GARANTÍA", "MANTENIMIENTO GRATUITO", "FORMA DE PAGO",
+    "CARACTERISTICAS DE LAS CABINAS", "CONSIDERACIONES:", "N° DE OBRAS ACTUALES EN EJECUCION"],
+  "postores": [
+    {"id": "A", "corto": "Postor A", "nombre": "POSTOR A S.A. (MARCA X - MODELO 1)", "estado": "recomendado", "ruc": "20000000011",
+     "gg": 0, "utilidad": 0, "total_declarado_sin_igv": 296000,
+     "contacto": "Empresa: POSTOR A S.A.\nContacto: (nombre)\nCorreo: ventas@postor-a.example",
+     "criterios": {
+       "ADELANTO / TIPO DE GARANTIA": {"texto": "Adelanto 40%", "tono": "info"},
+       "FONDO DE GARANTIA": {"texto": "No indica", "tono": "faltante"},
+       "VIGA DIVISORIA": {"texto": "INCLUYE SUMINISTRO E INSTALACION", "tono": "ventaja"},
+       "PLAZO DE ENVÍO / ENTREGA": {"texto": "8 meses", "tono": "info"},
+       "GARANTÍA": {"texto": "36 meses", "tono": "ventaja"},
+       "MANTENIMIENTO GRATUITO": {"texto": "6 meses", "tono": "info"},
+       "FORMA DE PAGO": {"texto": "- Firma de contrato 40%\n- Embarque 40%\n- Entrega 20%", "tono": "info"},
+       "CARACTERISTICAS DE LAS CABINAS": {"texto": "8 personas / 630 kg, 1.0 m/s, MRL", "tono": "info"},
+       "N° DE OBRAS ACTUALES EN EJECUCION": {"texto": "Por confirmar", "tono": "faltante"}},
+     "consideraciones": ["No incluye dinteles metálicos de puertas de hall.", "Obra civil del pozo por cuenta del cliente."],
+     "cotizacion": {"titulo": "POSTOR A S.A. - PROPUESTA (transcrita del PDF)", "encabezado": {"Moneda": "US$", "Fecha": "05/10/2026"},
+       "filas": [{"item": "1", "desc": "Ascensor 8 personas, 10 paradas", "und": "und", "cant": 2, "pu": 40000}], "notas": ["Precios en US$ sin IGV."]}},
+    {"id": "B", "corto": "Postor B", "nombre": "POSTOR B S.A. (MARCA Y - MODELO 2)", "estado": "caro", "ruc": "20000000012",
+     "gg": 0, "utilidad": 0, "total_declarado_sin_igv": 340400,
+     "contacto": "Empresa: POSTOR B S.A.\nContacto: (nombre)\nCorreo: ventas@postor-b.example",
+     "criterios": {
+       "ADELANTO / TIPO DE GARANTIA": {"texto": "Adelanto 50%", "tono": "riesgo"},
+       "FONDO DE GARANTIA": {"texto": "No indica", "tono": "faltante"},
+       "VIGA DIVISORIA": {"texto": "INCLUYE SUMINISTRO E INSTALACION", "tono": "ventaja"},
+       "PLAZO DE ENVÍO / ENTREGA": {"texto": "9 meses", "tono": "riesgo"},
+       "GARANTÍA": {"texto": "12 meses", "tono": "riesgo"},
+       "MANTENIMIENTO GRATUITO": {"texto": "12 meses", "tono": "ventaja"},
+       "FORMA DE PAGO": {"texto": "- Firma de contrato 50%\n- Aviso de embarque 40%\n- Entrega 10%", "tono": "riesgo"},
+       "CARACTERISTICAS DE LAS CABINAS": {"texto": "9 personas / 680 kg, 1.0 m/s, MRL", "tono": "ventaja"},
+       "N° DE OBRAS ACTUALES EN EJECUCION": {"texto": "Por confirmar", "tono": "faltante"}},
+     "consideraciones": ["Toda la adecuación civil por cuenta del comprador."],
+     "cotizacion": {"titulo": "POSTOR B S.A. - PROPUESTA (transcrita del PDF)", "encabezado": {"Moneda": "US$", "Fecha": "08/10/2026"},
+       "filas": [{"item": "1", "desc": "Ascensor 9 personas, 10 paradas", "und": "und", "cant": 2, "pu": 46000}], "notas": []}},
+    {"id": "C", "corto": "Postor C", "nombre": "POSTOR C (MARCA Z - MODELO 3)", "estado": "negociacion", "ruc": null,
+     "gg": 0, "utilidad": 0, "total_declarado_sin_igv": 303400,
+     "contacto": "Empresa: POSTOR C\nContacto: (nombre)\nCorreo: ventas@postor-c.example",
+     "criterios": {
+       "ADELANTO / TIPO DE GARANTIA": {"texto": "Adelanto 30%", "tono": "ventaja"},
+       "VIGA DIVISORIA": {"texto": "ES UN ITEM ADICIONAL DE SU PRESUPUESTO", "tono": "riesgo"},
+       "GARANTÍA": {"texto": "24 meses", "tono": "info"},
+       "MANTENIMIENTO GRATUITO": {"texto": "3 meses", "tono": "riesgo"}},
+     "consideraciones": ["Estructuras metálicas (vigas divisorias) cotizadas aparte."],
+     "cotizacion": {"titulo": "POSTOR C - PROPUESTA (transcrita del PDF)", "encabezado": {"Moneda": "US$"},
+       "filas": [{"item": "1", "desc": "Ascensor 8 personas", "und": "und", "cant": 2, "pu": 39000},
+                 {"item": "2", "desc": "Vigas divisorias (adicional)", "und": "glb", "cant": 1, "pu": 4000}], "notas": []}}
+  ],
+  "partidas": [
+    {"titulo": "EQUIPAMIENTO EDIFICIOS", "items": [
+      {"desc": "Suministro e instalación de ascensores", "und": "und",
+       "precios": {"A": {"cant": 2, "pu_usd": 40000, "ref": "1"}, "B": {"cant": 2, "pu_usd": 46000, "ref": "1"}, "C": {"cant": 2, "pu_usd": 39000, "ref": "1"}}},
+      {"desc": "Ángulos metálicos para puertas", "und": "glb",
+       "precios": {"A": {"incluido": "No incluye (por cuenta del cliente)"}, "B": {"incluido": "No incluye (por cuenta del comprador)"}, "C": {"incluido": "No incluye"}}, "clase": "normal"},
+      {"desc": "Vigas divisorias", "und": "glb",
+       "precios": {"A": {"incluido": "Incluido en el costo del equipo"}, "B": {"incluido": "Incluido en el costo del equipo"}, "C": {"cant": 1, "pu_usd": 4000, "ref": "2", "observado": true, "nota": "Adicional que solo cobra el Postor C."}},
+       "clase": "solo_uno"}
+    ]}
+  ],
+  "secciones_extra": [
+    {"titulo": "FLUJO DE PAGOS POR HITO (% DEL EQUIPO)", "filas": [
+      {"concepto": "Firma del contrato (adelanto)", "valores": {"A": 0.40, "B": 0.50, "C": 0.30}, "formato": "0%"},
+      {"concepto": "Embarque / aviso de expedición", "valores": {"A": 0.40, "B": 0.40, "C": 0.50}, "formato": "0%"},
+      {"concepto": "Entrega / puesta en marcha", "valores": {"A": 0.20, "B": 0.10, "C": 0.20}, "formato": "0%"}]},
+    {"titulo": "COMPARATIVO TÉCNICO", "texto": true, "filas": [
+      {"concepto": "Capacidad / velocidad", "valores": {"A": "630 kg / 1.0 m/s", "B": "680 kg / 1.0 m/s", "C": "630 kg / 1.0 m/s"}, "tonos": {"B": "ventaja"}},
+      {"concepto": "Tracción / máquina", "valores": {"A": "MRL gearless", "B": "MRL gearless", "C": "MRL gearless"}}]}
+  ],
+  "conclusiones": ["Postor A: menor precio a igual alcance (incluye vigas divisorias) y 36 meses de garantía."],
+  "recomendacion": "1° Postor A (RECOMENDADO). Negociar mantenimiento gratuito a 12 meses."
+}
