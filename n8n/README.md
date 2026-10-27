@@ -25,6 +25,7 @@ negocio y conserva la trazabilidad.
 | `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, clasifica la respuesta y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
 | `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
 | `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |
+| `flujos/detectar-respuestas-proveedores.json` | Identifica respuestas y guarda todos sus PDF en Nhost Storage, vinculados a solicitud y proveedor | Gmail, cada minuto | [Conexión y pruebas](DETECTAR_RESPUESTAS.md) |
 
 ## Configurar el primer envío
 
