@@ -1,0 +1,296 @@
+{
+  "id": "costflowEtapa3_2",
+  "name": "CostFlow - E3.2 Lectura OCR RAG Gemini y validación",
+  "active": false,
+  "nodes": [
+    {
+      "id": "4b5747b1-ee36-5edb-b362-95f70cdaf2ee",
+      "name": "Desde otra etapa",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "3912d4aa-1015-51c6-8adf-85f15a394457",
+      "name": "Leer y verificar versión completa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-etapa3:8093/read",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 720000
+        }
+      },
+      "position": [
+        220,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "46c548fd-e8be-51a4-bf76-fdb0a69b5997",
+      "name": "Resultado de la lectura",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "procesamiento_completado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "procesamiento_completado"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "error_procesamiento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "error_procesamiento"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "3a296535-dcfa-5516-bc6a-e49ea6085232",
+      "name": "Invocar E3.3",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "costflowEtapa3_3",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "id": "9facbc23-3067-5e03-bfbf-a0acd83b9f4f",
+      "name": "Gemini interno",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "e3-interno-gemini",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "position": [
+        880,
+        0
+      ],
+      "webhookId": "7ab90401-cfbd-5067-9adf-7117da46d6e1",
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "e302a0c9-56d3-59e1-bf7d-9e6f0df27216",
+      "name": "Preparar petición estructurada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "if(!/^[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('Modelo inválido');return [{json:$json.body}];"
+      },
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "605c0239-b417-53cd-9d5d-a232cee647d5",
+      "name": "Gemini JSON fijo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/'+$json.modelo+':generateContent' }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.peticion) }}",
+        "options": {
+          "timeout": 150000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1320,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:gemini"
+    },
+    {
+      "id": "3db2c5c2-c909-51fd-9754-1a614c80e03a",
+      "name": "Devolver respuesta de Gemini",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.http_code || 200 }}"
+        }
+      },
+      "position": [
+        1540,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Desde otra etapa": {
+      "main": [
+        [
+          {
+            "node": "Leer y verificar versión completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer y verificar versión completa": {
+      "main": [
+        [
+          {
+            "node": "Resultado de la lectura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de la lectura": {
+      "main": [
+        [
+          {
+            "node": "Invocar E3.3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invocar E3.3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini interno": {
+      "main": [
+        [
+          {
+            "node": "Preparar petición estructurada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar petición estructurada": {
+      "main": [
+        [
+          {
+            "node": "Gemini JSON fijo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini JSON fijo": {
+      "main": [
+        [
+          {
+            "node": "Devolver respuesta de Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

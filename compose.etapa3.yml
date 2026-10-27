@@ -1,0 +1,27 @@
+services:
+  etapa3:
+    build:
+      context: .
+      dockerfile: app/etapa3/Dockerfile
+    container_name: costflow-etapa3
+    restart: unless-stopped
+    env_file: .env.e3
+    environment:
+      E3_N8N_URL: http://n8n:5678
+      E3_EMBEDDING_MODEL: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      E3_MAX_FILE_BYTES: 50000000
+      E3_CHUNK_CHARS: 400
+      E3_CHUNK_OVERLAP: 60
+      E3_CONTEXT_CHARS: 24000
+    volumes:
+      - etapa3_datos:/datos
+    networks:
+      - costflow_e3
+    ports:
+      - "127.0.0.1:8093:8093"
+    mem_limit: 1800m
+volumes:
+  etapa3_datos:
+networks:
+  costflow_e3:
+    external: true
