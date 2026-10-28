@@ -75,6 +75,16 @@ def test_la_peticion_se_traduce_al_formato_de_claude():
     assert cuerpo['messages'][0]['role'] == 'user' and 'precio USD 100' in cuerpo['messages'][0]['content']
     # Parámetros que los modelos 5.x rechazan o que no se necesitan.
     assert not {'temperature', 'top_p', 'top_k', 'tool_choice', 'thinking'} & set(cuerpo)
+    assert cuerpo['output_config'] == {'effort': 'low'}
+
+
+def test_esfuerzo_bajo_solo_en_modelos_que_lo_admiten():
+    codigo = nodo(flujo_lectura(), 'Convertir a Claude')['parameters']['jsCode']
+    peticion = {'contents': [{'parts': [{'text': 'texto'}]}], 'generationConfig': {}}
+    for modelo, esperado in (('claude-opus-5-5', True), ('claude-sonnet-5-5', True), ('claude-haiku-5-5', True),
+                             ('claude-sonnet-4-6', False), ('claude-haiku-4-5', False)):
+        cuerpo = ejecutar_nodo(codigo, {'modelo': modelo, 'peticion': peticion})['cuerpo']
+        assert ('output_config' in cuerpo) is esperado, modelo
 
 
 @pytest.mark.parametrize('envoltura', ['{}', '```json\n{}\n```', 'Aquí está:\n{}\nListo.'])
@@ -95,8 +105,9 @@ def test_errores_de_claude_llegan_como_error_legible():
     with pytest.raises(ValueError, match='Overloaded'):
         contract.parse_response(saturado)
     cortado = ejecutar_nodo(codigo, {'type': 'message', 'stop_reason': 'max_tokens',
-                                     'content': [{'type': 'text', 'text': '{"a":'}]})
-    with pytest.raises(ValueError, match='respuesta completa'):
+                                     'content': [{'type': 'text', 'text': '{"a":'}],
+                                     'usage': {'output_tokens': 16000}})
+    with pytest.raises(ValueError, match=r'respuesta completa \(max_tokens; salida: 16000 tokens\)'):
         contract.parse_response(cortado)
     rechazo = ejecutar_nodo(codigo, {'type': 'message', 'stop_reason': 'refusal', 'content': []})
     with pytest.raises(ValueError, match='seguridad'):
