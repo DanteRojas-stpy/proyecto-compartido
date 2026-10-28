@@ -421,9 +421,11 @@ async function aceptarComoFinal(correo) {
       },
     }),
   });
-  const resultado = await respuesta.json();
-  if (!respuesta.ok || resultado.ok === false) {
-    throw new Error(resultado.mensaje ?? resultado.error ?? "No se pudo aceptar la versión.");
+  const cuerpo = await respuesta.json().catch(() => ({}));
+  // La función entrega la respuesta de E3 dentro de { respuesta: ... }; el rechazo está en ese interior.
+  const resultado = cuerpo.respuesta ?? cuerpo;
+  if (!respuesta.ok || resultado.ok !== true) {
+    throw new Error(resultado.mensaje ?? resultado.error ?? cuerpo.error ?? "E3 no aceptó la versión como final.");
   }
   return version;
 }
