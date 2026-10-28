@@ -495,9 +495,16 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
   boton.disabled = true;
   avisarCorreo(aviso, "Guardando en Nhost…");
   try {
+    let notaJson = "";
     if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
+      // La aceptación ya quedó registrada en E3; el .json es un paso aparte que puede fallar sin deshacerla.
       const version = await aceptarComoFinal(correo);
-      await guardarJsonFinal(version);
+      try {
+        await guardarJsonFinal(version);
+        notaJson = " y guardada como .json";
+      } catch (errorJson) {
+        notaJson = `. El .json no se generó: ${mensajeError(errorJson)}`;
+      }
     } else {
       await graphql(
         `mutation GuardarEstadoCorreo($id: uuid!, $estado: String!) {
@@ -518,7 +525,7 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
       correo.estado_asignado_at = guardado.estado_asignado_at;
       correo.origen_estado = guardado.origen_estado;
       const cuando = guardado.estado_asignado_at ? formatearFechaHora(guardado.estado_asignado_at) : "sin fecha";
-      avisarCorreo(aviso, `Guardado en Nhost: ${texto} · ${cuando}.`, "exito");
+      avisarCorreo(aviso, `Guardado en Nhost: ${texto} · ${cuando}${notaJson}.`, "exito");
     } else {
       avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${estadoEnNhost ?? "sin estado"}.`, "error");
     }
