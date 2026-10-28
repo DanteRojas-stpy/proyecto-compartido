@@ -13,6 +13,11 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
 
 **La instalación todavía no está lista para una corrida completa de producción.**
 
+- El código del PR #41 de Rodrigo se integró con la corrección de Gemini del #39.
+  La Function todavía requiere despliegue en Nhost. El panel del equipo no tiene
+  un repositorio GitHub conectado y su URL no responde con el contrato esperado.
+  Por eso el n8n local conserva sus conexiones PostgreSQL funcionales. El instalador
+  verifica la Function antes de sustituir los flujos y se detiene si falla.
 - Las credenciales de Gemini, Gmail y Nhost ya están configuradas en la instalación
   original. La variante portable elimina la credencial PostgreSQL de n8n y usa la
   Function protegida `functions/e3-operar.ts` por HTTPS.
@@ -155,9 +160,13 @@ WHERE id;
 
 ## Pruebas y límites de lo verificado
 
-- La suite Python completa pasó: 52 pruebas y una omitida en Windows por no tener
+- La suite Python completa pasó: 56 pruebas y una omitida en Windows por no tener
   Tesseract en el sistema anfitrión. Tesseract se instala dentro del contenedor.
 - Dentro de Docker pasaron las 29 pruebas de E3, incluida OCR, sin omisiones.
+- La integración de la Function añade tres comprobaciones Python y nueve pruebas
+  ejecutables con Node.js para autenticación, contrato, acceso Hasura y errores.
+  Pytest también ejecuta estas últimas si encuentra Node.js 22.6 o posterior;
+  en equipos sin esa versión indica la omisión. Se recomienda Node.js 24.
 - La búsqueda vectorial real respondió a los siete criterios con vectores de 384 dimensiones.
 - `tests/etapa3/integracion.sql` se ejecutó en la base real dentro de una transacción
   revertida: trece grupos de pruebas de negocio pasaron, sin conservar registros ficticios.

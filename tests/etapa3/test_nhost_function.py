@@ -1,7 +1,12 @@
 import importlib.util
 import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
+from unittest.mock import Mock
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,3 +62,37 @@ def test_funcion_nhost_protege_la_operacion_interna():
     sql = (ROOT / 'db/etapa3/002_procesamiento.sql').read_text(encoding='utf-8')
     implemented = set(re.findall(r"WHEN '([a-z_]+)' THEN", sql))
     assert allowed == implemented
+
+
+def test_instalador_no_sustituye_flujos_si_nhost_no_esta_desplegado(monkeypatch):
+    spec = importlib.util.spec_from_file_location('instalador_e3', ROOT / 'scripts/configurar_etapa3_local.py')
+    installer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(installer)
+    monkeypatch.setattr(installer, 'bindings', lambda: {'gmail': {'id': 'prueba'}, 'storage': {'id': 'prueba'}})
+    monkeypatch.setattr(installer, 'environment', lambda: {
+        'NHOST_SUBDOMAIN': 'prueba', 'NHOST_REGION': 'sa-east-1', 'E3_INTERNAL_KEY': 'interna-de-prueba'})
+    monkeypatch.setattr(installer.subprocess, 'run', Mock())
+    post = Mock(return_value=Mock(json=lambda: {'error': 'no desplegada'}))
+    monkeypatch.setattr(installer.requests, 'post', post)
+    docker, n8n = Mock(), Mock()
+    monkeypatch.setattr(installer, 'docker', docker)
+    monkeypatch.setattr(installer, 'n8n', n8n)
+    with pytest.raises(RuntimeError, match='Los flujos existentes no se modificaron'):
+        installer.install(publicar=True)
+    docker.assert_not_called()
+    n8n.assert_not_called()
+    assert post.call_args.kwargs['json'] == {'operacion': 'configuracion', 'datos': {}}
+
+
+def test_handler_nhost_con_node():
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Las pruebas ejecutables de la Function requieren Node.js 22.6 o posterior.')
+    version = subprocess.check_output([node, '--version'], text=True).strip().lstrip('v')
+    major, minor, *_ = map(int, version.split('.'))
+    if (major, minor) < (22, 6):
+        pytest.skip('El Node.js instalado no admite TypeScript; usa Node.js 24 para la Function.')
+    result = subprocess.run([node, '--experimental-strip-types', '--test',
+                             str(ROOT / 'tests/etapa3/nhost_function.test.mjs')],
+                            capture_output=True, text=True, encoding='utf-8', timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr

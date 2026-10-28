@@ -5,9 +5,9 @@ Antes de publicarlos, completa estos pasos en orden.
 
 ## 1. Preparar Nhost
 
-1. Aplica las tres migraciones de `db/etapa3/`.
+1. Aplica las cuatro migraciones de `db/etapa3/`, en orden de 001 a 004.
 2. Despliega `functions/e3-operar.ts` en el mismo proyecto Nhost.
-3. Crea el secreto `E3_INTERNAL_KEY` en Nhost.
+3. Registra en Nhost el mismo `E3_INTERNAL_KEY` de la instalación existente.
 4. Comprueba que la Function responda en:
 
    ```text
@@ -16,6 +16,9 @@ Antes de publicarlos, completa estos pasos en orden.
 
 Una petición sin la cabecera interna debe responder `401`. Esto confirma que la
 Function está publicada y protegida.
+Después comprueba `configuracion` con la clave interna: debe devolver
+`respuesta.modelo`. Esta segunda comprobación es obligatoria antes de sustituir
+los flujos locales; el instalador se detiene sin modificarlos si falla.
 
 ## 2. Preparar n8n
 
@@ -48,5 +51,6 @@ sin `E3_INTERNAL_KEY`.
 4. Prueba Gemini con un contenido pequeño.
 5. Habilita las banderas únicamente después de superar estas comprobaciones.
 
-PostgreSQL continúa dentro de Nhost. n8n solo usa HTTPS y nunca recibe la
-contraseña de la base ni el secreto administrativo de Hasura.
+PostgreSQL continúa dentro de Nhost. Las operaciones de base pasan por HTTPS y
+no necesitan la contraseña de PostgreSQL en n8n. Los nodos Storage conservan su
+credencial actual; el secreto administrativo nunca llega al frontend.

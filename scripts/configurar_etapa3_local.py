@@ -12,6 +12,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import requests
+
 ROOT = Path(__file__).resolve().parents[1]
 OLD_IDS = {"1ZkKft0tTPY0oeC7", "uSw30Vtt0Os8tza1", "SW4rHcXjJgPMtdUI",
            "costflowEspecialistaNhostV2", "costflowExportTest20261026", "costflowFormatTest20261027",
@@ -54,12 +56,33 @@ def environment() -> dict:
     return data
 
 
+def comprobar_funcion(env: dict):
+    """No sustituye los flujos funcionales mientras la Function no esté operativa."""
+    url = f"https://{env['NHOST_SUBDOMAIN']}.functions.{env['NHOST_REGION']}.nhost.run/v1/e3-operar"
+    try:
+        response = requests.post(url, headers={"X-Costflow-Internal-Key": env["E3_INTERNAL_KEY"]},
+                                 json={"operacion": "configuracion", "datos": {}}, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Respuesta inválida")
+        result = payload.get("respuesta", {})
+        if not isinstance(result, dict) or not isinstance(result.get("modelo"), str):
+            raise ValueError("Contrato de respuesta inválido")
+    except (requests.RequestException, ValueError) as error:
+        raise RuntimeError("La Function e3-operar todavía no responde correctamente. Despliégala en Nhost "
+                           "y registra el mismo E3_INTERNAL_KEY antes de reinstalar. Los flujos existentes no se modificaron.") from error
+
+
 def install(publicar=False, retirar=False):
     subprocess.run([os.sys.executable, str(ROOT / "n8n/etapa3/generar.py")], cwd=ROOT, check=True)
     refs = bindings()
+    if refs.get("running", 0):
+        raise RuntimeError("Hay trabajos de n8n en ejecución. Espera a que terminen antes de reinstalar E3.")
     if not refs["gmail"] or not refs["storage"]:
         raise RuntimeError("Asigna primero las credenciales Gmail y Storage en n8n.")
     env = environment()
+    comprobar_funcion(env)
     with tempfile.TemporaryDirectory(prefix="costflow-e3-") as temporary:
         folder = Path(temporary)
         credential = [{"id": "costflowE3Interna", "name": "CostFlow E3 - Acceso interno", "type": "httpHeaderAuth",
@@ -115,7 +138,7 @@ def install(publicar=False, retirar=False):
         docker("network", "connect", "costflow_e3", "n8n")
     subprocess.run(["docker", "compose", "-f", "compose.etapa3.yml", "up", "-d", "--build"], cwd=ROOT, check=True)
     print("Cinco flujos importados. Registra E3_INTERNAL_KEY también en Nhost Secrets antes de probar la función e3-operar.")
-    print("Gemini permanece pendiente hasta asignar su credencial y habilitar la configuración.")
+    print("Se conservaron las credenciales existentes. Comprueba Gemini y las pruebas de aceptación antes de habilitar E3.")
     if publicar:
         print("Reinicia n8n cuando no haya ejecuciones en curso para registrar las entradas publicadas.")
 

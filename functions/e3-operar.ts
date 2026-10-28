@@ -29,9 +29,21 @@ function literal(valor: string): string {
 }
 
 function baseHasura(): string {
-  const configurada = process.env.NHOST_GRAPHQL_URL ?? process.env.NHOST_HASURA_URL
+  // La API pública de GraphQL (/v1) no publica la API administrativa (/v2/query).
+  const configurada = process.env.NHOST_HASURA_URL ?? process.env.NHOST_GRAPHQL_URL
   if (!configurada) throw new Error('La URL de GraphQL/Hasura no está disponible en la función.')
-  return configurada.replace(/\/(?:console|v1\/(?:graphql|metadata)|v2\/query)\/?$/, '')
+  const url = new URL(configurada)
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error('La dirección de Hasura no es válida.')
+  }
+  if (/\.graphql\.[a-z0-9-]+\.nhost\.run$/.test(url.hostname)) {
+    url.hostname = url.hostname.replace('.graphql.', '.hasura.')
+    url.pathname = '/'
+  } else {
+    url.pathname = url.pathname.replace(/\/(?:console|v1\/(?:graphql|metadata)|v2\/query)\/?$/, '')
+    if (url.pathname !== '' && url.pathname !== '/') throw new Error('Configura NHOST_HASURA_URL con la dirección administrativa de Hasura.')
+  }
+  return url.origin
 }
 
 function respuestaRunSql(payload: unknown): unknown {
@@ -86,15 +98,16 @@ export default async function handler(req: Request, res: Response) {
           check_metadata_consistency: false,
         },
       }),
+      signal: AbortSignal.timeout(90000),
     })
     const payload = await upstream.json().catch(() => null)
     if (!upstream.ok) {
-      console.error('e3_operar fue rechazado por Hasura', upstream.status, payload)
+      console.error('e3_operar fue rechazado por Hasura', upstream.status)
       return res.status(502).json({ error: 'Nhost no pudo completar la operación de E3.' })
     }
     return res.status(200).json({ respuesta: respuestaRunSql(payload) })
-  } catch (error) {
-    console.error('Fallo interno en e3-operar', error)
+  } catch {
+    console.error('Fallo interno en e3-operar; revisa la configuración y disponibilidad de Hasura.')
     return res.status(500).json({ error: 'No fue posible completar la operación de E3.' })
   }
 }

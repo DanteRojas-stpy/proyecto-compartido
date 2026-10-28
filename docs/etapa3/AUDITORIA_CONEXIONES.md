@@ -12,6 +12,20 @@ PostgreSQL sigue siendo la base interna de Nhost; su contraseña y el secreto
 administrativo de Hasura ya no se entregan a n8n. Esta adaptación del repositorio
 debe desplegarse y probarse en Nhost antes de considerarla operativa en la web.
 
+Se integró el trabajo de Rodrigo del PR #41 en la rama del PR #39, conservando
+`gemini-3.5-flash-lite`. Se corrigió la resolución de la dirección administrativa:
+el dominio público GraphQL `/v1` no sirve directamente para `run_sql`.
+Nueve pruebas ejecutables del handler comprobaron autenticación, operaciones
+permitidas, dirección, errores y conservación del contrato de respuesta.
+
+Al revisar el panel de `costflow-dev`, Deployments mostró «Connect your Project
+to GitHub», sin repositorio conectado. La petición de comprobación a
+`/v1/e3-operar` devolvió HTTP 500 «item not found»; no confirmó una función
+operativa. **Los flujos locales siguen con el acceso PostgreSQL comprobado**:
+no se reemplazaron por llamadas a una función que todavía no responde. El
+instalador ahora comprueba `configuracion` por HTTPS antes de modificar n8n.
+La adaptación queda lista para desplegar y validar; no se afirma instalada.
+
 | Punto del equipo | Estado y evidencia |
 |---|---|
 | Nhost Storage | Correcto: original descargado; CSV ficticio cargado y descargado con contenido idéntico. Temporales retirados después con respuesta 204 |
