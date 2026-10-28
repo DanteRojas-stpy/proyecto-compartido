@@ -11,7 +11,7 @@ evidencia. El especialista la revisa y decide.
 
 ## Cómo se construyó
 
-Se tomó el patrón común de los comparativos históricos de `ejemplos/`: por cada
+Se tomó el patrón común de los comparativos históricos de la empresa (ya no incluidos en el repositorio): por cada
 partida, el metrado, el precio por proveedor en dólares o soles, el tipo de cambio
 y el parcial. La plantilla lo ordena en formato largo (una fila por partida y
 proveedor), porque así el flujo puede leerla y guardarla en la base.

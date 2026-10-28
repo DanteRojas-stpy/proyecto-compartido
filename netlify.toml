@@ -1,0 +1,17 @@
+# Netlify publica solamente el frontend estático. Nhost, n8n y el servicio de E3
+# siguen donde están instalados.
+[build]
+  command = "python3 scripts/preparar_frontend_pages.py"
+  publish = "_site"
+
+[build.environment]
+  PYTHON_VERSION = "3.12"
+  NHOST_SUBDOMAIN = "zgorsmkvfyytsouacrpa"
+  NHOST_REGION = "sa-east-1"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    X-Frame-Options = "DENY"
