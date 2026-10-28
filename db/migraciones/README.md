@@ -1,5 +1,9 @@
 # Migraciones de la base (Nhost)
 
+El orden completo, incluida E3, se mantiene en
+[ORDEN_MIGRACIONES.md](../ORDEN_MIGRACIONES.md). Esta carpeta contiene 001–011;
+las siguientes, 012–015, están en `db/etapa3/`. No son dos series independientes.
+
 Ejecutar cada archivo **una sola vez**, en orden, desde **Database > SQL
 Console** de un proyecto Nhost nuevo.
 

@@ -95,11 +95,16 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
 
 ## Instalación reproducible
 
-1. Trabajar después de la migración `db/migraciones/010_estados_por_correo_e2.sql`.
-2. Ejecutar en Nhost, en orden, `db/etapa3/001_entidades.sql`,
-   `002_procesamiento.sql`, `003_decisiones_y_salida.sql` y
-   `004_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
+1. Seguir [el orden único de migraciones](../../db/ORDEN_MIGRACIONES.md): primero
+   `db/migraciones/001` a `010_estados_por_correo.sql`, después
+   `011_base_versiones_cotizacion.sql`. La base 011 crea las dependencias que
+   existían fuera del repositorio; no sustituye las tablas ya presentes.
+2. En un proyecto nuevo, continuar en orden con `db/etapa3/012_entidades.sql`,
+   `013_procesamiento.sql`, `014_decisiones_y_salida.sql` y
+   `015_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
    probado; conserva una elección distinta del equipo y no activa las banderas.
+   Estos archivos antes se llamaban 001–004 dentro de `db/etapa3/`: el SQL se
+   conserva. Si ya se aplicaron en el proyecto del equipo, no repetirlos.
 3. Desplegar `functions/e3-operar.ts` en el mismo proyecto Nhost y registrar el
    secreto `E3_INTERNAL_KEY`. Añadir también la variable de entorno del mismo
    nombre, con valor `{{ secrets.E3_INTERNAL_KEY }}`, y volver a desplegar.

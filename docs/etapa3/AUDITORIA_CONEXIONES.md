@@ -97,6 +97,21 @@ continúa pendiente, al igual que la visualización y las decisiones en pantalla
 - Se respaldó privadamente la configuración previa. No se guardaron claves ni
   cotizaciones reales en el repositorio.
 
+## Instalación reproducible desde cero
+
+Se agregó `db/migraciones/011_base_versiones_cotizacion.sql` a partir del catálogo
+real de Nhost, sin copiar cotizaciones ni datos personales. Crea la tabla base y
+los campos de origen, Gmail y versión que faltaban en las migraciones de documentos.
+Las cuatro migraciones anteriores de E3 se renombraron a 012–015 conservando su
+SQL; no se deben repetir en el proyecto existente por ese cambio de nombre.
+El orden único y las dependencias están en `db/ORDEN_MIGRACIONES.md`.
+
+Se verificaron las 15 migraciones sobre PostgreSQL 18 vacío y los trece grupos de
+operaciones SQL de E3. Repetir la base 011 conserva documentos, versiones y reglas.
+También se comprobó que sea inocua sobre `costflow-dev` en una transacción revertida,
+comparando estructura y huellas de los datos sin exportarlos.
+Esta prueba de instalación no es la corrida integrada con Gmail, Gemini y JWT real.
+
 ## Lo que sigue sin activarse
 
 `recepcion_habilitada=false` y `gemini_habilitado=false`.

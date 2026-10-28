@@ -5,7 +5,9 @@ Antes de publicarlos, completa estos pasos en orden.
 
 ## 1. Preparar Nhost
 
-1. Aplica las cuatro migraciones de `db/etapa3/`, en orden de 001 a 004.
+1. Sigue [el orden único de migraciones](../../db/ORDEN_MIGRACIONES.md): base
+   001–010, compatibilidad 011 y E3 012–015. No repitas las ya aplicadas; los
+   antiguos nombres 001–004 de E3 corresponden a 012–015 con el mismo SQL.
 2. Despliega `functions/e3-operar.ts` en el mismo proyecto Nhost.
 3. Registra en **Settings → Secrets** el mismo `E3_INTERNAL_KEY` de la instalación
    existente. En **Environment Variables**, añade `E3_INTERNAL_KEY` con valor

@@ -72,7 +72,7 @@ def test_funcion_nhost_protege_la_operacion_interna():
 
     block = source.split('const OPERACIONES = new Set([', 1)[1].split('])', 1)[0]
     allowed = set(re.findall(r"'([a-z_]+)'", block))
-    sql = (ROOT / 'db/etapa3/002_procesamiento.sql').read_text(encoding='utf-8')
+    sql = (ROOT / 'db/etapa3/013_procesamiento.sql').read_text(encoding='utf-8')
     implemented = set(re.findall(r"WHEN '([a-z_]+)' THEN", sql))
     assert allowed == implemented
 

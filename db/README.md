@@ -2,6 +2,10 @@
 
 Aquí vive la forma de los datos guardados: tablas, estados y trazabilidad.
 
+El orden completo de instalación y actualización está en
+[ORDEN_MIGRACIONES.md](ORDEN_MIGRACIONES.md). Incluye 001–010, la base 011 y
+E3 012–015, sin repetir números ni volver a ejecutar archivos ya aplicados.
+
 Las solicitudes usan tres estados de negocio: `inicio`, `cerrado` y
 `cerrado_sin_proveedores`. La preparación del correo se registra aparte mediante
 `preparada_para_envio`; por ello el envío no modifica el estado de la solicitud.
