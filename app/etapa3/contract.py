@@ -59,6 +59,12 @@ Usa exclusivamente los fragmentos suministrados y devuelve el JSON del esquema: 
 No inventes, no calcules subtotales ni impuestos para completar datos, no conviertas monedas ni homologues equipos.
 Usa null para datos ausentes. Conserva números, símbolos, unidades y textos originales en campos separados.
 Por cada dato no nulo cita evidencia literal y su fragmento_id. Cada evidencia pertenece al mismo documento del dato.
+Cada campo de originales debe ser una subcadena literal, sin reformular, de texto_fuente en alguna
+de las evidencias que ese registro enumera en evidencia_ids. Incluye todas las evidencias necesarias
+para cubrir TODOS sus campos no nulos: moneda, importes, plazos, pago, vigencia y datos del ítem.
+No basta con citar el importe para respaldar también la moneda o las condiciones de pago.
+Puedes copiar el fragmento completo como texto_fuente cuando contiene varios datos del registro.
+Conserva mayúsculas, acentos y espacios de los originales; por ejemplo, USD no se sustituye por dólares.
 Clasifica por contenido: precios/condiciones comerciales -> cotizacion_proveedor; especificaciones -> ficha_tecnica_proveedor;
 complementos -> anexo_proveedor; otros -> otro_documento. El nombre y la extensión no bastan.
 Si hay varias fichas de equipos distintos, identifica referencia_item y no las trates como contradicción entre equipos.

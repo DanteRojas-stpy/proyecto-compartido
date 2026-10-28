@@ -5,7 +5,7 @@ La especificación recibida se conserva en [REGLAS.md](REGLAS.md).
 
 ## Estado real de la instalación
 
-Se aplicaron las tres migraciones en la base Nhost del equipo y se importaron/publicaron
+Se aplicaron las cuatro migraciones en la base Nhost del equipo y se importaron/publicaron
 los cinco flujos en el n8n local de Juan Daniel. Los flujos anteriores de E3 están
 desactivados y archivados, con respaldo privado previo. Las cotizaciones, lecturas,
 PDF, Excel históricos y decisiones anteriores se conservan; no se eliminaron datos
@@ -18,18 +18,19 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
   una respuesta 404 guardada en caché que impedía descargar inmediatamente archivos nuevos.
 - Hasura ya permite administrar la configuración. Las consultas y permisos de E3/E4
   se publicaron y sus consultas GraphQL respondieron sin errores.
-- Gemini permite consultar el catálogo de modelos, pero las pruebas pequeñas de
-  generación con el modelo configurado devuelven 503 por alta demanda. La lectura real
-  todavía no se ha validado y no se han enviado cotizaciones a Gemini en estas pruebas.
-- Por ello `recepcion_habilitada=false` y `gemini_habilitado=false`. Los eventos se
+- Gemini ya respondió con `gemini-3.5-flash-lite` usando la misma credencial de n8n.
+  Se validó el contrato completo de E3 con una cotización ficticia: un ítem,
+  evidencias literales, cantidades y precios correctos. El modelo anterior devolvía 503.
+  No se enviaron cotizaciones reales a Google durante estas pruebas.
+- Se conservan `recepcion_habilitada=false` y `gemini_habilitado=false`. Los eventos se
   conservan pendientes hasta superar las pruebas restantes.
 - Falta una dirección pública HTTPS de n8n para el frontend del equipo; el servicio
   de procesamiento sigue privado. También falta probar una decisión con JWT real del especialista.
 - El frontend del compañero requiere integrar las vistas y acciones descritas en
   [CONTRATO_FRONTEND.md](CONTRATO_FRONTEND.md). No se sustituyó su interfaz existente.
 
-Estos pendientes impiden dar por terminados los casos de aceptación relativos a
-Gemini real y la interfaz integrada. El detalle de conexiones comprobadas está en
+Falta validar la corrida integrada de una cotización autorizada y las decisiones
+desde la interfaz real antes de habilitar producción. El detalle de conexiones está en
 [AUDITORIA_CONEXIONES.md](AUDITORIA_CONEXIONES.md).
 
 ## Los cinco flujos
@@ -55,7 +56,7 @@ no sustituye una final. Desactivar la final anterior no crea un nuevo evento de 
 
 | Tema | Configuración implementada |
 |---|---|
-| Gemini | `gemini-3.8-flash`, configurable en `e3_configuracion`; temperatura 0 y esquema JSON fijo |
+| Gemini | `gemini-3.5-flash-lite`, configurable en `e3_configuracion`; temperatura 0 y esquema JSON fijo |
 | OCR | Tesseract local, español e inglés; conserva página, bloque, caja y confianza |
 | Búsqueda documental | FastEmbed/ONNX, `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensiones, dos hilos de CPU |
 | Índice | Fragmentos y vectores guardados por documento/versión en PostgreSQL; extracción local reutilizable |
@@ -69,7 +70,8 @@ no sustituye una final. Desactivar la final anterior no crea un nuevo evento de 
 | Salida | JSON independiente de una plantilla; conserva campos originales y normalizados, ítems comerciales y especificaciones extensibles para E4 |
 
 El modelo de búsqueda no es Ollama y no utiliza la tarjeta gráfica. Se descargó y
-probó localmente. Solo Gemini interpreta el contenido; su llamada real permanece pendiente.
+probó localmente. Solo Gemini interpreta el contenido; su llamada real y el contrato
+de salida se comprobaron con datos ficticios.
 No se realizan conversiones monetarias, equivalencias técnicas ni homologación.
 Las unidades se normalizan por una lista de alias conservadora, sin alterar cantidades.
 
@@ -85,7 +87,9 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
 
 1. Trabajar después de la migración `db/migraciones/010_estados_por_correo_e2.sql`.
 2. Ejecutar en Nhost, en orden, `db/etapa3/001_entidades.sql`,
-   `002_procesamiento.sql` y `003_decisiones_y_salida.sql`.
+   `002_procesamiento.sql`, `003_decisiones_y_salida.sql` y
+   `004_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
+   probado; conserva una elección distinta del equipo y no activa las banderas.
 3. Con Docker Desktop y un contenedor llamado `n8n`, ejecutar con Python 3.12:
 
    ```powershell
@@ -130,6 +134,8 @@ en una nueva credencial Header Auth de n8n: cabecera `x-goog-api-key`, valor la 
 Asignarla al nodo «Gemini JSON fijo» de E3.2, guardar y publicar. El instalador puede
 encontrarla por su nombre si contiene «Gemini». No pegar claves en el JSON del flujo.
 Comprobar disponibilidad y cuota del modelo elegido en la cuenta del equipo.
+La configuración vigente usa `gemini-3.5-flash-lite`; E3.2 recibe el nombre desde
+Nhost, por lo que este cambio no requiere otra clave ni modificar la URL del nodo.
 
 Después de verificar Storage y una lectura de prueba con Gemini:
 
@@ -141,9 +147,9 @@ WHERE id;
 
 ## Pruebas y límites de lo verificado
 
-- La suite Python completa pasó: 51 pruebas y una omitida en Windows por no tener
+- La suite Python completa pasó: 52 pruebas y una omitida en Windows por no tener
   Tesseract en el sistema anfitrión. Tesseract se instala dentro del contenedor.
-- Dentro de Docker pasaron las 28 pruebas de E3, incluida OCR, sin omisiones.
+- Dentro de Docker pasaron las 29 pruebas de E3, incluida OCR, sin omisiones.
 - La búsqueda vectorial real respondió a los siete criterios con vectores de 384 dimensiones.
 - `tests/etapa3/integracion.sql` se ejecutó en la base real dentro de una transacción
   revertida: trece grupos de pruebas de negocio pasaron, sin conservar registros ficticios.
@@ -155,8 +161,14 @@ WHERE id;
 - Las consultas GraphQL de E3/E4 ya respondieron. Con el rol de usuario, el propietario
   pudo consultar sus versiones y una cuenta ajena no obtuvo ninguna. Esta prueba de
   permisos no sustituye la prueba pendiente con JWT real desde el frontend.
-- Gemini devolvió 503 en la generación de un JSON pequeño. No se enviaron correos
-  ni se ejecutó el procesamiento completo de cotizaciones.
+- Gemini devolvió 503 con el modelo anterior. Se sustituyó por
+  `gemini-3.5-flash-lite`, que respondió por la entrada publicada de E3.2 y superó
+  `parse_response` y `combine` con el esquema completo, datos originales y evidencias
+  de una cotización ficticia (2 unidades × USD 100, parcial 200, total 236).
+  También se reforzaron las instrucciones: las citas deben contener todos los
+  originales del registro, incluida la moneda y las condiciones. Se comprobó que
+  una cita incompleta sigue siendo rechazada por las validaciones independientes.
+  No se enviaron correos ni se ejecutó el procesamiento completo de cotizaciones.
 
 Los grupos SQL comprueban: correo sin documentos, una versión por correo,
 repetición sin duplicados, dos archivos en la misma versión, falta de Gemini sin

@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS public.e3_configuracion (
  id boolean PRIMARY KEY DEFAULT true CHECK(id),
  gemini_habilitado boolean NOT NULL DEFAULT false,
  recepcion_habilitada boolean NOT NULL DEFAULT false,
- modelo text NOT NULL DEFAULT 'gemini-3.8-flash',
+ modelo text NOT NULL DEFAULT 'gemini-3.5-flash-lite',
  parametros jsonb NOT NULL DEFAULT '{"max_archivo_bytes":50000000,"max_paginas":300,"fragmento_caracteres":400,"solapamiento":60,"contexto_caracteres":24000,"retencion_cache_dias":30}'
 );
 INSERT INTO public.e3_configuracion(id) VALUES(true) ON CONFLICT DO NOTHING;

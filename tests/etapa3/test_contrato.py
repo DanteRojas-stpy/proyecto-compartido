@@ -67,6 +67,18 @@ def test_incoherencia_aritmetica_independiente_de_gemini():
     assert result["items"][0]["parcial"] == 200  # No corrige el precio del proveedor.
 
 
+def test_evidencia_de_importes_no_respalda_moneda_y_condiciones():
+    data, source, context = sample()
+    # Los datos existen en el documento, pero la cita elegida no los respalda todos.
+    data["evidencias"][0]["texto_fuente"] = "subtotal 200 impuestos 36 total 236"
+    with pytest.raises(ValueError, match="moneda no tiene texto original verificable"):
+        contract.combine([data], [source], context, "gemini-prueba")
+    data["evidencias"][0]["texto_fuente"] = source["fragmentos"][0]["texto"]
+    result = contract.combine([data], [source], context, "gemini-prueba")
+    assert result["datos_comerciales"]["moneda"] == "USD"
+    assert result["datos_comerciales"]["condiciones_pago"] == "contado"
+
+
 def test_ausente_es_null_y_no_valor_inventado():
     data, source, context = sample()
     data["comerciales"][0]["valores"]["vigencia_oferta"] = None
