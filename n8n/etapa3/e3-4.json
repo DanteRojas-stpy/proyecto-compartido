@@ -1,0 +1,206 @@
+{
+  "id": "costflowEtapa3_4",
+  "name": "CostFlow - E3.4 Decisiones autenticadas del especialista",
+  "active": false,
+  "nodes": [
+    {
+      "id": "bd9d67ea-879f-520a-b4bd-e7eb1e5c38b8",
+      "name": "Decisión desde el frontend",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "costflow-e3-especialista",
+        "authentication": "none",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "f4087755-90f1-56ad-81b0-eec372f69140"
+    },
+    {
+      "id": "d67fbbba-faaf-57ef-b3ac-5bf035eb198d",
+      "name": "Preparar decisión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r=$json;const origen=String(r.headers?.origin??'');\nconst origenes=['http://127.0.0.1:8001','http://localhost:8001'];\nif(origen&&!origenes.includes(origen))return [{json:{ok:false,http_code:403,mensaje:'Origen de frontend no autorizado.'}}];\nif(!/^Bearer\\s+\\S+$/i.test(String(r.headers?.authorization??'')))return [{json:{ok:false,http_code:401,mensaje:'Inicia sesión en Nhost.'}}];\nif(!r.body||typeof r.body!=='object'||Array.isArray(r.body))return [{json:{ok:false,http_code:400,mensaje:'Envía una decisión en JSON.'}}];\nreturn [{json:{ok:true,body:r.body,authorization:r.headers.authorization}}];"
+      },
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "id": "bc92d148-793a-5cb2-9d13-27ced29f4989",
+      "name": "¿Decisión preparada?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.ok }}",
+                    "rightValue": true,
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "true"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "9ae1fb41-2f60-5380-90ff-3a3dc3f74632",
+      "name": "Verificar sesión y registrar decisión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-etapa3:8093/action",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "timeout": 720000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $(\"Preparar decisión\").first().json.authorization }}"
+            }
+          ]
+        }
+      },
+      "position": [
+        660,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "32c46bbd-0d5b-54e6-a807-0c125b85dc41",
+      "name": "Responder decisión",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.http_code || 503 }}",
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "={{ ['http://127.0.0.1:8001','http://localhost:8001'].includes($('Decisión desde el frontend').first().json.headers.origin) ? $('Decisión desde el frontend').first().json.headers.origin : 'http://127.0.0.1:8001' }}"
+              },
+              {
+                "name": "Vary",
+                "value": "Origin"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "position": [
+        880,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Decisión desde el frontend": {
+      "main": [
+        [
+          {
+            "node": "Preparar decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar decisión": {
+      "main": [
+        [
+          {
+            "node": "¿Decisión preparada?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Decisión preparada?": {
+      "main": [
+        [
+          {
+            "node": "Verificar sesión y registrar decisión",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar sesión y registrar decisión": {
+      "main": [
+        [
+          {
+            "node": "Responder decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

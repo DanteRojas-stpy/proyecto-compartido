@@ -1,0 +1,480 @@
+{
+  "id": "costflowEtapa3_1",
+  "name": "CostFlow - E3.1 Recepción de correos confirmados",
+  "active": false,
+  "nodes": [
+    {
+      "id": "3074aa1d-0cda-5430-8678-75f92ca4db3b",
+      "name": "Consumir eventos de Nhost",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "9f9b69cd-585a-5de9-80c4-ed6ab052ba21",
+      "name": "Tomar eventos pendientes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'eventos',datos:{} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        220,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "305d0a9d-994d-556a-ac43-8b1e5c9a9c61",
+      "name": "Un correo por evento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return ($json.respuesta.eventos??[]).map(json=>({json}));"
+      },
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "771f4eab-c5a5-56fd-8aa3-843cc8caeeed",
+      "name": "Desde otra etapa",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "id": "078dd30f-061c-5ed6-9d6e-fd9c58231a9d",
+      "name": "Reservar versión por correo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'preparar_correo',datos:$json }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        880,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "90135a19-fd24-54ea-96a4-eca19cbd6bb1",
+      "name": "Resultado de recepción",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $input.all().map((i,index)=>({json:i.json.respuesta,pairedItem:{item:index}}));"
+      },
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "670266a6-0a4a-53ef-abe3-aa59c02b6599",
+      "name": "¿Versión nueva?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "version_creada",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "version_creada"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "7b06bb51-855c-53b1-9424-7b45f138542f",
+      "name": "Recuperar exactamente este correo",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "parameters": {
+        "resource": "message",
+        "operation": "get",
+        "messageId": "={{ $json.gmail_message_id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true,
+          "attachmentPrefix": "adjunto_"
+        }
+      },
+      "position": [
+        1540,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:gmail",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "597b7ced-3ea5-5b19-9c0d-0a926b732646",
+      "name": "Preparar todos los adjuntos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const result=[];\nfor(let index=0;index<$input.all().length;index++){\nconst item=$input.all()[index];const contexto=$('Resultado de recepción').itemMatching(index).json;\nconst archivos=[];for(const[key,b]of Object.entries(item.binary??{})){const bytes=await this.helpers.getBinaryDataBuffer(index,key);\narchivos.push({nombre_original:b.fileName??key,mime_type:b.mimeType??'application/octet-stream',contenido_base64:bytes.toString('base64')});}\nresult.push({json:{contexto,archivos,error:item.json.error??null},pairedItem:{item:index}});}return result;"
+      },
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "id": "e052ce3a-8498-57c4-a23b-5891b986fd4e",
+      "name": "Guardar archivos y vincular versión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-etapa3:8093/receive",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 720000
+        }
+      },
+      "position": [
+        1980,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "id": "40b466e7-3869-5c32-a7b7-b9faf4d5a418",
+      "name": "Resultado del registro",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "documentos_registrados",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "documentos_registrados"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "error_procesamiento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "error_procesamiento"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "id": "04f8b264-f8ee-5fbc-b0da-f7d1d42dfbaf",
+      "name": "Invocar E3.2",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "costflowEtapa3_2",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "id": "4342f536-924f-54d2-93b2-d41babe81828",
+      "name": "Notificar error definitivo",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "costflowEtapa3_3",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "position": [
+        2640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Consumir eventos de Nhost": {
+      "main": [
+        [
+          {
+            "node": "Tomar eventos pendientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar eventos pendientes": {
+      "main": [
+        [
+          {
+            "node": "Un correo por evento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un correo por evento": {
+      "main": [
+        [
+          {
+            "node": "Reservar versión por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Desde otra etapa": {
+      "main": [
+        [
+          {
+            "node": "Reservar versión por correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reservar versión por correo": {
+      "main": [
+        [
+          {
+            "node": "Resultado de recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de recepción": {
+      "main": [
+        [
+          {
+            "node": "¿Versión nueva?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Versión nueva?": {
+      "main": [
+        [
+          {
+            "node": "Recuperar exactamente este correo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperar exactamente este correo": {
+      "main": [
+        [
+          {
+            "node": "Preparar todos los adjuntos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar todos los adjuntos": {
+      "main": [
+        [
+          {
+            "node": "Guardar archivos y vincular versión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar archivos y vincular versión": {
+      "main": [
+        [
+          {
+            "node": "Resultado del registro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado del registro": {
+      "main": [
+        [
+          {
+            "node": "Invocar E3.2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notificar error definitivo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

@@ -3,3 +3,5 @@ openpyxl
 pydantic
 python-dotenv
 pytest
+-r app/etapa3/requirements.txt
+-r tests/etapa3/requirements.txt

@@ -1,0 +1,2 @@
+# Solo para fabricar un XLS de prueba; E3 no genera Excel de salida.
+xlwt==1.3.0
