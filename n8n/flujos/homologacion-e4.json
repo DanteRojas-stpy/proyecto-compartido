@@ -1,5 +1,5 @@
 {
-  "name": "E4: homologación desde el contrato de E3 (Gemini 3.8 Flash)",
+  "name": "E4: homologación desde el contrato de E3 (Gemini 3.5 Flash-Lite)",
   "nodes": [
     {
       "id": "revisar-homologación",
@@ -145,7 +145,7 @@
     },
     {
       "id": "modelo-gemini-3.8-flash",
-      "name": "Modelo Gemini 3.8 Flash",
+      "name": "Modelo Gemini 3.5 Flash-Lite",
       "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
       "typeVersion": 1.2,
       "position": [
@@ -153,7 +153,7 @@
         420
       ],
       "parameters": {
-        "modelName": "models/gemini-3.8-flash",
+        "modelName": "models/gemini-3.5-flash-lite",
         "options": {
           "temperature": 0
         }
@@ -226,7 +226,7 @@
         60
       ],
       "parameters": {
-        "content": "## E4 homologación (contrato de E3)\nLee solo `e3_finales_e4`: nunca PDF ni Excel. Cada propuesta lleva el `version_id` de origen. Un proveedor sin versión final procesada queda pendiente y no se homologa. Modelo: Gemini 3.8 Flash. Sin escritura en Nhost todavía."
+        "content": "## E4 homologación (contrato de E3)\nLee solo `e3_finales_e4`: nunca PDF ni Excel. Cada propuesta lleva el `version_id` de origen. Un proveedor sin versión final procesada queda pendiente y no se homologa. Modelo: Gemini 3.5 Flash-Lite. Sin escritura en Nhost todavía."
       }
     }
   ],
@@ -315,7 +315,7 @@
         ]
       ]
     },
-    "Modelo Gemini 3.8 Flash": {
+    "Modelo Gemini 3.5 Flash-Lite": {
       "ai_languageModel": [
         [
           {
