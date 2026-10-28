@@ -165,6 +165,102 @@
       ]
     },
     {
+      "id": "387080e5-07f9-5b7d-90f7-c4c69e81c4e5",
+      "name": "¿Modelo de Claude?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "8ef4ce6c-bfa5-5739-9f70-8574b82ba1be",
+              "leftValue": "={{ $json.modelo }}",
+              "rightValue": "claude-",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "58f83159-e632-551f-ba29-a5bd94b4c83c",
+      "name": "Convertir a Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Traduce la petición del lector (formato Gemini) al formato de la API de mensajes de Claude.\nconst { modelo, peticion } = $json;\nconst partes = (x) => (x?.parts ?? []).map((p) => p.text ?? '').join('\\n');\nconst sistema = partes(peticion.systemInstruction);\nconst contenido = (peticion.contents ?? []).map((c) => partes(c)).join('\\n');\nconst esquema = peticion.generationConfig?.responseJsonSchema ?? {};\nif (!contenido.trim()) throw new Error('La petición no trae contenido para leer');\nconst instruccion = sistema\n  + '\\n\\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '\n  + 'Sin texto adicional, sin comentarios y sin bloques de código:\\n' + JSON.stringify(esquema);\nreturn [{ json: { modelo, cuerpo: {\n  model: modelo,\n  max_tokens: 16000,\n  system: instruccion,\n  messages: [{ role: 'user', content: contenido }],\n} } }];"
+      },
+      "position": [
+        1540,
+        -160
+      ]
+    },
+    {
+      "id": "c1742b9b-7951-54bf-b813-23f6596e3193",
+      "name": "Claude Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}",
+        "options": {
+          "timeout": 170000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1760,
+        -160
+      ],
+      "notes": "CREDENCIAL_E3:claude"
+    },
+    {
+      "id": "a74f633c-812e-5d76-be1c-251ba1c57ba5",
+      "name": "Claude a formato del lector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Devuelve la respuesta de Claude con la misma forma que usa el lector para Gemini.\nconst r = $json;\nconst rechazo = (mensaje) => [{ json: { error: { message: mensaje } } }];\nif (r.type === 'error' || r.error) return rechazo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return rechazo('Claude rechazó la petición por seguridad.');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();\nlet limpio = texto.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\nconst ini = limpio.indexOf('{');\nconst fin = limpio.lastIndexOf('}');\nif (ini >= 0 && fin > ini) limpio = limpio.slice(ini, fin + 1);\nconst completo = r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence';\nreturn [{ json: {\n  candidates: [{ finishReason: completo ? 'STOP' : String(r.stop_reason ?? 'DESCONOCIDO').toUpperCase(), content: { parts: [{ text: limpio }] } }],\n  usageMetadata: { promptTokenCount: r.usage?.input_tokens, candidatesTokenCount: r.usage?.output_tokens },\n  modelVersion: r.model,\n} }];"
+      },
+      "position": [
+        1980,
+        -160
+      ]
+    },
+    {
       "id": "605c0239-b417-53cd-9d5d-a232cee647d5",
       "name": "Gemini JSON fijo",
       "type": "n8n-nodes-base.httpRequest",
@@ -188,14 +284,14 @@
         }
       },
       "position": [
-        1320,
-        0
+        1540,
+        100
       ],
       "notes": "CREDENCIAL_E3:gemini"
     },
     {
-      "id": "3db2c5c2-c909-51fd-9754-1a614c80e03a",
-      "name": "Devolver respuesta de Gemini",
+      "id": "0d407f1d-345f-5196-9608-3c5d0cdbed2c",
+      "name": "Devolver respuesta del lector",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "parameters": {
@@ -206,7 +302,7 @@
         }
       },
       "position": [
-        1540,
+        2200,
         0
       ]
     }
@@ -267,7 +363,58 @@
       "main": [
         [
           {
+            "node": "¿Modelo de Claude?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Modelo de Claude?": {
+      "main": [
+        [
+          {
+            "node": "Convertir a Claude",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Gemini JSON fijo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir a Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Messages": {
+      "main": [
+        [
+          {
+            "node": "Claude a formato del lector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude a formato del lector": {
+      "main": [
+        [
+          {
+            "node": "Devolver respuesta del lector",
             "type": "main",
             "index": 0
           }
@@ -278,7 +425,7 @@
       "main": [
         [
           {
-            "node": "Devolver respuesta de Gemini",
+            "node": "Devolver respuesta del lector",
             "type": "main",
             "index": 0
           }
