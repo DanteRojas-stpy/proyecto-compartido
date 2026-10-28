@@ -279,3 +279,7 @@ dialog::backdrop { background: rgb(22 59 131 / 40%); }
   .dato-resumen { grid-column: 1; }
   .chevron { grid-column: 2; grid-row: 2; }
 }
+
+.estado-correo-aviso { margin: .4rem 0 0; font-weight: 650; }
+.estado-correo-aviso.error { color: var(--cf-critical); }
+.estado-correo-aviso.exito { color: #247a28; }

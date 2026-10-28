@@ -460,35 +460,58 @@ async function guardarJsonFinal(version) {
   URL.revokeObjectURL(enlace.href);
 }
 
-async function guardarEstadoCorreo(correo, estado, boton) {
+function avisarCorreo(aviso, texto, tipo = "") {
+  aviso.textContent = texto;
+  aviso.className = `ayuda estado-correo-aviso ${tipo}`.trim();
+}
+
+// Lee el estado tal como quedó en Nhost, para mostrar lo que realmente se guardó.
+async function estadoGuardadoEnNhost(correo) {
+  const datos = await graphql(
+    `query EstadoGuardado($id: uuid!) {
+      correos_proveedor_by_pk(id: $id) { estado_correo }
+    }`,
+    { id: correo.id },
+  );
+  return datos.correos_proveedor_by_pk?.estado_correo ?? null;
+}
+
+async function guardarEstadoCorreo(correo, estado, boton, aviso) {
   if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
     const confirmado = window.confirm(
       "¿Confirmas que esta cotización o ficha técnica no tiene aclaraciones y debe aceptarse como final?",
     );
     if (!confirmado) return;
   }
+  const texto = estadosCorreo.find(([valor]) => valor === estado)?.[1] ?? estado;
   boton.disabled = true;
+  avisarCorreo(aviso, "Guardando en Nhost…");
   try {
     if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
       const version = await aceptarComoFinal(correo);
       await guardarJsonFinal(version);
-      mostrarResultado("Versión aceptada como final, registrada en el historial y guardada como .json.", "exito");
-      await cargarDetalleProyecto();
-      return;
+    } else {
+      await graphql(
+        `mutation GuardarEstadoCorreo($id: uuid!, $estado: String!) {
+          update_correos_proveedor_by_pk(
+            pk_columns: { id: $id }
+            _set: { estado_correo: $estado }
+          ) { id estado_correo origen_estado estado_asignado_at }
+        }`,
+        { id: correo.id, estado },
+      );
     }
-    await graphql(
-      `mutation GuardarEstadoCorreo($id: uuid!, $estado: String!) {
-        update_correos_proveedor_by_pk(
-          pk_columns: { id: $id }
-          _set: { estado_correo: $estado }
-        ) { id estado_correo origen_estado estado_asignado_at }
-      }`,
-      { id: correo.id, estado },
-    );
-    mostrarResultado("Estado del correo guardado en Nhost y registrado en el historial.", "exito");
-    await cargarDetalleProyecto();
+
+    // Se vuelve a leer desde Nhost: el aviso muestra lo que quedó guardado, no lo que se intentó guardar.
+    const guardado = await estadoGuardadoEnNhost(correo);
+    correo.estado_correo = guardado ?? correo.estado_correo;
+    if (guardado === estado) {
+      avisarCorreo(aviso, `Guardado en Nhost: ${texto}.`, "exito");
+    } else {
+      avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${guardado ?? "sin estado"}.`, "error");
+    }
   } catch (error) {
-    mostrarResultado(mensajeError(error), "error");
+    avisarCorreo(aviso, `No se guardó: ${mensajeError(error)}`, "error");
   } finally {
     boton.disabled = false;
   }
@@ -600,8 +623,11 @@ function crearTarjetaCorreo(correo, esMasReciente) {
   guardar.type = "button";
   guardar.className = "secundario";
   guardar.textContent = "Guardar estado";
-  guardar.addEventListener("click", () => guardarEstadoCorreo(correo, selector.value, guardar));
-  acciones.append(etiqueta, origen, guardar);
+  const aviso = document.createElement("p");
+  aviso.className = "ayuda estado-correo-aviso";
+  aviso.setAttribute("role", "status");
+  guardar.addEventListener("click", () => guardarEstadoCorreo(correo, selector.value, guardar, aviso));
+  acciones.append(etiqueta, origen, guardar, aviso);
   tarjeta.append(cabecera, contenido, bloqueAdjuntos, bloqueDocumentos, acciones);
   return tarjeta;
 }
