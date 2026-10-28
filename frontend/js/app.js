@@ -386,6 +386,80 @@ async function registrarCoordinacion(evento) {
   }
 }
 
+// Aceptar como final pasa por la decisión de E3: la base registra quién decidió, conserva la
+// versión anterior y guarda la auditoría. Un cambio directo del estado se rechaza.
+async function aceptarComoFinal(correo) {
+  const datos = await graphql(
+    `query VersionParaFinal($correo: uuid!) {
+      versiones_cotizacion(where: { correo_id: { _eq: $correo } }, order_by: { version: desc }, limit: 1) {
+        id solicitud_id proveedor_id version
+      }
+    }`,
+    { correo: correo.id },
+  );
+  const version = datos.versiones_cotizacion?.[0];
+  if (!version) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
+
+  const token = await nhost.auth.getAccessToken();
+  const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.functions.${configuracionNhost.NHOST_REGION}.nhost.run/v1/e3-operar`;
+  const respuesta = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      operacion: "decision",
+      datos: {
+        accion: {
+          accion: "aceptar_version",
+          version_id: version.id,
+          accion_id: crypto.randomUUID(),
+          medio: "plataforma",
+          motivo: "Aceptada como final por el especialista",
+        },
+      },
+    }),
+  });
+  const resultado = await respuesta.json();
+  if (!respuesta.ok || resultado.ok === false) {
+    throw new Error(resultado.mensaje ?? resultado.error ?? "No se pudo aceptar la versión.");
+  }
+  return version;
+}
+
+// Genera el .json de la versión final con el resultado de E3, lo guarda en Storage y lo descarga.
+async function guardarJsonFinal(version) {
+  const datos = await graphql(
+    `query ResultadoFinal($version: uuid!) {
+      e3_resultados(where: { version_id: { _eq: $version } }) { resultado }
+    }`,
+    { version: version.id },
+  );
+  const resultado = datos.e3_resultados?.[0]?.resultado;
+  if (!resultado) throw new Error("E3 todavía no tiene el resultado de esta versión.");
+
+  const contenido = {
+    solicitud_id: version.solicitud_id,
+    proveedor_id: version.proveedor_id,
+    version_id: version.id,
+    numero_version: version.version,
+    aceptada_at: new Date().toISOString(),
+    resultado,
+  };
+  const nombre = `final-${version.solicitud_id}-${version.proveedor_id}-v${version.version}.json`;
+  const archivo = new File([JSON.stringify(contenido, null, 2)], nombre, { type: "application/json" });
+
+  await nhost.storage.uploadFiles({
+    "bucket-id": "cotizaciones",
+    "file[]": [archivo],
+    "metadata[]": [{ name: nombre, metadata: { solicitudId: version.solicitud_id, tipo: "resultado_final" } }],
+  }, opcionesRolUsuario);
+
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = nombre;
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+}
+
 async function guardarEstadoCorreo(correo, estado, boton) {
   if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
     const confirmado = window.confirm(
@@ -395,6 +469,13 @@ async function guardarEstadoCorreo(correo, estado, boton) {
   }
   boton.disabled = true;
   try {
+    if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
+      const version = await aceptarComoFinal(correo);
+      await guardarJsonFinal(version);
+      mostrarResultado("Versión aceptada como final, registrada en el historial y guardada como .json.", "exito");
+      await cargarDetalleProyecto();
+      return;
+    }
     await graphql(
       `mutation GuardarEstadoCorreo($id: uuid!, $estado: String!) {
         update_correos_proveedor_by_pk(
