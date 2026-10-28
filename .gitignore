@@ -37,3 +37,8 @@ cotizaciones_reales/
 
 # Resultados generados localmente (comparativos, CSV de prueba)
 salidas/
+
+# Paquete del front generado para publicar
+_site/
+# Excel con datos reales de empresas: no se suben
+ejemplos/*.xlsx

@@ -7,3 +7,6 @@ Caso de prueba completo para medir si la plataforma acierta:
 - `esperado/`: la matriz comparativa llenada a mano (resultado correcto).
 
 Antes de subir una, borra nombres, RUC, teléfonos y correos del proveedor.
+
+Los Excel históricos con datos reales de empresas (`*-aecode.xlsx`) se retiraron
+del repositorio. No los vuelvas a subir: `ejemplos/*.xlsx` está en `.gitignore`.

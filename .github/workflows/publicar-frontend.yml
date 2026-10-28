@@ -1,25 +1,25 @@
-name: Publicar frontend
+name: Comprobar frontend
 
+# La publicación la hace Netlify (ver netlify.toml). Este flujo solo comprueba
+# que el paquete estático se arma y que el JavaScript es válido.
 on:
   pull_request:
     paths:
       - "frontend/**"
       - "scripts/preparar_frontend_pages.py"
+      - "netlify.toml"
       - ".github/workflows/publicar-frontend.yml"
   push:
     branches: [main]
     paths:
       - "frontend/**"
       - "scripts/preparar_frontend_pages.py"
+      - "netlify.toml"
       - ".github/workflows/publicar-frontend.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: frontend-pages-${{ github.event_name == 'pull_request' && github.ref || 'publicacion' }}
-  cancel-in-progress: false
 
 jobs:
   preparar:
@@ -30,32 +30,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Preparar solo los archivos del frontend
-        env:
-          NHOST_SUBDOMAIN: ${{ vars.NHOST_SUBDOMAIN || 'zgorsmkvfyytsouacrpa' }}
-          NHOST_REGION: ${{ vars.NHOST_REGION || 'sa-east-1' }}
         run: python scripts/preparar_frontend_pages.py
       - name: Comprobar JavaScript
         run: |
           node --check _site/js/app.js
           node --check _site/js/config.local.js
-      - name: Guardar frontend para publicar
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-  publicar:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: preparar
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.publicacion.outputs.page_url }}
-    steps:
-      - uses: actions/configure-pages@v5
-      - name: Publicar en GitHub Pages
-        id: publicacion
-        uses: actions/deploy-pages@v5
