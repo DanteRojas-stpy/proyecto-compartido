@@ -535,7 +535,7 @@ async function resolverAclaracion(id) {
   }
 }
 
-function crearTarjetaCorreo(correo, esMasReciente) {
+function crearTarjetaCorreo(correo, esMasReciente, correosDelProveedor = []) {
   const tarjeta = document.createElement("article");
   tarjeta.className = "correo-proveedor";
   const cabecera = document.createElement("div");
@@ -551,6 +551,20 @@ function crearTarjetaCorreo(correo, esMasReciente) {
     reciente.className = "badge respondio";
     reciente.textContent = "MÁS RECIENTE";
     cabecera.append(reciente);
+  }
+  // Indica si esta cotización es la final o si otra de este proveedor ya lo es.
+  const finalDelProveedor = correosDelProveedor.find(
+    (item) => item.estado_correo === "cotizacion_o_ficha_tecnica_aceptada_final",
+  );
+  const situacion = document.createElement("span");
+  if (correo.estado_correo === "cotizacion_o_ficha_tecnica_aceptada_final") {
+    situacion.className = "badge respondio";
+    situacion.textContent = "VERSIÓN FINAL";
+    cabecera.append(situacion);
+  } else if (finalDelProveedor) {
+    situacion.className = "badge";
+    situacion.textContent = "Reemplazada por la versión final";
+    cabecera.append(situacion);
   }
 
   const contenido = document.createElement("details");
@@ -675,7 +689,7 @@ function crearTarjetaProveedor(participacion, aclaraciones, correos) {
     const tituloHistorial = document.createElement("h4");
     tituloHistorial.textContent = "Correos del proveedor";
     historial.append(tituloHistorial);
-    correos.forEach((correoItem, indice) => historial.append(crearTarjetaCorreo(correoItem, indice === 0)));
+    correos.forEach((correoItem, indice) => historial.append(crearTarjetaCorreo(correoItem, indice === 0, correos)));
     tarjeta.append(historial);
   }
 
