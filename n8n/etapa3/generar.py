@@ -22,12 +22,15 @@ if (!contenido.trim()) throw new Error('La petición no trae contenido para leer
 const instruccion = sistema
   + '\n\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '
   + 'Sin texto adicional, sin comentarios y sin bloques de código:\n' + JSON.stringify(esquema);
-return [{ json: { modelo, cuerpo: {
+const cuerpo = {
   model: modelo,
   max_tokens: 16000,
   system: instruccion,
   messages: [{ role: 'user', content: contenido }],
-} } }];"""
+};
+// Extraer datos no necesita razonar a fondo: el esfuerzo bajo deja los tokens para el JSON (modelos 5.x).
+if (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };
+return [{ json: { modelo, cuerpo } }];"""
 
 CLAUDE_RESPONSE = r"""// Devuelve la respuesta de Claude con la misma forma que usa el lector para Gemini.
 const r = $json;
@@ -40,8 +43,9 @@ const ini = limpio.indexOf('{');
 const fin = limpio.lastIndexOf('}');
 if (ini >= 0 && fin > ini) limpio = limpio.slice(ini, fin + 1);
 const completo = r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence';
+if (!completo) return rechazo('Claude no devolvió una respuesta completa (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');
 return [{ json: {
-  candidates: [{ finishReason: completo ? 'STOP' : String(r.stop_reason ?? 'DESCONOCIDO').toUpperCase(), content: { parts: [{ text: limpio }] } }],
+  candidates: [{ finishReason: 'STOP', content: { parts: [{ text: limpio }] } }],
   usageMetadata: { promptTokenCount: r.usage?.input_tokens, candidatesTokenCount: r.usage?.output_tokens },
   modelVersion: r.model,
 } }];"""
