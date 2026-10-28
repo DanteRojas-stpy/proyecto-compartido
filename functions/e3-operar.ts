@@ -57,18 +57,41 @@ function respuestaRunSql(payload: unknown): unknown {
   return JSON.parse(value)
 }
 
+// Devuelve el id del usuario de Nhost a partir de su token de acceso, o null si no es válido.
+async function usuarioVerificado(req: Request): Promise<string | null> {
+  const cabecera = String(req.header('authorization') ?? '')
+  const token = cabecera.startsWith('Bearer ') ? cabecera.slice(7).trim() : ''
+  if (!token) return null
+  const authBase = process.env.NHOST_AUTH_URL ?? `${baseHasura().replace('.hasura.', '.auth.')}/v1`
+  const respuesta = await fetch(`${authBase}/user`, { headers: { Authorization: `Bearer ${token}` } })
+  if (!respuesta.ok) return null
+  const usuario = (await respuesta.json()) as { id?: unknown }
+  return typeof usuario.id === 'string' ? usuario.id : null
+}
+
 export default async function handler(req: Request, res: Response) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST') return res.status(405).json({ error: 'Utiliza POST.' })
 
-  const esperado = process.env.E3_INTERNAL_KEY ?? ''
-  const recibido = String(req.header('x-costflow-internal-key') ?? '')
-  if (!esperado || !secretoValido(recibido, esperado)) {
-    return res.status(401).json({ error: 'Acceso interno no válido.' })
+  const operacion = typeof req.body?.operacion === 'string' ? req.body.operacion : ''
+  let datos = req.body?.datos
+
+  if (operacion === 'decision') {
+    // El especialista llama desde el navegador con su propio token. La identidad sale de Nhost Auth,
+    // nunca de un campo que envía el cliente.
+    const usuario = await usuarioVerificado(req)
+    if (!usuario) return res.status(401).json({ error: 'Inicia sesión para registrar la decisión.' })
+    if (datos && typeof datos === 'object' && !Array.isArray(datos)) {
+      datos = { ...datos, usuario_id_verificado: usuario }
+    }
+  } else {
+    const esperado = process.env.E3_INTERNAL_KEY ?? ''
+    const recibido = String(req.header('x-costflow-internal-key') ?? '')
+    if (!esperado || !secretoValido(recibido, esperado)) {
+      return res.status(401).json({ error: 'Acceso interno no válido.' })
+    }
   }
 
-  const operacion = typeof req.body?.operacion === 'string' ? req.body.operacion : ''
-  const datos = req.body?.datos
   if (!OPERACIONES.has(operacion) || !datos || typeof datos !== 'object' || Array.isArray(datos)) {
     return res.status(400).json({ error: 'Operación o datos inválidos.' })
   }
