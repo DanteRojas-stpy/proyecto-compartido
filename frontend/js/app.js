@@ -477,12 +477,17 @@ async function estadoGuardadoEnNhost(correo) {
 }
 
 async function guardarEstadoCorreo(correo, estado, boton, aviso) {
-  if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
-    const confirmado = window.confirm(
-      "¿Confirmas que esta cotización o ficha técnica no tiene aclaraciones y debe aceptarse como final?",
+  // La confirmación se pide dentro de la tarjeta: un cuadro del navegador puede bloquearse y dejar el botón sin respuesta.
+  if (estado === "cotizacion_o_ficha_tecnica_aceptada_final" && boton.dataset.confirmado !== "si") {
+    boton.dataset.confirmado = "si";
+    avisarCorreo(
+      aviso,
+      "Confirma con otro clic en «Guardar estado»: la cotización no tiene aclaraciones y pasará a final.",
+      "",
     );
-    if (!confirmado) return;
+    return;
   }
+  delete boton.dataset.confirmado;
   const texto = estadosCorreo.find(([valor]) => valor === estado)?.[1] ?? estado;
   boton.disabled = true;
   avisarCorreo(aviso, "Guardando en Nhost…");
