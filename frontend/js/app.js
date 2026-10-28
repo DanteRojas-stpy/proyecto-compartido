@@ -402,7 +402,8 @@ async function aceptarComoFinal(correo) {
   if (!fila) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
   const version = { id: fila.version_id, solicitud_id: fila.solicitud_id, proveedor_id: fila.proveedor_id, version: fila.numero_version };
 
-  const token = await nhost.auth.getAccessToken();
+  const token = nhost.getUserSession()?.accessToken;
+  if (!token) throw new Error("La sesión venció. Vuelve a ingresar.");
   const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.functions.${configuracionNhost.NHOST_REGION}.nhost.run/v1/e3-operar`;
   const respuesta = await fetch(url, {
     method: "POST",
