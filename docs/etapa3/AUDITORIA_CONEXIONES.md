@@ -1,4 +1,4 @@
-# Comprobación de conexiones de E3 — 27/10/2026
+# Comprobación de conexiones de E3 — actualización 28/10/2026
 
 Auditoría realizada por Codex después de configurar las credenciales del equipo.
 No se ejecutó el procesamiento completo ni se habilitaron las dos banderas de E3.
@@ -8,9 +8,9 @@ No se ejecutó el procesamiento completo ni se habilitaron las dos banderas de E
 La instalación auditada originalmente utilizó una credencial PostgreSQL directa
 en n8n. La variante portable posterior sustituye esos tres accesos por llamadas
 HTTPS a `functions/e3-operar.ts`, desplegada dentro del mismo proyecto Nhost.
-PostgreSQL sigue siendo la base interna de Nhost; su contraseña y el secreto
-administrativo de Hasura ya no se entregan a n8n. Esta adaptación del repositorio
-debe desplegarse y probarse en Nhost antes de considerarla operativa en la web.
+PostgreSQL sigue siendo la base interna de Nhost. Las operaciones de base ya no
+necesitan la contraseña PostgreSQL en n8n; los nodos Storage conservan su propia
+credencial. La función usa la credencial administrativa proporcionada por Nhost.
 
 Se integró el trabajo de Rodrigo del PR #41 en la rama del PR #39, conservando
 `gemini-3.5-flash-lite`. Se corrigió la resolución de la dirección administrativa:
@@ -18,13 +18,30 @@ el dominio público GraphQL `/v1` no sirve directamente para `run_sql`.
 Nueve pruebas ejecutables del handler comprobaron autenticación, operaciones
 permitidas, dirección, errores y conservación del contrato de respuesta.
 
-Al revisar el panel de `costflow-dev`, Deployments mostró «Connect your Project
-to GitHub», sin repositorio conectado. La petición de comprobación a
-`/v1/e3-operar` devolvió HTTP 500 «item not found»; no confirmó una función
-operativa. **Los flujos locales siguen con el acceso PostgreSQL comprobado**:
-no se reemplazaron por llamadas a una función que todavía no responde. El
-instalador ahora comprueba `configuracion` por HTTPS antes de modificar n8n.
-La adaptación queda lista para desplegar y validar; no se afirma instalada.
+El equipo conectó el repositorio y desplegó la rama `juan-daniel/e3-reglas-y-flujos`
+con directorio base `./`. Nhost conservó la configuración existente al no encontrar
+`nhost/nhost.toml`; no hizo falta reemplazarla para publicar la función.
+Se creó el secret `E3_INTERNAL_KEY` y su variable de entorno del mismo nombre,
+referenciada mediante `{{ secrets.E3_INTERNAL_KEY }}`. Tras volver a desplegar,
+se sincronizó la misma clave en el archivo privado `.env.e3`, la credencial interna
+de n8n y el servicio local.
+
+La petición directa sin clave devuelve 401 y la consulta autorizada `configuracion`
+devuelve 200. Se instalaron los cinco flujos conservando Gmail, Gemini y Storage.
+Los tres nodos de base de E3.1/E3.5 ya apuntan a la función HTTPS, sin nodos Postgres.
+El instalador comprueba esa consulta antes de modificar n8n.
+
+La primera comprobación a través de n8n detectó HTTP 500: dos llaves contiguas
+dentro del cuerpo JSON cerraban anticipadamente la expresión. Una prueba aislada
+reprodujo `ExpressionError: invalid syntax`; separar los cierres corrigió la
+petición. Se regeneraron los JSON y se añadió una prueba de regresión.
+Después, tanto la entrada interna de n8n como la cadena **servicio E3 → n8n →
+función Nhost → base** devolvieron la configuración correcta con HTTP 200.
+Se comprobó `gemini-3.5-flash-lite`, con ambas banderas todavía en `false`.
+Una nueva llamada pequeña a Gemini por el flujo publicado devolvió HTTP 200 y
+JSON válido, usando exclusivamente texto ficticio. La entrada del especialista
+rechazó una petición sin sesión con HTTP 401. La suite completa local terminó
+con 57 pruebas aprobadas y una omitida por falta de OCR en Windows.
 
 | Punto del equipo | Estado y evidencia |
 |---|---|
@@ -32,7 +49,7 @@ La adaptación queda lista para desplegar y validar; no se afirma instalada.
 | Hasura administrativo | Correcto: exportación privada de respaldo y publicación de las consultas E3/E4 con revisión concurrente y rechazo de configuración inconsistente |
 | Gemini | Correcto con `gemini-3.5-flash-lite`: generación y contrato completo de E3 validados con una cotización ficticia, usando la credencial existente de n8n |
 | Gmail | Correcto: consulta aislada de un correo existente con la credencial de E3.1. No se envió correo |
-| Clave interna | Correcta: servicio E3 y n8n se comunicaron mediante las entradas protegidas; PostgreSQL respondió |
+| Clave interna y función HTTPS | Correctas: sin clave, función 401 y entrada n8n 403; con clave, ambas devuelven configuración con HTTP 200; también se comprobó desde el servicio E3 |
 | Referencias entre flujos | Los seis enlaces de invocación apuntan a los identificadores de los cinco flujos instalados; todos están publicados |
 | Servicio de procesamiento | Accesible dentro de Docker por `http://costflow-etapa3:8093`; no necesita exposición pública |
 | URL del frontend hacia n8n | Pendiente definir una URL pública HTTPS y los orígenes permitidos; actualmente se utiliza localhost |
@@ -41,7 +58,7 @@ La adaptación queda lista para desplegar y validar; no se afirma instalada.
 
 1. Descargar archivo real: correcto.
 2. Cargar archivo ficticio: correcto después de corregir la caché.
-3. Consultar Nhost: PostgreSQL y GraphQL correctos. Se publicaron once tablas/vistas
+3. Consultar Nhost: función HTTPS y GraphQL correctos. Se publicaron once tablas/vistas
    de lectura E3, sin habilitar escrituras directas del frontend en esas tablas.
 4. Llamar a Gemini: correcto tras cambiar a `gemini-3.5-flash-lite`. Un ítem y
    evidencias válidas; cantidades, precios y total coinciden con la muestra ficticia.

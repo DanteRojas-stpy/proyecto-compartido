@@ -14,10 +14,12 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
 **La instalación todavía no está lista para una corrida completa de producción.**
 
 - El código del PR #41 de Rodrigo se integró con la corrección de Gemini del #39.
-  La Function todavía requiere despliegue en Nhost. El panel del equipo no tiene
-  un repositorio GitHub conectado y su URL no responde con el contrato esperado.
-  Por eso el n8n local conserva sus conexiones PostgreSQL funcionales. El instalador
-  verifica la Function antes de sustituir los flujos y se detiene si falla.
+  La Function está desplegada en Nhost desde `juan-daniel/e3-reglas-y-flujos`.
+  Se sincronizó la clave interna y se comprobó `configuracion` con HTTP 200 tanto
+  directamente como por la cadena servicio E3 → n8n → Function → Nhost.
+  Los tres accesos de base de E3.1/E3.5 ya utilizan HTTPS; se conservaron las demás
+  credenciales y los cinco flujos publicados. El instalador verifica la Function
+  antes de sustituir los flujos y se detiene si falla.
 - Las credenciales de Gemini, Gmail y Nhost ya están configuradas en la instalación
   original. La variante portable elimina la credencial PostgreSQL de n8n y usa la
   Function protegida `functions/e3-operar.ts` por HTTPS.
@@ -99,7 +101,9 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
    `004_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
    probado; conserva una elección distinta del equipo y no activa las banderas.
 3. Desplegar `functions/e3-operar.ts` en el mismo proyecto Nhost y registrar el
-   secreto `E3_INTERNAL_KEY`. La guía está en `functions/README.md`.
+   secreto `E3_INTERNAL_KEY`. Añadir también la variable de entorno del mismo
+   nombre, con valor `{{ secrets.E3_INTERNAL_KEY }}`, y volver a desplegar.
+   La guía está en `functions/README.md`.
 4. Con Docker Desktop y un contenedor llamado `n8n`, ejecutar con Python 3.12:
 
    ```powershell
@@ -107,8 +111,10 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
    ```
 
    El instalador reutiliza referencias de las credenciales Gmail y Storage.
-   Crea una clave interna aleatoria en `.env.e3`, excluido de Git. No descifra las otras
-   credenciales. Esa misma clave se registra como `E3_INTERNAL_KEY` en Nhost.
+   Reutiliza la clave interna de `.env.e3`, excluido de Git; solo crea una si falta.
+   No descifra las otras credenciales. Esa misma clave se registra como
+   `E3_INTERNAL_KEY` en Nhost. Si el equipo ya dispone de una, guardarla primero
+   en ese archivo local y en el secret del proyecto.
    Construye el apoyo local en `127.0.0.1:8093` y lo conecta a n8n por Docker.
    Si n8n ya estaba ejecutando trabajos, esperar a que terminen antes de reiniciarlo.
 5. Revisar las credenciales como se indica abajo. No activar las dos banderas hasta

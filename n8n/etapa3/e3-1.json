@@ -35,7 +35,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({operacion:'eventos',datos:{}}) }}",
+        "jsonBody": "={{ JSON.stringify({operacion:'eventos',datos:{} }) }}",
         "options": {
           "timeout": 120000,
           "response": {
@@ -89,7 +89,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({operacion:'preparar_correo',datos:$json}) }}",
+        "jsonBody": "={{ JSON.stringify({operacion:'preparar_correo',datos:$json }) }}",
         "options": {
           "timeout": 120000,
           "response": {

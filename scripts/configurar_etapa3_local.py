@@ -137,7 +137,7 @@ def install(publicar=False, retirar=False):
     if "costflow_e3" not in connected:
         docker("network", "connect", "costflow_e3", "n8n")
     subprocess.run(["docker", "compose", "-f", "compose.etapa3.yml", "up", "-d", "--build"], cwd=ROOT, check=True)
-    print("Cinco flujos importados. Registra E3_INTERNAL_KEY también en Nhost Secrets antes de probar la función e3-operar.")
+    print("Cinco flujos importados. La consulta autorizada a la función Nhost se comprobó antes de instalar.")
     print("Se conservaron las credenciales existentes. Comprueba Gemini y las pruebas de aceptación antes de habilitar E3.")
     if publicar:
         print("Reinicia n8n cuando no haya ejecuciones en curso para registrar las entradas publicadas.")

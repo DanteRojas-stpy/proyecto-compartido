@@ -46,6 +46,19 @@ def test_n8n_opera_nhost_por_https_sin_credencial_postgres():
         assert exported == flow
 
 
+def test_peticiones_nhost_no_cierran_la_expresion_antes_de_tiempo():
+    # El evaluador de n8n toma el primer }} como fin, incluso dentro de un objeto.
+    # datos:{} seguido de otra } cortaba la petición y producía HTTP 500.
+    calls = [node for flow in generar_flujos() for node in flow['nodes']
+             if str(node.get('parameters', {}).get('url', '')).endswith('/v1/e3-operar')]
+    assert len(calls) == 3
+    for node in calls:
+        expression = node['parameters']['jsonBody']
+        assert expression.startswith('={{ ')
+        assert expression.endswith(' }}')
+        assert expression.index('}}') == len(expression) - 2, node['name']
+
+
 def test_funcion_nhost_protege_la_operacion_interna():
     source = (ROOT / 'functions/e3-operar.ts').read_text(encoding='utf-8')
     assert 'E3_INTERNAL_KEY' in source

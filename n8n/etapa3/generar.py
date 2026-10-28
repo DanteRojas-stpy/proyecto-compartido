@@ -58,10 +58,11 @@ class Flow:
         return self.node(name, "httpRequest", parameters, 4.2, "internal")
 
     def nhost(self, name, operation, data="{}"):
+        # El primer }} termina la expresión de n8n: separar el cierre del objeto.
         return self.node(name, "httpRequest", {"method": "POST", "url": NHOST_E3,
             "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
             "sendBody": True, "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({operacion:'" + operation + "',datos:" + data + "}) }}",
+            "jsonBody": "={{ JSON.stringify({operacion:'" + operation + "',datos:" + data + " }) }}",
             "options": {"timeout": 120000, "response": {"response": {"responseFormat": "json"}}}},
             4.2, "internal")
 
@@ -69,7 +70,7 @@ class Flow:
         return self.node(name, "httpRequest", {"method": "POST", "url": NHOST_E3,
             "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
             "sendBody": True, "specifyBody": "json",
-            "jsonBody": "={{ JSON.stringify({operacion:$json.body.operacion,datos:$json.body.datos||{}}) }}",
+            "jsonBody": "={{ JSON.stringify({operacion:$json.body.operacion,datos:$json.body.datos||{} }) }}",
             "options": {"timeout": 120000, "response": {"response": {"responseFormat": "json"}}}},
             4.2, "internal")
 

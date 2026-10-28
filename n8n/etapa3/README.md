@@ -7,7 +7,9 @@ Antes de publicarlos, completa estos pasos en orden.
 
 1. Aplica las cuatro migraciones de `db/etapa3/`, en orden de 001 a 004.
 2. Despliega `functions/e3-operar.ts` en el mismo proyecto Nhost.
-3. Registra en Nhost el mismo `E3_INTERNAL_KEY` de la instalación existente.
+3. Registra en **Settings → Secrets** el mismo `E3_INTERNAL_KEY` de la instalación
+   existente. En **Environment Variables**, añade `E3_INTERNAL_KEY` con valor
+   `{{ secrets.E3_INTERNAL_KEY }}`. Guarda y vuelve a desplegar la función.
 4. Comprueba que la Function responda en:
 
    ```text
@@ -34,6 +36,10 @@ Importa los cinco JSON y, en todos los nodos con el aviso
 
 Asigna además las credenciales existentes de Gmail, Gemini y Nhost Storage en
 los nodos que muestran sus respectivos avisos.
+
+Los cuerpos de las tres peticiones a Nhost separan las llaves de cierre del
+objeto y de la expresión. No unas esos cierres: el evaluador de n8n puede leer
+el primer `}}` como fin anticipado y devolver `invalid syntax`/HTTP 500.
 
 ## 3. Procesamiento OCR/RAG
 

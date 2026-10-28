@@ -7,12 +7,22 @@ credencial de conexión directa a la base.
 ## Configuración en Nhost
 
 1. Despliega `functions/e3-operar.ts` en el mismo proyecto Nhost de CostFlow.
-2. Registra `E3_INTERNAL_KEY` con el mismo valor que ya utiliza el servicio E3
-   (archivo local privado `.env.e3`). No generes otro valor si la instalación existe.
-3. Usa exactamente el mismo valor en una credencial **Header Auth** de n8n:
+2. En **Settings → Secrets**, registra `E3_INTERNAL_KEY` con el mismo valor que
+   utiliza el servicio E3 (archivo local privado `.env.e3`). No generes otro valor
+   si la instalación existe. Copia solo el valor, sin `E3_INTERNAL_KEY=`.
+3. En **Settings → Environment Variables**, crea una variable con nombre
+   `E3_INTERNAL_KEY` y valor `{{ secrets.E3_INTERNAL_KEY }}`. Crear únicamente el
+   secret no lo hace accesible mediante `process.env.E3_INTERNAL_KEY`.
+4. Guarda y vuelve a desplegar la función para aplicar la configuración.
+5. Usa exactamente la misma clave real en una credencial **Header Auth** de n8n:
 
    - cabecera: `X-Costflow-Internal-Key`;
    - valor: el secreto `E3_INTERNAL_KEY`.
+
+En la instalación del equipo se comprobó el despliegue desde la rama
+`juan-daniel/e3-reglas-y-flujos`, con directorio base `./`. El despliegue de la
+función conservó la configuración del proyecto aunque no hubiera `nhost/nhost.toml`.
+No es necesario reemplazar la configuración compartida para publicar esta función.
 
 Nhost proporciona a la función `NHOST_GRAPHQL_URL` y `NHOST_ADMIN_SECRET` (se
 utiliza primero `NHOST_HASURA_URL` para llamar a la API administrativa). GraphQL
