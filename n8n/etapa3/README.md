@@ -43,6 +43,37 @@ Los cuerpos de las tres peticiones a Nhost separan las llaves de cierre del
 objeto y de la expresión. No unas esos cierres: el evaluador de n8n puede leer
 el primer `}}` como fin anticipado y devolver `invalid syntax`/HTTP 500.
 
+## 2.1 Lector con Claude (opcional)
+
+El nodo `¿Modelo de Claude?` de `e3-2.json` mira el modelo configurado en
+`e3_configuracion.modelo`. Si empieza con `claude-`, la lectura va a la API de
+mensajes de Claude; con cualquier otro valor (por ejemplo `gemini-3.5-flash-lite`)
+sigue por Gemini. El servicio de `app/etapa3` no cambia: n8n traduce la
+petición y la respuesta, y el validador de E3 revisa el resultado igual que antes.
+
+Para usarlo:
+
+1. Crea una credencial **Header Auth** en n8n con nombre `CostFlow E3 - Claude`,
+   cabecera `x-api-key` y como valor la clave de la API de Anthropic
+   (`sk-ant-...`). Nunca la pegues en un JSON, en el chat ni en Git.
+2. En `e3-2.json`, en el nodo `Claude Messages` (aviso `CREDENCIAL_E3:claude`),
+   selecciona esa credencial.
+3. Cambia el modelo en la consola SQL de Nhost, con ese identificador exacto y
+   sin sufijos de fecha:
+
+   ```sql
+   UPDATE public.e3_configuracion SET modelo = 'claude-opus-5-5' WHERE id;
+   ```
+
+   Alternativas: `claude-sonnet-5-5` (más barato) o `claude-haiku-5-5` (el más
+   económico, con menos precisión al citar). Para volver a Gemini, usa
+   `gemini-3.5-flash-lite` o el modelo de Gemini que prefieras.
+4. Reintenta una versión desde la aplicación y comprueba el resultado.
+
+El nodo no envía `temperature` ni `tool_choice`, que los modelos 5.x rechazan, y
+pide la salida como JSON dentro del texto. Si la respuesta no cumple el esquema,
+el validador de E3 la rechaza y la versión usa su reintento normal.
+
 ## 3. Procesamiento OCR/RAG
 
 Los nodos que llaman a `http://costflow-etapa3:8093` necesitan el servicio de
