@@ -26,18 +26,30 @@
     {
       "id": "9f9b69cd-585a-5de9-80c4-ed6ab052ba21",
       "name": "Tomar eventos pendientes",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT public.e3_operar('eventos','{}') AS respuesta;",
-        "options": {}
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'eventos',datos:{}}) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
       },
       "position": [
         220,
         0
       ],
-      "notes": "CREDENCIAL_E3:postgres"
+      "notes": "CREDENCIAL_E3:internal"
     },
     {
       "id": "305d0a9d-994d-556a-ac43-8b1e5c9a9c61",
@@ -68,20 +80,30 @@
     {
       "id": "078dd30f-061c-5ed6-9d6e-fd9c58231a9d",
       "name": "Reservar versión por correo",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT public.e3_operar('preparar_correo',$1::jsonb) AS respuesta;",
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'preparar_correo',datos:$json}) }}",
         "options": {
-          "queryReplacement": "={{ [JSON.stringify($json)] }}"
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "position": [
         880,
         0
       ],
-      "notes": "CREDENCIAL_E3:postgres"
+      "notes": "CREDENCIAL_E3:internal"
     },
     {
       "id": "90135a19-fd24-54ea-96a4-eca19cbd6bb1",

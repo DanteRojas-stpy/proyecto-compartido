@@ -8,6 +8,7 @@ from pathlib import Path
 IDS = {str(i): f"costflowEtapa3_{i}" for i in range(1, 6)}
 INTERNAL = "http://costflow-etapa3:8093"
 NHOST = "https://SUBDOMINIO.storage.REGION.nhost.run/v1/files"
+NHOST_E3 = "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar"
 
 
 class Flow:
@@ -56,9 +57,21 @@ class Flow:
             parameters.update({"sendHeaders": True, "headerParameters": {"parameters": [{"name": "Authorization", "value": '={{ $("Preparar decisión").first().json.authorization }}'}]}})
         return self.node(name, "httpRequest", parameters, 4.2, "internal")
 
-    def postgres(self, name, query, replacements=None):
-        options = {"queryReplacement": replacements} if replacements else {}
-        return self.node(name, "postgres", {"operation": "executeQuery", "query": query, "options": options}, 2.6, "postgres")
+    def nhost(self, name, operation, data="{}"):
+        return self.node(name, "httpRequest", {"method": "POST", "url": NHOST_E3,
+            "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+            "sendBody": True, "specifyBody": "json",
+            "jsonBody": "={{ JSON.stringify({operacion:'" + operation + "',datos:" + data + "}) }}",
+            "options": {"timeout": 120000, "response": {"response": {"responseFormat": "json"}}}},
+            4.2, "internal")
+
+    def nhost_dynamic(self, name):
+        return self.node(name, "httpRequest", {"method": "POST", "url": NHOST_E3,
+            "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
+            "sendBody": True, "specifyBody": "json",
+            "jsonBody": "={{ JSON.stringify({operacion:$json.body.operacion,datos:$json.body.datos||{}}) }}",
+            "options": {"timeout": 120000, "response": {"response": {"responseFormat": "json"}}}},
+            4.2, "internal")
 
     def respond(self, name="Responder"):
         return self.node(name, "respondToWebhook", {"respondWith": "json", "responseBody": "={{ JSON.stringify($json) }}",
@@ -101,10 +114,10 @@ return [{json:{ok:true,body:BODY,authorization:r.headers.authorization}}];""".re
 def generate():
     first = Flow(1, "Recepción de correos confirmados")
     schedule = first.schedule("Consumir eventos de Nhost")
-    events = first.postgres("Tomar eventos pendientes", "SELECT public.e3_operar('eventos','{}') AS respuesta;")
+    events = first.nhost("Tomar eventos pendientes", "eventos")
     flatten = first.code("Un correo por evento", "return ($json.respuesta.eventos??[]).map(json=>({json}));")
     trigger = first.subtrigger()
-    reserve = first.postgres("Reservar versión por correo", "SELECT public.e3_operar('preparar_correo',$1::jsonb) AS respuesta;", "={{ [JSON.stringify($json)] }}")
+    reserve = first.nhost("Reservar versión por correo", "preparar_correo", "$json")
     unpack = first.code("Resultado de recepción", "return $input.all().map((i,index)=>({json:i.json.respuesta,pairedItem:{item:index}}));")
     branch = first.switch("¿Versión nueva?", "resultado", ["version_creada"])
     gmail = first.node("Recuperar exactamente este correo", "gmail", {"resource": "message", "operation": "get",
@@ -160,7 +173,7 @@ result.push({json:{contexto,archivos,error:item.json.error??null},pairedItem:{it
     hook = fifth.webhook("Servicios internos protegidos", "e3-interno-datos")
     router = fifth.switch("Servicio requerido", "body.operacion", ["storage_head", "storage_get", "storage_upload"])
     respond = fifth.respond("Responder servicio interno")
-    api = fifth.postgres("Operación transaccional Nhost", "SELECT public.e3_operar($1::text,$2::jsonb) AS respuesta;", "={{ [$json.body.operacion,JSON.stringify($json.body.datos||{})] }}")
+    api = fifth.nhost_dynamic("Operación transaccional Nhost")
     uncached_url = "={{ '" + NHOST + "/'+$json.body.datos.storage_file_id+'?e3_revision='+Date.now()+'-'+Math.random().toString(36).slice(2) }}"
     no_cache = {"sendHeaders": True, "headerParameters": {"parameters": [
         {"name": "Cache-Control", "value": "no-cache"}, {"name": "Pragma", "value": "no-cache"}]}}

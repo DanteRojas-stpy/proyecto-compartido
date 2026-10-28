@@ -13,7 +13,9 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
 
 **La instalación todavía no está lista para una corrida completa de producción.**
 
-- Las credenciales de Gemini, Gmail, PostgreSQL y Nhost ya están configuradas.
+- Las credenciales de Gemini, Gmail y Nhost ya están configuradas en la instalación
+  original. La variante portable elimina la credencial PostgreSQL de n8n y usa la
+  Function protegida `functions/e3-operar.ts` por HTTPS.
 - Storage permite descargar originales y cargar un archivo temporal. Se corrigió
   una respuesta 404 guardada en caché que impedía descargar inmediatamente archivos nuevos.
 - Hasura ya permite administrar la configuración. Las consultas y permisos de E3/E4
@@ -43,9 +45,10 @@ desde la interfaz real antes de habilitar producción. El detalle de conexiones 
 | E3.4 | Petición del frontend con sesión Nhost | Aceptar cualquier versión procesada elegida, descartar con motivo o registrar aclaración | Decisión auditada; ningún envío de correo |
 | E3.5 | Revisión cada minuto o reintento autorizado | Recuperar ejecuciones vencidas y pasos pendientes, volver al punto seguro | Lectura o error definitivo visible |
 
-La activación de E3.1 utiliza una **cola de eventos en PostgreSQL**. El evento se
+La activación de E3.1 utiliza una **cola de eventos en PostgreSQL de Nhost**. El evento se
 crea en la misma transacción en la que E2 confirma el correo; n8n la consume cada
-minuto. No necesita exponer el n8n local a Internet ni buscar todos los Gmail.
+minuto mediante la Function HTTPS `e3-operar`; n8n no abre una conexión directa a
+PostgreSQL ni necesita su contraseña. No necesita buscar todos los Gmail.
 La búsqueda general y la detección preliminar siguen perteneciendo a E2.
 
 El usuario confirma expresamente cada correo documental. Correos sin documentos o
@@ -90,19 +93,22 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
    `002_procesamiento.sql`, `003_decisiones_y_salida.sql` y
    `004_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
    probado; conserva una elección distinta del equipo y no activa las banderas.
-3. Con Docker Desktop y un contenedor llamado `n8n`, ejecutar con Python 3.12:
+3. Desplegar `functions/e3-operar.ts` en el mismo proyecto Nhost y registrar el
+   secreto `E3_INTERNAL_KEY`. La guía está en `functions/README.md`.
+4. Con Docker Desktop y un contenedor llamado `n8n`, ejecutar con Python 3.12:
 
    ```powershell
    .venv\Scripts\python.exe scripts/configurar_etapa3_local.py --publicar --retirar-anteriores
    ```
 
-   El instalador reutiliza referencias de las credenciales Postgres, Gmail y Storage.
+   El instalador reutiliza referencias de las credenciales Gmail y Storage.
    Crea una clave interna aleatoria en `.env.e3`, excluido de Git. No descifra las otras
-   credenciales. Construye el apoyo local en `127.0.0.1:8093` y lo conecta a n8n por Docker.
+   credenciales. Esa misma clave se registra como `E3_INTERNAL_KEY` en Nhost.
+   Construye el apoyo local en `127.0.0.1:8093` y lo conecta a n8n por Docker.
    Si n8n ya estaba ejecutando trabajos, esperar a que terminen antes de reiniciarlo.
-4. Revisar las credenciales como se indica abajo. No activar las dos banderas hasta
+5. Revisar las credenciales como se indica abajo. No activar las dos banderas hasta
    que las comprobaciones hayan funcionado.
-5. Importar los JSON de `n8n/etapa3/` en otra computadora requiere instalar también
+6. Importar los JSON de `n8n/etapa3/` en otra computadora requiere instalar también
    este servicio y las migraciones. Un JSON solo no contiene todo el sistema.
 
 Los cinco JSON compartibles no llevan claves ni referencias personales de credenciales.
@@ -111,12 +117,14 @@ solo afecta los identificadores anteriores de E3 de esta instalación; no toca E
 
 ## Configuración de credenciales para otra instalación
 
-**Nhost / Hasura / Storage.** El administrador debe aportar la clave administrativa
-correcta del mismo proyecto. No es la contraseña de Gmail, de la cuenta Nhost ni el
-secreto de un webhook. En n8n crear una credencial Header Auth con nombre de cabecera
-`x-hasura-admin-secret` y el valor correcto; asignarla a los tres nodos Storage de E3.5.
-Comprobar lectura y carga con un archivo de prueba. No reemplazar un secret compartido
-por uno nuevo improvisado: eso afectaría las otras integraciones del equipo.
+**Operaciones Nhost.** En n8n crear una credencial Header Auth con cabecera
+`X-Costflow-Internal-Key` y el mismo `E3_INTERNAL_KEY` guardado en Nhost. Asignarla
+a los nodos marcados como `CREDENCIAL_E3:internal`. El secreto administrativo de
+Hasura permanece en Nhost y nunca se copia a n8n ni al navegador.
+
+**Storage.** Los nodos de archivos conservan su credencial Nhost/Storage. Comprobar
+lectura y carga con un archivo de prueba antes de activar E3. No reemplazar un secreto
+compartido por uno nuevo improvisado: eso afectaría otras integraciones del equipo.
 
 Para publicar GraphQL, ejecutar el script que pide la clave sin mostrarla ni guardarla:
 

@@ -484,18 +484,19 @@ cotizacion_o_ficha_tecnica_recibida
 
 ### Proceso
 
-1. Consultar el correo en Nhost.
-2. Validar su estado.
-3. Buscar una versión existente.
-4. Si ya existe, terminar sin reprocesar.
-5. Recuperar exactamente sus adjuntos.
-6. Calcular SHA-256.
-7. Evitar archivos duplicados.
-8. Clasificar los documentos.
-9. Crear el siguiente número de versión atómicamente.
-10. Vincular correo, versión y documentos.
-11. Marcar la versión como `pendiente`.
-12. invocar E3.2.
+1. Consumir la operación interna de Nhost mediante la Function HTTPS protegida.
+2. Consultar el correo en Nhost.
+3. Validar su estado.
+4. Buscar una versión existente.
+5. Si ya existe, terminar sin reprocesar.
+6. Recuperar exactamente sus adjuntos.
+7. Calcular SHA-256.
+8. Evitar archivos duplicados.
+9. Clasificar los documentos.
+10. Crear el siguiente número de versión atómicamente.
+11. Vincular correo, versión y documentos.
+12. Marcar la versión como `pendiente`.
+13. invocar E3.2.
 
 ### Salida
 
@@ -744,13 +745,18 @@ Acciones:
 
 Los detalles técnicos quedan en los registros de n8n y Nhost.
 
+Las operaciones transaccionales de E3.5 también se invocan por la Function HTTPS
+protegida. La Function acepta solamente operaciones E3 declaradas y ejecuta
+`public.e3_operar` dentro del proyecto Nhost. n8n no usa credenciales PostgreSQL.
+
 ---
 
 ## 16. Arquitectura
 
 ```mermaid
 flowchart LR
-    E2[Correo confirmado en E2] --> E31[E3.1 Crear versión]
+    E2[Correo confirmado en E2] --> NH[(Nhost)]
+    E31[E3.1 Crear versión] --> F[Nhost Function HTTPS]
     E31 --> E32[E3.2 Leer y verificar]
     E32 --> E33[E3.3 Notificar]
     E32 -. error .-> E35[E3.5 Recuperar]
@@ -758,9 +764,10 @@ flowchart LR
     E35 -. error definitivo .-> E33
 
     UI[Frontend autenticado] --> E34[E3.4 Decisiones]
-    E34 --> NH[(Nhost)]
-    E32 --> NH
-    E33 --> NH
+    E34 --> F
+    E33 --> F
+    E35 --> F
+    F --> NH[(Nhost)]
     NH --> E4[E4 Homologación]
 ```
 

@@ -510,20 +510,30 @@
     {
       "id": "31a956e8-dfcf-5296-9d39-32d598575d6e",
       "name": "Operación transaccional Nhost",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "parameters": {
-        "operation": "executeQuery",
-        "query": "SELECT public.e3_operar($1::text,$2::jsonb) AS respuesta;",
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:$json.body.operacion,datos:$json.body.datos||{}}) }}",
         "options": {
-          "queryReplacement": "={{ [$json.body.operacion,JSON.stringify($json.body.datos||{})] }}"
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "position": [
         3520,
         0
       ],
-      "notes": "CREDENCIAL_E3:postgres"
+      "notes": "CREDENCIAL_E3:internal"
     },
     {
       "id": "b50e3dec-ab4e-5d62-a578-d6f3791cecdb",

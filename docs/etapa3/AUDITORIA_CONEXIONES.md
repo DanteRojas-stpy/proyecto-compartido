@@ -3,6 +3,15 @@
 Auditoría realizada por Codex después de configurar las credenciales del equipo.
 No se ejecutó el procesamiento completo ni se habilitaron las dos banderas de E3.
 
+## Adaptación para n8n web
+
+La instalación auditada originalmente utilizó una credencial PostgreSQL directa
+en n8n. La variante portable posterior sustituye esos tres accesos por llamadas
+HTTPS a `functions/e3-operar.ts`, desplegada dentro del mismo proyecto Nhost.
+PostgreSQL sigue siendo la base interna de Nhost; su contraseña y el secreto
+administrativo de Hasura ya no se entregan a n8n. Esta adaptación del repositorio
+debe desplegarse y probarse en Nhost antes de considerarla operativa en la web.
+
 | Punto del equipo | Estado y evidencia |
 |---|---|
 | Nhost Storage | Correcto: original descargado; CSV ficticio cargado y descargado con contenido idéntico. Temporales retirados después con respuesta 204 |

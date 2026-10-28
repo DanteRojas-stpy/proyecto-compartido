@@ -33,10 +33,10 @@ def bindings() -> dict:
 const creds=db.prepare('SELECT id,name,type FROM credentials_entity').all();
 const rows=db.prepare('SELECT id,nodes FROM workflow_entity').all();const source=rows.find(x=>x.id==='1ZkKft0tTPY0oeC7');
 const configured=kind=>rows.filter(w=>/^costflowEtapa3_[1-5]$/.test(w.id)).flatMap(w=>JSON.parse(w.nodes)).find(n=>n.notes==='CREDENCIAL_E3:'+kind&&n.credentials);
-const reference=kind=>{const n=configured(kind);return n?.credentials?.[kind==='gmail'?'gmailOAuth2':kind==='postgres'?'postgres':'httpHeaderAuth'];};
+const reference=kind=>{const n=configured(kind);return n?.credentials?.[kind==='gmail'?'gmailOAuth2':'httpHeaderAuth'];};
 const storage=reference('storage')||(source?JSON.parse(source.nodes).find(n=>n.type==='n8n-nodes-base.httpRequest'&&n.credentials?.httpHeaderAuth)?.credentials.httpHeaderAuth:null);
 const headers=creds.filter(c=>c.type==='httpHeaderAuth'&&!/gemini|interno/i.test(c.name));
-console.log(JSON.stringify({postgres:reference('postgres')||creds.find(c=>c.type==='postgres'),gmail:reference('gmail')||creds.find(c=>c.type==='gmailOAuth2'),storage:storage||headers.find(c=>/nhost|storage|hasura/i.test(c.name))||(headers.length===1?headers[0]:null),
+console.log(JSON.stringify({gmail:reference('gmail')||creds.find(c=>c.type==='gmailOAuth2'),storage:storage||headers.find(c=>/nhost|storage|hasura/i.test(c.name))||(headers.length===1?headers[0]:null),
 gemini:reference('gemini')||creds.find(c=>c.type==='httpHeaderAuth'&&/gemini/i.test(c.name)),running:db.prepare("SELECT count(*) n FROM execution_entity WHERE status='running' AND deletedAt IS NULL").get().n}));"""
     return json.loads(docker("exec", "n8n", "node", "-e", code, capture=True))
 
@@ -57,8 +57,8 @@ def environment() -> dict:
 def install(publicar=False, retirar=False):
     subprocess.run([os.sys.executable, str(ROOT / "n8n/etapa3/generar.py")], cwd=ROOT, check=True)
     refs = bindings()
-    if not refs["postgres"] or not refs["gmail"] or not refs["storage"]:
-        raise RuntimeError("Asigna primero las credenciales Postgres, Gmail y Storage en n8n.")
+    if not refs["gmail"] or not refs["storage"]:
+        raise RuntimeError("Asigna primero las credenciales Gmail y Storage en n8n.")
     env = environment()
     with tempfile.TemporaryDirectory(prefix="costflow-e3-") as temporary:
         folder = Path(temporary)
@@ -78,7 +78,7 @@ def install(publicar=False, retirar=False):
                 marker = node.get("notes", "")
                 if marker.startswith("CREDENCIAL_E3:"):
                     kind = marker.split(":", 1)[1]
-                    credential_type = {"gmail": "gmailOAuth2", "postgres": "postgres"}.get(kind, "httpHeaderAuth")
+                    credential_type = {"gmail": "gmailOAuth2"}.get(kind, "httpHeaderAuth")
                     if refs.get(kind):
                         node["credentials"] = {credential_type: {"id": refs[kind]["id"], "name": refs[kind]["name"]}}
                 if "url" in node["parameters"]:
@@ -114,7 +114,8 @@ def install(publicar=False, retirar=False):
     if "costflow_e3" not in connected:
         docker("network", "connect", "costflow_e3", "n8n")
     subprocess.run(["docker", "compose", "-f", "compose.etapa3.yml", "up", "-d", "--build"], cwd=ROOT, check=True)
-    print("Cinco flujos importados. Gemini permanece pendiente hasta asignar su credencial y habilitar la configuración.")
+    print("Cinco flujos importados. Registra E3_INTERNAL_KEY también en Nhost Secrets antes de probar la función e3-operar.")
+    print("Gemini permanece pendiente hasta asignar su credencial y habilitar la configuración.")
     if publicar:
         print("Reinicia n8n cuando no haya ejecuciones en curso para registrar las entradas publicadas.")
 
