@@ -77,7 +77,7 @@ continúa pendiente, al igual que la visualización y las decisiones en pantalla
 
 - El modelo anterior, `gemini-3.8-flash`, devolvía 503. El catálogo y la prueba de
   generación identificaron `gemini-3.5-flash-lite` como alternativa disponible con
-  la misma clave. Se aplicó la migración 004 y se conservó el procesamiento pausado.
+  la misma clave. Se aplicó la migración que hoy es `015_modelo_gemini_disponible.sql` (antes 004) y se conservó el procesamiento pausado.
   La llamada pasó por el nodo publicado «Gemini JSON fijo» de E3.2; su salida
   superó el esquema y las comprobaciones de datos/evidencias de E3 con una oferta
   ficticia. No se enviaron originales del equipo a Google.
