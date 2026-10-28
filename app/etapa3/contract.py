@@ -175,12 +175,14 @@ def combine(responses: list[dict], documents: list[dict], version: dict, model_n
             entry["evidencia_ids"] = refs(entry)
             validate_values(entry["valores"], entry["originales"], entry["evidencia_ids"], entry["documento_id"])
             currency = entry["valores"]["moneda"]
-            if currency is not None and not re.fullmatch(r"[A-Z]{3}", currency):
-                raise ValueError("Moneda inválida: se espera un código de tres letras o null.")
             original_currency = entry["originales"]["moneda"]
             aliases = {"US$": "USD", "S/": "PEN", "S/.": "PEN", "€": "EUR"}
-            if currency is not None and aliases.get(original_currency, original_currency) != currency:
-                raise ValueError("La moneda no tiene una identificación explícita inequívoca.")
+            if currency is not None and (not re.fullmatch(r"[A-Z]{3}", currency)
+                                         or aliases.get(original_currency, original_currency) != currency):
+                # Una moneda dudosa no invalida el resto de la lectura: se deja vacía y se pide confirmación.
+                entry["valores"]["moneda"] = None
+                observe("moneda_ambigua", f"La moneda no tiene una identificación explícita inequívoca: {original_currency}",
+                        doc=entry["documento_id"], refs=entry["evidencia_ids"])
             commercial.append(entry)
         for entry in data["items"]:
             if entry["documento_id"] not in docids:
