@@ -469,11 +469,11 @@ function avisarCorreo(aviso, texto, tipo = "") {
 async function estadoGuardadoEnNhost(correo) {
   const datos = await graphql(
     `query EstadoGuardado($id: uuid!) {
-      correos_proveedor_by_pk(id: $id) { estado_correo }
+      correos_proveedor_by_pk(id: $id) { estado_correo estado_asignado_at origen_estado }
     }`,
     { id: correo.id },
   );
-  return datos.correos_proveedor_by_pk?.estado_correo ?? null;
+  return datos.correos_proveedor_by_pk ?? null;
 }
 
 async function guardarEstadoCorreo(correo, estado, boton, aviso) {
@@ -504,11 +504,15 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
 
     // Se vuelve a leer desde Nhost: el aviso muestra lo que quedó guardado, no lo que se intentó guardar.
     const guardado = await estadoGuardadoEnNhost(correo);
-    correo.estado_correo = guardado ?? correo.estado_correo;
-    if (guardado === estado) {
-      avisarCorreo(aviso, `Guardado en Nhost: ${texto}.`, "exito");
+    const estadoEnNhost = guardado?.estado_correo ?? null;
+    if (estadoEnNhost === estado) {
+      correo.estado_correo = estadoEnNhost;
+      correo.estado_asignado_at = guardado.estado_asignado_at;
+      correo.origen_estado = guardado.origen_estado;
+      const cuando = guardado.estado_asignado_at ? formatearFechaHora(guardado.estado_asignado_at) : "sin fecha";
+      avisarCorreo(aviso, `Guardado en Nhost: ${texto} · ${cuando}.`, "exito");
     } else {
-      avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${guardado ?? "sin estado"}.`, "error");
+      avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${estadoEnNhost ?? "sin estado"}.`, "error");
     }
   } catch (error) {
     avisarCorreo(aviso, `No se guardó: ${mensajeError(error)}`, "error");
