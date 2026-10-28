@@ -389,16 +389,18 @@ async function registrarCoordinacion(evento) {
 // Aceptar como final pasa por la decisión de E3: la base registra quién decidió, conserva la
 // versión anterior y guarda la auditoría. Un cambio directo del estado se rechaza.
 async function aceptarComoFinal(correo) {
+  // Se usa la vista de E3 que el rol del especialista puede leer (versiones_cotizacion no está publicada para él).
   const datos = await graphql(
     `query VersionParaFinal($correo: uuid!) {
-      versiones_cotizacion(where: { correo_id: { _eq: $correo } }, order_by: { version: desc }, limit: 1) {
-        id solicitud_id proveedor_id version
+      e3_bandeja_versiones(where: { correo_id: { _eq: $correo } }, order_by: { numero_version: desc }, limit: 1) {
+        version_id solicitud_id proveedor_id numero_version
       }
     }`,
     { correo: correo.id },
   );
-  const version = datos.versiones_cotizacion?.[0];
-  if (!version) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
+  const fila = datos.e3_bandeja_versiones?.[0];
+  if (!fila) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
+  const version = { id: fila.version_id, solicitud_id: fila.solicitud_id, proveedor_id: fila.proveedor_id, version: fila.numero_version };
 
   const token = await nhost.auth.getAccessToken();
   const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.functions.${configuracionNhost.NHOST_REGION}.nhost.run/v1/e3-operar`;
