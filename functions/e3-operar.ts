@@ -69,8 +69,22 @@ async function usuarioVerificado(req: Request): Promise<string | null> {
   return typeof usuario.id === 'string' ? usuario.id : null
 }
 
+// Orígenes del front que pueden llamar a la función desde el navegador (CORS).
+const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGINS ?? 'http://localhost:8000,http://127.0.0.1:8000')
+  .split(',')
+  .map((origen) => origen.trim())
+  .filter(Boolean)
+
 export default async function handler(req: Request, res: Response) {
   res.setHeader('Cache-Control', 'no-store')
+  const origen = String(req.header('origin') ?? '')
+  if (origen && ORIGENES_PERMITIDOS.includes(origen)) {
+    res.setHeader('Access-Control-Allow-Origin', origen)
+    res.setHeader('Vary', 'Origin')
+    res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, x-costflow-internal-key')
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
+  }
+  if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return res.status(405).json({ error: 'Utiliza POST.' })
 
   const operacion = typeof req.body?.operacion === 'string' ? req.body.operacion : ''

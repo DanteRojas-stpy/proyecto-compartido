@@ -389,18 +389,21 @@ async function registrarCoordinacion(evento) {
 // Aceptar como final pasa por la decisión de E3: la base registra quién decidió, conserva la
 // versión anterior y guarda la auditoría. Un cambio directo del estado se rechaza.
 async function aceptarComoFinal(correo) {
+  // Se usa la vista de E3 que el rol del especialista puede leer (versiones_cotizacion no está publicada para él).
   const datos = await graphql(
     `query VersionParaFinal($correo: uuid!) {
-      versiones_cotizacion(where: { correo_id: { _eq: $correo } }, order_by: { version: desc }, limit: 1) {
-        id solicitud_id proveedor_id version
+      e3_bandeja_versiones(where: { correo_id: { _eq: $correo } }, order_by: { numero_version: desc }, limit: 1) {
+        version_id solicitud_id proveedor_id numero_version
       }
     }`,
     { correo: correo.id },
   );
-  const version = datos.versiones_cotizacion?.[0];
-  if (!version) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
+  const fila = datos.e3_bandeja_versiones?.[0];
+  if (!fila) throw new Error("Esta cotización todavía no tiene una versión procesada por E3.");
+  const version = { id: fila.version_id, solicitud_id: fila.solicitud_id, proveedor_id: fila.proveedor_id, version: fila.numero_version };
 
-  const token = await nhost.auth.getAccessToken();
+  const token = nhost.getUserSession()?.accessToken;
+  if (!token) throw new Error("La sesión venció. Vuelve a ingresar.");
   const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.functions.${configuracionNhost.NHOST_REGION}.nhost.run/v1/e3-operar`;
   const respuesta = await fetch(url, {
     method: "POST",
@@ -469,20 +472,25 @@ function avisarCorreo(aviso, texto, tipo = "") {
 async function estadoGuardadoEnNhost(correo) {
   const datos = await graphql(
     `query EstadoGuardado($id: uuid!) {
-      correos_proveedor_by_pk(id: $id) { estado_correo }
+      correos_proveedor_by_pk(id: $id) { estado_correo estado_asignado_at origen_estado }
     }`,
     { id: correo.id },
   );
-  return datos.correos_proveedor_by_pk?.estado_correo ?? null;
+  return datos.correos_proveedor_by_pk ?? null;
 }
 
 async function guardarEstadoCorreo(correo, estado, boton, aviso) {
-  if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
-    const confirmado = window.confirm(
-      "¿Confirmas que esta cotización o ficha técnica no tiene aclaraciones y debe aceptarse como final?",
+  // La confirmación se pide dentro de la tarjeta: un cuadro del navegador puede bloquearse y dejar el botón sin respuesta.
+  if (estado === "cotizacion_o_ficha_tecnica_aceptada_final" && boton.dataset.confirmado !== "si") {
+    boton.dataset.confirmado = "si";
+    avisarCorreo(
+      aviso,
+      "Confirma con otro clic en «Guardar estado»: la cotización no tiene aclaraciones y pasará a final.",
+      "",
     );
-    if (!confirmado) return;
+    return;
   }
+  delete boton.dataset.confirmado;
   const texto = estadosCorreo.find(([valor]) => valor === estado)?.[1] ?? estado;
   boton.disabled = true;
   avisarCorreo(aviso, "Guardando en Nhost…");
@@ -504,11 +512,15 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
 
     // Se vuelve a leer desde Nhost: el aviso muestra lo que quedó guardado, no lo que se intentó guardar.
     const guardado = await estadoGuardadoEnNhost(correo);
-    correo.estado_correo = guardado ?? correo.estado_correo;
-    if (guardado === estado) {
-      avisarCorreo(aviso, `Guardado en Nhost: ${texto}.`, "exito");
+    const estadoEnNhost = guardado?.estado_correo ?? null;
+    if (estadoEnNhost === estado) {
+      correo.estado_correo = estadoEnNhost;
+      correo.estado_asignado_at = guardado.estado_asignado_at;
+      correo.origen_estado = guardado.origen_estado;
+      const cuando = guardado.estado_asignado_at ? formatearFechaHora(guardado.estado_asignado_at) : "sin fecha";
+      avisarCorreo(aviso, `Guardado en Nhost: ${texto} · ${cuando}.`, "exito");
     } else {
-      avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${guardado ?? "sin estado"}.`, "error");
+      avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${estadoEnNhost ?? "sin estado"}.`, "error");
     }
   } catch (error) {
     avisarCorreo(aviso, `No se guardó: ${mensajeError(error)}`, "error");
