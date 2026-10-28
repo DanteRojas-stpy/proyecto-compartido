@@ -25,8 +25,6 @@ negocio y conserva la trazabilidad.
 | `flujos/analizar-respuestas-proveedores.json` | Recibe Gmail, correlaciona el hilo, propone si contiene cotización o ficha técnica y crea una notificación en CostFlow | Cada correo nuevo | Listo para configurar |
 | `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
 | `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |
-| `flujos/homologacion-e4.json` | E4: lee las versiones finales de Nhost, propone la homologación con el modelo local y la deja para revisión | Revisión manual por ahora | Borrador. Requiere itemizado cargado |
-| `flujos/comparativo-e5-python.json` | E5: llama al generador de Python que llena la plantilla del comparativo conservando sus fórmulas | Manual | Borrador. Requiere tipo de cambio aprobado y rutas configuradas |
 
 ## Configurar el primer envío
 
