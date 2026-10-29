@@ -291,3 +291,8 @@ dialog::backdrop { background: rgb(22 59 131 / 40%); }
 .homologacion-resultado { padding: .75rem 1rem; border-top: 1px solid var(--cf-border); }
 .homologacion-resultado h4 { margin: 1rem 0 .4rem; }
 .homologacion-resultado ul { margin: .25rem 0 .75rem; padding-left: 1.2rem; line-height: 1.5; }
+
+.cuadro { display: grid; gap: .6rem; padding-top: .8rem; border-top: 1px solid var(--cf-border); }
+.cuadro p { margin: 0; }
+.cuadro details { display: grid; gap: .5rem; }
+.cuadro details label { display: grid; gap: .2rem; margin-top: .4rem; max-width: 18rem; }

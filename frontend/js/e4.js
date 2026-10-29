@@ -90,3 +90,54 @@ export function nombreArchivoHomologacion(codigoSolicitud, fechaIso) {
   const codigo = String(codigoSolicitud ?? "solicitud").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-");
   return `homologacion-${codigo}-${String(fechaIso ?? "").slice(0, 10) || "sin-fecha"}.json`;
 }
+
+// ---- E5: cuadro comparativo ---------------------------------------------------------------------------
+
+// Qué mostrar y qué botones habilitar para el cuadro, según el estado que entrega e4_estado_solicitud.
+export function describirEstadoE5(fila) {
+  const hayHomologacion = Boolean(fila?.homologacion_id);
+  const estado = fila?.e5_estado ?? null;
+  const archivo = Boolean(fila?.cuadro_storage_file_id) && (estado === "borrador" || estado === "validado");
+  const base = { activo: false, puedeGenerar: false, puedeDescargar: archivo, etiqueta: "Generar cuadro" };
+
+  if (ACTIVOS.has(estado)) {
+    return { ...base, activo: true, etiqueta: "Generando…", badge: { texto: "EN CURSO", clase: "pendiente" },
+      mensaje: "Generando el cuadro comparativo en tu plantilla. Te avisaremos al terminar." };
+  }
+  if (!hayHomologacion) {
+    return { ...base, badge: { texto: "SIN HOMOLOGAR", clase: "pendiente" },
+      mensaje: "Primero homologa las cotizaciones finales (E4) para poder generar el cuadro." };
+  }
+  const puedeGenerar = true;
+  if (estado === "error") {
+    return { ...base, puedeGenerar, etiqueta: "Reintentar cuadro", badge: { texto: "CON ERROR", clase: "critica" },
+      mensaje: fila.e5_error ?? "El cuadro no terminó. Vuelve a solicitarlo." };
+  }
+  if (estado === "validado") {
+    return { ...base, puedeGenerar, etiqueta: "Volver a generar", badge: { texto: "VALIDADO", clase: "respondio" },
+      mensaje: `Cuadro comparativo validado (revisión ${fila.e5_revision}).` };
+  }
+  if (estado === "borrador") {
+    return { ...base, puedeGenerar, etiqueta: "Volver a generar", badge: { texto: "BORRADOR", clase: "pendiente" },
+      mensaje: `Cuadro generado como borrador (revisión ${fila.e5_revision}): tiene pendientes o comprobaciones sin cumplir.` };
+  }
+  const aviso = fila.estado_revision === "listo_para_cuadro" ? "" : " La homologación tiene pendientes: el cuadro saldrá como borrador.";
+  return { ...base, puedeGenerar, badge: { texto: "SIN CUADRO", clase: "pendiente" }, mensaje: `Listo para generar el cuadro.${aviso}` };
+}
+
+// El tipo de cambio es opcional; si se indica, debe traer valor, fecha y fuente (E4 y E5 nunca lo inventan).
+export function leerTipoCambio({ valor, fecha, fuente }) {
+  const texto = String(valor ?? "").trim().replace(",", ".");
+  if (!texto && !String(fecha ?? "").trim() && !String(fuente ?? "").trim()) return { tipoCambio: null };
+  const numero = Number(texto);
+  if (!texto || !Number.isFinite(numero) || numero <= 0) return { error: "El tipo de cambio debe ser un número mayor que cero." };
+  if (!String(fecha ?? "").trim()) return { error: "Indica la fecha del tipo de cambio." };
+  if (!String(fuente ?? "").trim()) return { error: "Indica la fuente del tipo de cambio (por ejemplo, SBS)." };
+  return { tipoCambio: { valor: numero, fecha: String(fecha).trim(), fuente: String(fuente).trim() } };
+}
+
+export function nombreArchivoCuadro(nombreGuardado, codigoSolicitud, revision) {
+  if (nombreGuardado) return nombreGuardado;
+  const codigo = String(codigoSolicitud ?? "solicitud").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Za-z0-9._-]+/g, "-");
+  return `cuadro-${codigo}-rev${revision ?? 1}.xlsx`;
+}

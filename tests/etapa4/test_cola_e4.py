@@ -14,10 +14,11 @@ def test_e4_e5_operaciones_permisos_y_cola(postgres):
     sql = postgres
     instalar(sql)
     # La migración se puede repetir sin cambiar nada.
-    sql((ROOT / 'db/etapa4/017_homologacion_cuadro.sql').read_text(encoding='utf-8'))
+    for nombre in ('017_homologacion_cuadro.sql', '018_tipo_cambio_cuadro.sql'):
+        sql((ROOT / 'db/etapa4' / nombre).read_text(encoding='utf-8'))
     salida = sql((ROOT / 'tests/etapa4/integracion_e4.sql').read_text(encoding='utf-8'))
     lineas = salida.splitlines()
-    assert len(lineas) == 11, salida
+    assert len(lineas) == 12, salida
     assert all(linea.endswith('|true') for linea in lineas), salida
 
 
@@ -26,6 +27,7 @@ def test_la_migracion_esta_en_el_orden_documentado():
     assert numeros == list(range(1, len(numeros) + 1))
     guia = (ROOT / 'db/ORDEN_MIGRACIONES.md').read_text(encoding='utf-8')
     assert '[017_homologacion_cuadro.sql](etapa4/017_homologacion_cuadro.sql)' in guia
+    assert '[018_tipo_cambio_cuadro.sql](etapa4/018_tipo_cambio_cuadro.sql)' in guia
 
 
 def test_function_e4_operar_con_node():

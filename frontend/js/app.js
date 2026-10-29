@@ -1,6 +1,6 @@
 import { createClient } from "https://esm.sh/@nhost/nhost-js@4.9.0";
 import { createClient as createSubscriptionClient } from "https://esm.sh/graphql-ws@5.16.2";
-import { describirEstadoE4, formatearImporte, nombreArchivoHomologacion, resumirHomologacion } from "./e4.js";
+import { describirEstadoE4, describirEstadoE5, formatearImporte, leerTipoCambio, nombreArchivoCuadro, nombreArchivoHomologacion, resumirHomologacion } from "./e4.js";
 
 const ui = {
   configuracion: document.querySelector("#configuracion"),
@@ -804,7 +804,7 @@ async function llamarFuncionNhost(funcion, operacion, datos) {
   return cuerpo.respuesta ?? cuerpo;
 }
 
-const CAMPOS_ESTADO_E4 = "solicitud_id finales_e3 e4_estado e4_solicitada_at e4_error homologacion_id estado_revision homologada_at e4_modelo";
+const CAMPOS_ESTADO_E4 = "solicitud_id finales_e3 e4_estado e4_solicitada_at e4_error homologacion_id estado_revision homologada_at e4_modelo cuadro_id e5_estado e5_revision nombre_archivo cuadro_storage_file_id e5_error";
 
 async function cargarEstadosE4(proyectoId) {
   try {
@@ -905,7 +905,7 @@ async function refrescarSeccionE4(seccion, solicitud, avisoInicial = "") {
   const fila = await cargarEstadoE4DeSolicitud(solicitud.id);
   if (!seccion.isConnected) return;
   seccion.replaceWith(crearSeccionHomologacion(solicitud, fila, avisoInicial));
-  if (!describirEstadoE4(fila).activo) cargarNotificaciones().catch(() => {});
+  if (!describirEstadoE4(fila).activo && !describirEstadoE5(fila).activo) cargarNotificaciones().catch(() => {});
 }
 
 // Mientras E4 trabaja, la tarjeta se actualiza sola hasta que termine o el usuario cambie de pantalla.
@@ -918,6 +918,78 @@ function programarActualizacionE4(seccion, solicitud) {
       if (seccion.isConnected) programarActualizacionE4(seccion, solicitud);
     }
   }, 8000);
+}
+
+// El cuadro está en Storage; se descarga con la sesión del especialista.
+async function descargarCuadro(solicitud, fila) {
+  const token = nhost.getUserSession()?.accessToken;
+  if (!token) throw new Error("La sesión venció. Vuelve a ingresar.");
+  const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.storage.${configuracionNhost.NHOST_REGION}.nhost.run/v1/files/${fila.cuadro_storage_file_id}`;
+  const respuesta = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+  if (!respuesta.ok) throw new Error("No se pudo descargar el cuadro. Vuelve a intentarlo.");
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(await respuesta.blob());
+  enlace.download = nombreArchivoCuadro(fila.nombre_archivo, solicitud.codigo, fila.e5_revision);
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+}
+
+async function solicitarCuadro(solicitud, seccion, boton, aviso, campos) {
+  const lectura = leerTipoCambio({ valor: campos.valor.value, fecha: campos.fecha.value, fuente: campos.fuente.value });
+  if (lectura.error) return avisarCorreo(aviso, lectura.error, "error");
+  boton.disabled = true;
+  avisarCorreo(aviso, "Solicitando el cuadro…");
+  try {
+    const resultado = await llamarFuncionNhost("e4-operar", "solicitar_e5", { solicitud_id: solicitud.id, tipo_cambio: lectura.tipoCambio });
+    if (resultado.ok !== true) throw new Error(resultado.mensaje ?? "No se pudo solicitar el cuadro.");
+    await refrescarSeccionE4(seccion, solicitud, "Cuadro solicitado. Te avisaremos cuando termine.");
+  } catch (error) {
+    avisarCorreo(aviso, `No se pudo generar el cuadro: ${mensajeError(error)}`, "error");
+    boton.disabled = false;
+  }
+}
+
+function crearBloqueCuadro(solicitud, fila, seccion) {
+  const estado = describirEstadoE5(fila);
+  const bloque = document.createElement("div");
+  bloque.className = "cuadro";
+  const cabecera = document.createElement("div");
+  cabecera.className = "homologacion-cabecera";
+  cabecera.append(crearTextoE4("strong", "Cuadro comparativo (E5)"), crearTextoE4("span", estado.badge.texto, `badge ${estado.badge.clase}`));
+  const aviso = crearTextoE4("p", "", "ayuda estado-correo-aviso");
+  aviso.setAttribute("role", "status");
+
+  const cambio = document.createElement("details");
+  cambio.append(crearTextoE4("summary", "Tipo de cambio US$ → S/ (solo si hay ofertas en dólares)"));
+  const campos = {};
+  for (const [clave, etiqueta, tipo, ejemplo] of [["valor", "Valor", "text", "3.75"], ["fecha", "Fecha", "date", ""], ["fuente", "Fuente", "text", "SBS"]]) {
+    const campo = document.createElement("label");
+    campo.append(etiqueta);
+    const entrada = document.createElement("input");
+    entrada.type = tipo;
+    entrada.placeholder = ejemplo;
+    entrada.disabled = !estado.puedeGenerar;
+    campos[clave] = entrada;
+    campo.append(entrada);
+    cambio.append(campo);
+  }
+  cambio.append(crearTextoE4("p", "El sistema nunca inventa el tipo de cambio: si no lo indicas, las columnas en S/ de las ofertas en dólares quedan vacías.", "ayuda"));
+
+  const acciones = document.createElement("div");
+  acciones.className = "acciones";
+  const generar = crearTextoE4("button", estado.etiqueta);
+  generar.type = "button";
+  generar.disabled = !estado.puedeGenerar;
+  generar.addEventListener("click", () => solicitarCuadro(solicitud, seccion, generar, aviso, campos));
+  acciones.append(generar);
+  if (estado.puedeDescargar) {
+    const descargar = crearTextoE4("button", "Descargar Excel", "secundario");
+    descargar.type = "button";
+    descargar.addEventListener("click", () => descargarCuadro(solicitud, fila).catch((error) => avisarCorreo(aviso, mensajeError(error), "error")));
+    acciones.append(descargar);
+  }
+  bloque.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), cambio, acciones, aviso);
+  return bloque;
 }
 
 async function solicitarHomologacion(solicitud, seccion, boton, aviso) {
@@ -981,8 +1053,8 @@ function crearSeccionHomologacion(solicitud, fila, avisoInicial = "") {
       .catch((error) => avisarCorreo(aviso, mensajeError(error), "error")));
     acciones.append(ver, descargar);
   }
-  seccion.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), acciones, aviso, panel);
-  if (estado.activo) programarActualizacionE4(seccion, solicitud);
+  seccion.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), acciones, aviso, panel, crearBloqueCuadro(solicitud, fila, seccion));
+  if (estado.activo || describirEstadoE5(fila).activo) programarActualizacionE4(seccion, solicitud);
   return seccion;
 }
 

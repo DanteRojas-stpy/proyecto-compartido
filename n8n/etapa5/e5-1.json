@@ -1,0 +1,603 @@
+{
+  "id": "costflowE5_1",
+  "name": "CostFlow - E5.1 Cuadro comparativo",
+  "active": false,
+  "nodes": [
+    {
+      "id": "94c4322c-2df2-5215-a1cf-33e87ba41480",
+      "name": "Revisar la cola cada minuto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "82c6178d-0583-532e-8646-4ea776aa3fae",
+      "name": "Tomar cuadro pendiente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'tomar_e5',datos:{} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        220,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "e6955f1f-a0b3-5303-a590-e270c832e866",
+      "name": "¿Hay algún cuadro por generar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "6d9d9ac4-7b16-576e-8a3e-15c65bd4d6df",
+              "leftValue": "={{ $json.respuesta.resultado }}",
+              "rightValue": "tomada",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "937b25aa-f2ce-571d-980b-0a9b7a92affb",
+      "name": "Consultar entrada en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'entrada_e5',datos:{cuadro_id:$json.respuesta.cuadro_id,token:$json.respuesta.token} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        660,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "6f2b7f40-cb6b-5c05-8156-3a9e43073888",
+      "name": "Comprobar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Sigue solo si Nhost entregó la entrada de este cuadro; si el intento venció, termina sin hacer nada.\nconst tomada = $('Tomar cuadro pendiente').first().json.respuesta;\nconst entrada = $json.respuesta;\nif (entrada?.resultado !== 'entrada') return [];\nconst base = { cuadro_id: tomada.cuadro_id, token: tomada.token, entrada };\nif (!entrada.plantilla?.storage_file_id) {\n  return [{ json: { ...base, ok: false, recuperable: false, error: 'La solicitud no tiene cargada la plantilla del cuadro comparativo.' } }];\n}\nreturn [{ json: { ...base, ok: true, storage_file_id: entrada.plantilla.storage_file_id } }];"
+      },
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "0b245e7e-834f-5b75-9104-4e1ef5906549",
+      "name": "¿Hay plantilla?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c4332315-8ded-5f99-a414-ea3181e6419f",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "d2c64d60-066f-56b9-be14-8b6d2653ed04",
+      "name": "Descargar plantilla",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/' + $json.storage_file_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "position": [
+        1320,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:storage"
+    },
+    {
+      "id": "7fd99a0b-97af-589f-81fb-ec351328b154",
+      "name": "Armar petición",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Une la plantilla descargada con la homologación y el tipo de cambio para el servicio de E5.\nconst ctx = $('Comprobar entrada').first().json;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst e = ctx.entrada;\nreturn [{ json: { cuadro_id: ctx.cuadro_id, token: ctx.token, codigo: e.solicitud?.codigo ?? 'solicitud', revision: e.revision,\n  peticion: { homologacion: e.homologacion, tipo_cambio: e.tipo_cambio ?? null, plantilla_b64: buffer.toString('base64') } } }];"
+      },
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "id": "866c9e49-ee1d-5490-b5b6-b9c301a5ea33",
+      "name": "Generar cuadro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-cuadro:8095/e5/generar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.peticion) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1760,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "1b941427-0112-5b5f-b16d-5e90a2e0fc89",
+      "name": "Evaluar cuadro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// El servicio devuelve el xlsx y su validación; un cuadro imposible de armar no se reintenta.\nconst ctx = $('Armar petición').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nif (!$json.ok || !$json.archivo_b64) {\n  return [{ json: { ...base, ok: false, recuperable: $json.recuperable !== false,\n    error: String($json.error ?? $json.detail ?? 'El servicio de E5 no devolvió el cuadro.').slice(0, 600) } }];\n}\nconst nombre = `cuadro-${ctx.codigo}-rev${ctx.revision}.xlsx`;\nconst binario = await this.helpers.prepareBinaryData(Buffer.from($json.archivo_b64, 'base64'), nombre,\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { ...base, ok: true, estado: $json.estado, validacion: $json.validacion, nombre_archivo: nombre,\n  metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: ctx.cuadro_id } }) }, binary: { data: binario } }];"
+      },
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "id": "9c75f422-6b2f-5436-adc2-130aaf2c847b",
+      "name": "¿Cuadro armado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "bb447315-1570-5e58-8242-d782d9ea755f",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "id": "ed8481d4-8cbe-5f61-98b1-2b88c47c7ffe",
+      "name": "Guardar cuadro en Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.storage.REGION.nhost.run/v1/files",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "bucket-id",
+              "value": "cotizaciones"
+            },
+            {
+              "name": "metadata[]",
+              "value": "={{ $json.metadata }}"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file[]",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        2420,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:storage"
+    },
+    {
+      "id": "669cb842-9bbe-58ad-baab-4a5b045972da",
+      "name": "Evaluar subida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Storage responde con el archivo creado; sin identificador, el intento falla y se reintenta.\nconst ctx = $('Evaluar cuadro').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nconst id = $json.processedFiles?.[0]?.id;\nif (!id) return [{ json: { ...base, ok: false, recuperable: true, error: 'Storage no guardó el cuadro: ' + JSON.stringify($json).slice(0, 300) } }];\nreturn [{ json: { ...base, ok: true, estado: ctx.estado, validacion: ctx.validacion, nombre_archivo: ctx.nombre_archivo, storage_file_id: id } }];"
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "1def20d5-9b38-5056-99d2-0586c9259f7b",
+      "name": "¿Se guardó el archivo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e9974025-c9f9-5ae2-a45d-644a0564af9f",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "id": "de248afa-7056-5968-9110-439c59815ae2",
+      "name": "Guardar cuadro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'guardar_e5',datos:{cuadro_id:$json.cuadro_id,token:$json.token,estado:$json.estado,nombre_archivo:$json.nombre_archivo,storage_file_id:$json.storage_file_id,validacion:$json.validacion} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        3080,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "e5bdd364-f40e-55c4-9cd5-89648bc8339e",
+      "name": "Registrar fallo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'fallo_e5',datos:{cuadro_id:$json.cuadro_id,token:$json.token,error:$json.error,recuperable:$json.recuperable} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        3300,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    }
+  ],
+  "connections": {
+    "Revisar la cola cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Tomar cuadro pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar cuadro pendiente": {
+      "main": [
+        [
+          {
+            "node": "¿Hay algún cuadro por generar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay algún cuadro por generar?": {
+      "main": [
+        [
+          {
+            "node": "Consultar entrada en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar entrada en Nhost": {
+      "main": [
+        [
+          {
+            "node": "Comprobar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar entrada": {
+      "main": [
+        [
+          {
+            "node": "¿Hay plantilla?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay plantilla?": {
+      "main": [
+        [
+          {
+            "node": "Descargar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar plantilla": {
+      "main": [
+        [
+          {
+            "node": "Armar petición",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Armar petición": {
+      "main": [
+        [
+          {
+            "node": "Generar cuadro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar cuadro": {
+      "main": [
+        [
+          {
+            "node": "Evaluar cuadro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar cuadro": {
+      "main": [
+        [
+          {
+            "node": "¿Cuadro armado?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Cuadro armado?": {
+      "main": [
+        [
+          {
+            "node": "Guardar cuadro en Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar cuadro en Storage": {
+      "main": [
+        [
+          {
+            "node": "Evaluar subida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar subida": {
+      "main": [
+        [
+          {
+            "node": "¿Se guardó el archivo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se guardó el archivo?": {
+      "main": [
+        [
+          {
+            "node": "Guardar cuadro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

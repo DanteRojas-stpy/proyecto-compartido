@@ -1,0 +1,18 @@
+# Servicio del cuadro comparativo (E5). Comparte la red y la clave interna de E3: n8n lo llama por su nombre.
+# Antes de levantarlo: docker compose -f compose.etapa3.yml ya debe haber creado la red costflow_e3.
+services:
+  cuadro:
+    build:
+      context: .
+      dockerfile: app/cuadro/Dockerfile
+    container_name: costflow-cuadro
+    restart: unless-stopped
+    env_file: .env.e3
+    networks:
+      - costflow_e3
+    ports:
+      - "127.0.0.1:8095:8095"
+    mem_limit: 256m
+networks:
+  costflow_e3:
+    external: true
