@@ -34,4 +34,5 @@ jobs:
       - name: Comprobar JavaScript
         run: |
           node --check _site/js/app.js
+          node --check _site/js/e4.js
           node --check _site/js/config.local.js
