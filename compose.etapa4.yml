@@ -1,0 +1,20 @@
+# Servicio de homologación (E4). Comparte la red y la clave interna de E3: n8n lo llama por su nombre.
+# Antes de levantarlo: docker compose -f compose.etapa3.yml ya debe haber creado la red costflow_e3.
+services:
+  homologacion:
+    build:
+      context: .
+      dockerfile: app/homologacion/Dockerfile
+    container_name: costflow-homologacion
+    restart: unless-stopped
+    env_file: .env.e3
+    environment:
+      E4_MODELO: claude-sonnet-5-5
+    networks:
+      - costflow_e3
+    ports:
+      - "127.0.0.1:8094:8094"
+    mem_limit: 512m
+networks:
+  costflow_e3:
+    external: true
