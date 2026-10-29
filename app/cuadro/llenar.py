@@ -90,9 +90,11 @@ def plan(homologacion: dict, tipo_cambio: dict | None) -> dict:
         celdas[f"{n}6"] = postor["nombre"] + (f" (TIPO {etiqueta_tipo})" if etiqueta_tipo else "")
         moneda = postor["moneda"]
         parciales = [dec(i["original"]["parcial"]) for i in items]
-        cantidad = dec(items[0]["original"]["cantidad"]) if len(items) == 1 else None
+        cantidades = [dec(i["original"]["cantidad"]) for i in items]
+        cantidad = sum(cantidades) if all(c is not None for c in cantidades) and sum(cantidades) > 0 else None
         if cantidad is None:
             cantidad = dec(partida["metrado"]) or Decimal(1)
+            avisos.append(f"{postor['nombre']}: E3 no trae la cantidad; se usó {numero(cantidad)} (el metrado de la partida o 1).")
         unitario_item = dec(items[0]["original"]["precio_unitario"]) if len(items) == 1 else None
         if moneda not in ("PEN", "USD"):
             avisos.append(f"{postor['nombre']}: moneda {moneda or 'no identificada'}; la plantilla solo maneja PEN y USD, el bloque queda sin precios.")
