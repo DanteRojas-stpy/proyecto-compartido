@@ -388,7 +388,7 @@ async function registrarCoordinacion(evento) {
 
 // Aceptar como final pasa por la decisión de E3: la base registra quién decidió, conserva la
 // versión anterior y guarda la auditoría. Un cambio directo del estado se rechaza.
-async function aceptarComoFinal(correo) {
+async function aceptarComoFinal(correo, conObservaciones = false) {
   // Se usa la vista de E3 que el rol del especialista puede leer (versiones_cotizacion no está publicada para él).
   const datos = await graphql(
     `query VersionParaFinal($correo: uuid!) {
@@ -416,7 +416,10 @@ async function aceptarComoFinal(correo) {
           version_id: version.id,
           accion_id: crypto.randomUUID(),
           medio: "plataforma",
-          motivo: "Aceptada como final por el especialista",
+          motivo: conObservaciones
+            ? "Aceptada como final por el especialista, con observaciones pendientes"
+            : "Aceptada como final por el especialista",
+          aceptar_con_observaciones: conObservaciones,
         },
       },
     }),
@@ -424,6 +427,13 @@ async function aceptarComoFinal(correo) {
   const cuerpo = await respuesta.json().catch(() => ({}));
   // La función entrega la respuesta de E3 dentro de { respuesta: ... }; el rechazo está en ese interior.
   const resultado = cuerpo.respuesta ?? cuerpo;
+  if (resultado.requiere_confirmacion) {
+    // No es un fallo: el especialista decide si acepta la versión con sus observaciones pendientes.
+    const pregunta = new Error(resultado.mensaje);
+    pregunta.pendientes = resultado.pendientes;
+    pregunta.requiereConfirmacion = true;
+    throw pregunta;
+  }
   if (!respuesta.ok || resultado.ok !== true) {
     throw new Error(resultado.mensaje ?? resultado.error ?? cuerpo.error ?? "E3 no aceptó la versión como final.");
   }
@@ -487,12 +497,14 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
     boton.dataset.confirmado = "si";
     avisarCorreo(
       aviso,
-      "Confirma con otro clic en «Guardar estado»: la cotización no tiene aclaraciones y pasará a final.",
+      "Confirma con otro clic en «Guardar estado»: la cotización pasará a final.",
       "",
     );
     return;
   }
   delete boton.dataset.confirmado;
+  const conObservaciones = boton.dataset.conObservaciones === "si";
+  delete boton.dataset.conObservaciones;
   const texto = estadosCorreo.find(([valor]) => valor === estado)?.[1] ?? estado;
   boton.disabled = true;
   avisarCorreo(aviso, "Guardando en Nhost…");
@@ -500,7 +512,7 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
     let notaJson = "";
     if (estado === "cotizacion_o_ficha_tecnica_aceptada_final") {
       // La aceptación ya quedó registrada en E3; el .json es un paso aparte que puede fallar sin deshacerla.
-      const version = await aceptarComoFinal(correo);
+      const version = await aceptarComoFinal(correo, conObservaciones);
       try {
         await guardarJsonFinal(version);
         notaJson = " y guardada como .json";
@@ -532,7 +544,18 @@ async function guardarEstadoCorreo(correo, estado, boton, aviso) {
       avisarCorreo(aviso, `No se guardó como «${texto}». Nhost conserva: ${estadoEnNhost ?? "sin estado"}.`, "error");
     }
   } catch (error) {
-    avisarCorreo(aviso, `No se guardó: ${mensajeError(error)}`, "error");
+    if (error.requiereConfirmacion) {
+      // La siguiente pulsación acepta la versión con sus observaciones pendientes.
+      boton.dataset.confirmado = "si";
+      boton.dataset.conObservaciones = "si";
+      avisarCorreo(
+        aviso,
+        `${mensajeError(error)} Pulsa «Guardar estado» otra vez para aceptarla de todos modos.`,
+        "",
+      );
+    } else {
+      avisarCorreo(aviso, `No se guardó: ${mensajeError(error)}`, "error");
+    }
   } finally {
     boton.disabled = false;
   }

@@ -80,7 +80,14 @@ BEGIN
  respuesta:=public.e3_operar('guardar_resultado',jsonb_build_object('version_id',v1,'token',token1,'resultado',resultado));
  ASSERT respuesta->>'resultado'='procesamiento_completado','El guardado transaccional no terminó';
  respuesta:=public.e3_decidir(usuario,jsonb_build_object('accion','aceptar_version','version_id',v1));
- ASSERT (respuesta->>'http_code')::int=409,'Una observación baja que requiere aclaración no bloqueó';
+ ASSERT (respuesta->>'http_code')::int=409 AND (respuesta->>'requiere_confirmacion')::boolean AND (respuesta->>'pendientes')::int>=1,'Una observación pendiente no pidió confirmación';
+ -- El especialista decide: confirmando, la versión se acepta con sus observaciones. Se deshace para no alterar el resto de la prueba.
+ BEGIN
+  respuesta:=public.e3_decidir(usuario,jsonb_build_object('accion','aceptar_version','version_id',v1,'aceptar_con_observaciones',true));
+  ASSERT (respuesta->>'http_code')::int=200 AND (respuesta->>'observaciones_pendientes_al_aceptar')::int>=1,'Aceptar con observaciones confirmadas no funcionó';
+  RAISE EXCEPTION USING ERRCODE='P0099',MESSAGE='deshacer la aceptación de prueba';
+ EXCEPTION WHEN SQLSTATE 'P0099' THEN NULL;
+ END;
  respuesta:=public.e3_decidir(usuario,jsonb_build_object('accion','descartar_observacion','observacion_id',obs));
  ASSERT (respuesta->>'http_code')::int=400,'Descarte sin motivo aceptado';
  respuesta:=public.e3_decidir(usuario,jsonb_build_object('accion','solicitar_aclaracion','version_id',v1,'motivo','Confirmar dato','medio','correo','observacion_ids',jsonb_build_array(obs)));
