@@ -6,7 +6,7 @@ import pytest
 
 from app.homologacion import contrato, entrada
 from app.homologacion.construir import HomologacionInvalida, build
-from datos_ficticios import ALFA, BETA, DELTA, GAMMA, SOLICITUD, paquete, respuesta_modelo
+from datos_ficticios import ALFA, BETA, DELTA, GAMMA, SOLICITUD, comercial, paquete, respuesta_modelo
 
 
 def armar(con_itemizado=False, cambiar=None):
@@ -208,6 +208,8 @@ def test_instrucciones_y_peticion_a_claude():
     enviado = json.loads(cuerpo["messages"][0]["content"])
     assert set(enviado) == {"solicitud", "base", "postores", "evidencias", "sin_final"}
     assert "huella" not in enviado and "version_ids" not in enviado
+    assert enviado["solicitud"]["moneda_comparacion"] == "USD"
+    assert "no los repitas" in texto and "solicitud.moneda_comparacion" in texto
 
 
 @pytest.mark.parametrize("envoltura", ["{}", "```json\n{}\n```", "Resultado:\n{}\nListo.", "{}\n\nNota: revisé el caso {dudoso} y {otro}.", '{}\n{"extra": 1}'])
@@ -290,3 +292,61 @@ def test_metrado_provisional_acepta_la_suma_de_cantidades_de_un_proveedor():
     salida["partidas"][0]["metrado"] = 7
     with pytest.raises(HomologacionInvalida, match="metrado no coincide"):
         build(prep, salida, "m")
+
+
+def test_una_oferta_sin_moneda_no_cambia_la_moneda_de_comparacion():
+    """Pasó en vivo: TK sin moneda y la solicitud en PEN bloqueaban a las ofertas que sí declaran USD."""
+    def sin_moneda_de_tk(d):
+        d["solicitud"]["moneda"] = "PEN"
+        for c in d["finales"][2]["resultado"]["datos_comerciales_documentos"]:
+            c["valores"]["moneda"] = None
+    _, prep, salida = armar(True, cambiar=sin_moneda_de_tk)
+    h = build(prep, salida, "m")
+    assert h["moneda_comparacion"] == "USD"
+    assert h["trazabilidad"]["moneda_comparacion_origen"] == "moneda común de las ofertas"
+    comparables = {p["nombre"]: p["comparable_en_moneda_de_comparacion"] for p in h["postores"]}
+    assert comparables == {"Alfa SAC": True, "Beta SA": True, "Gamma Lift": False}
+    motivos = tipos(h, True)
+    assert sum("No se identificó la moneda" in m and "Gamma Lift" in m for m in motivos) == 1
+    assert not any("la comparación en PEN" in m for m in motivos), 'no se exige un cambio a ofertas que ya están en la moneda común'
+    assert h["estado_revision"] == "requiere_revision"
+
+
+def test_con_monedas_distintas_se_usa_la_de_la_solicitud():
+    _, prep, salida = armar(True, cambiar=lambda d: d["finales"][1]["resultado"]["datos_comerciales"].update(moneda="PEN"))
+    h = build(prep, salida, "m")
+    assert h["moneda_comparacion"] == "USD" and h["trazabilidad"]["moneda_comparacion_origen"] == "moneda de la solicitud"
+
+
+def test_plazo_y_vigencia_salen_de_cada_documento_si_el_consolidado_esta_vacio():
+    """Schindler tenía dos plazos distintos en el mismo documento y el resumen mostraba el plazo vacío."""
+    def dos_plazos(d):
+        r = d["finales"][0]["resultado"]
+        r["datos_comerciales"].update(plazo_entrega=None, vigencia_oferta=None)
+        doc = r["datos_comerciales_documentos"][0]["documento_id"]
+        r["datos_comerciales_documentos"][0]["valores"].update(plazo_entrega="9 meses", vigencia_oferta="15 días")
+        r["datos_comerciales_documentos"].append(comercial(doc, "USD", None, None, None, [], vigencia="15 días", plazo="6 meses de materiales"))
+    _, prep, salida = armar(True, cambiar=dos_plazos)
+    alfa = next(p for p in build(prep, salida, "m")["postores"] if p["proveedor_id"] == ALFA)
+    assert alfa["condiciones"]["plazo_entrega"] == "9 meses / 6 meses de materiales"
+    assert alfa["condiciones"]["vigencia_oferta"] == "15 días", 'un valor repetido en varios documentos no se duplica'
+
+
+def test_el_consolidado_prevalece_sobre_los_documentos():
+    _, prep, salida = armar(True)
+    beta = next(p for p in build(prep, salida, "m")["postores"] if p["proveedor_id"] == BETA)
+    assert beta["condiciones"]["plazo_entrega"] == "8.5 meses" and beta["condiciones"]["vigencia_oferta"] is None
+
+
+def test_el_modelo_recibe_la_moneda_de_comparacion_ya_resuelta():
+    """En vivo el modelo escribió un pendiente «comparación en PEN» porque solo veía la moneda de la solicitud."""
+    def sin_moneda_de_tk(d):
+        d["solicitud"]["moneda"] = "PEN"
+        for c in d["finales"][2]["resultado"]["datos_comerciales_documentos"]:
+            c["valores"]["moneda"] = None
+    datos = paquete(True)
+    sin_moneda_de_tk(datos)
+    prep = entrada.prepare(datos)
+    enviado = json.loads(contrato.request(prep, "m")["messages"][0]["content"])
+    assert enviado["solicitud"]["moneda"] == "PEN" and enviado["solicitud"]["moneda_comparacion"] == "USD"
+    assert prep["moneda_comparacion_origen"] == "moneda común de las ofertas"

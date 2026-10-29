@@ -71,11 +71,16 @@ def prepare(paquete: dict) -> dict:
     partidas = paquete["partidas"]
     base = {"tipo": "itemizado" if partidas else "provisional",
             "partidas": [{"codigo": p["codigo"], "descripcion": p["descripcion"], "unidad": p["unidad"], "metrado": p["metrado"]} for p in partidas]}
+    # Moneda de comparación: la que comparten las ofertas que identifican su moneda; si hay varias, la de la solicitud.
+    monedas = {p["moneda"] for p in postores if p["moneda"]}
+    moneda_comun = len(monedas) == 1
+    moneda_comparacion = next(iter(monedas)) if moneda_comun else solicitud["moneda"]
     version_ids = sorted(p["version_id"] for p in postores)
     huella = hashlib.sha256(canonico({"versiones": version_ids, "base": base["partidas"], "moneda": solicitud["moneda"]}).encode()).hexdigest()
     return {
         "huella": huella, "version_ids": version_ids,
         "solicitud": {"id": solicitud["id"], "codigo": solicitud["codigo"], "nombre": solicitud["nombre"], "moneda": solicitud["moneda"],
-                      "fecha_evaluacion": paquete["fecha_evaluacion"], "proyecto": solicitud["proyecto"]},
+                      "moneda_comparacion": moneda_comparacion, "fecha_evaluacion": paquete["fecha_evaluacion"], "proyecto": solicitud["proyecto"]},
+        "moneda_comparacion_origen": "moneda común de las ofertas" if moneda_comun else "moneda de la solicitud",
         "base": base, "postores": postores, "evidencias": list(evidencias.values()), "sin_final": sin_final,
     }

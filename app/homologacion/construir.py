@@ -25,6 +25,15 @@ def numero(valor) -> Decimal | None:
     return None if valor is None else Decimal(str(valor))
 
 
+def condicion(postor: dict, campo: str):
+    """El valor consolidado o, si falta, los de cada documento sin repetirlos."""
+    valor = postor["comercial"].get(campo)
+    if valor is not None:
+        return valor
+    distintos = list(dict.fromkeys(c["valores"].get(campo) for c in postor["comercial_por_documento"] if c["valores"].get(campo)))
+    return " / ".join(distintos) if distintos else None
+
+
 def build(preparado: dict, salida: dict, modelo: str, ahora: datetime | None = None) -> dict:
     try:
         Draft202012Validator(SALIDA).validate(salida)
@@ -121,9 +130,8 @@ def build(preparado: dict, salida: dict, modelo: str, ahora: datetime | None = N
                                "motivo": "Un ítem cotizado no quedó relacionado con la base.", "bloquea_comparacion": True,
                                "decision_requerida": "Relacionar el ítem con una partida o aceptarlo como adicional.", "evidencia_ids": item["evidencia_ids"]})
 
-    # Moneda de comparación: la de las ofertas si todas coinciden; si no, la de la solicitud (y se exige un cambio autorizado).
-    monedas = {p["moneda"] for p in postores.values() if p["moneda"]}
-    moneda_comparacion = next(iter(monedas)) if len(monedas) == 1 and all(p["moneda"] for p in postores.values()) else preparado["solicitud"]["moneda"]
+    # La moneda de comparación se resolvió al preparar la entrada (entrada.prepare) y es la misma que vio el modelo.
+    moneda_comparacion = preparado["solicitud"]["moneda_comparacion"]
 
     def sistema(proveedor, motivo, decision, bloquea):
         pendientes.append({"proveedor_id": proveedor, "partida_codigo": None, "partida_descripcion": None, "origen": "sistema", "motivo": motivo,
@@ -166,7 +174,7 @@ def build(preparado: dict, salida: dict, modelo: str, ahora: datetime | None = N
             "totales_originales": {c: p["comercial"].get(c) for c in ("subtotal", "impuestos", "total")},
             "totales_por_documento": [{"documento_id": c["documento_id"], **{k: c["valores"].get(k) for k in ("subtotal", "impuestos", "total")},
                                        "originales": {k: c["originales"].get(k) for k in ("subtotal", "impuestos", "total")}} for c in p["comercial_por_documento"]],
-            "condiciones": {k: p["comercial"].get(k) for k in ("plazo_entrega", "condiciones_pago", "vigencia_oferta")},
+            "condiciones": {k: condicion(p, k) for k in ("plazo_entrega", "condiciones_pago", "vigencia_oferta")},
             "estado_vigencia": "no_determinada", "archivos": p["documentos"]})
 
     comparables = {p["proveedor_id"]: p["moneda"] == moneda_comparacion for p in postores.values()}
@@ -218,6 +226,7 @@ def build(preparado: dict, salida: dict, modelo: str, ahora: datetime | None = N
         "trazabilidad": {"entrada": "Resultados de E3 de las versiones aceptadas como final; no se leyeron PDF ni Excel.",
                          "version_ids": preparado["version_ids"], "huella": preparado["huella"],
                          "operaciones": ["Los importes se copian de E3 sin cambio; no hay conversión de moneda ni ajuste de IGV."],
+                         "moneda_comparacion_origen": preparado["moneda_comparacion_origen"],
                          "evidencias": [e for e in preparado["evidencias"]]},
         "pendientes": pendientes, "diferencias": salida["diferencias"], "escenarios": [], "decisiones": decisiones,
         "generado": {"modelo": modelo, "fecha": (ahora or datetime.now(timezone.utc)).isoformat()},

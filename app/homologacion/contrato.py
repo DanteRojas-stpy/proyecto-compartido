@@ -58,6 +58,8 @@ Reglas de esta entrega:
 - Base «itemizado»: usa exactamente las partidas de la entrada (mismo código, unidad y metrado). Base «provisional»: propón las
   partidas desde el desglose más completo, con codigo null, y deja el metrado en null salvo que venga de la cantidad de un ítem.
 - No elijas proveedor, no adjudiques, no inventes tipo de cambio, IGV, plazos ni inclusiones. Dato ausente: null.
+- La moneda de comparación ya viene resuelta en solicitud.moneda_comparacion. El sistema crea los pendientes de moneda, tipo de
+  cambio e IGV: no los repitas. Puedes mencionar una diferencia de moneda en «diferencias».
 - Señala diferencias de alcance, especificación, plazo, forma de pago, vigencia y precio con sus evidencias.
 - Los pendientes que impiden comparar (equivalencia sin resolver, partida distinta) llevan bloquea_comparacion true.
 """
