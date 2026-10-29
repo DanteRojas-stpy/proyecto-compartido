@@ -30,7 +30,8 @@ def test_numero_tecnico_falso_no_se_guarda():
 
 def test_moneda_ambigua_no_se_asume_usd():
     data, source, context = sample()
-    source['fragmentos'][0]['texto'] += ' $'
+    # Un documento que solo escribe "$", sin nombrar la moneda en ninguna parte.
+    source['fragmentos'][0]['texto'] = source['fragmentos'][0]['texto'].replace('USD ', '$ ') + ' $'
     data['evidencias'][0]['texto_fuente'] = source['fragmentos'][0]['texto']
     data['comerciales'][0]['originales']['moneda'] = '$'
     result = contract.combine([data], [source], context, 'prueba')
