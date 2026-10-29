@@ -78,3 +78,16 @@ Pruebas del handler (Node.js 24, sin paquetes adicionales ni claves reales):
 ```text
 node --experimental-strip-types --test tests/etapa3/nhost_function.test.mjs
 ```
+
+## e4-operar: homologación (E4) y cuadro comparativo (E5)
+
+Función hermana de `e3-operar`. Usa los mismos secretos (`E3_INTERNAL_KEY`, la credencial administrativa) y
+la misma variable `CORS_ORIGINS`; no hay nada nuevo que configurar en Nhost salvo desplegarla.
+
+- `solicitar_e4` y `solicitar_e5`: las llama el front con la sesión del especialista. La identidad sale de
+  Nhost Auth y nunca del cuerpo de la petición.
+- `tomar_*`, `entrada_*`, `guardar_*` y `fallo_*`: las usan n8n y los servicios con la cabecera
+  `x-costflow-internal-key`. El especialista no puede ejecutarlas.
+
+Antes de usarla, ejecuta la migración `db/etapa4/017_homologacion_cuadro.sql` y publica las tablas para el
+front con `python scripts/configurar_etapa4_nhost.py --url <hasura> --respaldo respaldo.json`.

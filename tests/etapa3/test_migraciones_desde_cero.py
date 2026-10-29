@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def migrations():
-    return sorted([*ROOT.glob('db/migraciones/*.sql'), *ROOT.glob('db/etapa3/*.sql')],
+    return sorted([*ROOT.glob('db/migraciones/*.sql'), *ROOT.glob('db/etapa3/*.sql'), *ROOT.glob('db/etapa4/*.sql')],
                   key=lambda p: int(p.name.split('_', 1)[0]))
 
 
