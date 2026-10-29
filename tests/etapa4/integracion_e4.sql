@@ -111,6 +111,18 @@ BEGIN
  r:=public.e4_operar('solicitar_e5',jsonb_build_object('solicitud_id',solicitud,'usuario_id_verificado',usuario));
  ASSERT (SELECT revision FROM public.e5_cuadros WHERE id=(r->>'cuadro_id')::uuid)=2,'La revisión del cuadro no es correlativa';
  INSERT INTO e4_prueba VALUES('cuadro_borrador_revision_y_aviso',true);
+ -- El tipo de cambio lo autoriza el especialista al pedir el cuadro: se valida, se guarda con su autor y llega a E5.
+ r:=public.e4_operar('tomar_e5','{}'::jsonb);token:=(r->>'token')::uuid;
+ ASSERT public.e4_operar('entrada_e5',jsonb_build_object('cuadro_id',r->>'cuadro_id','token',token))->'tipo_cambio'='null'::jsonb,'Sin tipo de cambio debe llegar nulo';
+ PERFORM public.e4_operar('guardar_e5',jsonb_build_object('cuadro_id',r->>'cuadro_id','token',token,'estado','borrador','nombre_archivo','r2.xlsx','storage_file_id',gen_random_uuid(),'validacion','{}'::jsonb));
+ r:=public.e4_operar('solicitar_e5',jsonb_build_object('solicitud_id',solicitud,'usuario_id_verificado',usuario,'tipo_cambio',jsonb_build_object('valor',0,'fecha','2026-10-29','fuente','SBS')));
+ ASSERT (r->>'http_code')::int=400,'Aceptó un tipo de cambio inválido';
+ r:=public.e4_operar('solicitar_e5',jsonb_build_object('solicitud_id',solicitud,'usuario_id_verificado',usuario,'tipo_cambio',jsonb_build_object('valor',3.75,'fecha','2026-10-29','fuente','SBS')));
+ ASSERT (r->>'http_code')::int=200,'No aceptó un tipo de cambio válido';
+ e:=public.e4_operar('tomar_e5','{}'::jsonb);
+ e:=public.e4_operar('entrada_e5',jsonb_build_object('cuadro_id',e->>'cuadro_id','token',e->>'token'));
+ ASSERT (e#>>'{tipo_cambio,valor}')::numeric=3.75 AND e#>>'{tipo_cambio,autorizado_por}'=usuario::text AND e#>>'{tipo_cambio,sentido}'='USD_PEN','El tipo de cambio no llegó a E5';
+ INSERT INTO e4_prueba VALUES('tipo_de_cambio_autorizado',true);
 END;$t$;
 SELECT caso||'|'||correcto FROM e4_prueba;
 ROLLBACK;

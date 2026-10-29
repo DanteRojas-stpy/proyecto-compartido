@@ -90,3 +90,55 @@ test('un resultado incompleto no rompe el resumen', () => {
   assert.deepEqual([r.postores, r.partidas, r.pendientes], [[], [], []]);
   assert.equal(resumirHomologacion(null).estado, 'Requiere revisión');
 });
+
+import { describirEstadoE5, leerTipoCambio, nombreArchivoCuadro } from '../../frontend/js/e4.js';
+
+const cuadro = (extra = {}) => ({ homologacion_id: 'h1', estado_revision: 'listo_para_cuadro', e5_estado: null, e5_revision: null, ...extra });
+
+test('E5: sin homologación no se genera el cuadro', () => {
+  for (const f of [null, {}, { homologacion_id: null }]) {
+    const e = describirEstadoE5(f);
+    assert.equal(e.puedeGenerar, false);
+    assert.equal(e.badge.texto, 'SIN HOMOLOGAR');
+  }
+});
+
+test('E5: con homologación se puede generar y se avisa si saldrá como borrador', () => {
+  assert.equal(describirEstadoE5(cuadro()).puedeGenerar, true);
+  assert.doesNotMatch(describirEstadoE5(cuadro()).mensaje, /borrador/);
+  assert.match(describirEstadoE5(cuadro({ estado_revision: 'requiere_revision' })).mensaje, /saldrá como borrador/);
+});
+
+test('E5: mientras genera bloquea el botón y se actualiza sola', () => {
+  for (const e5_estado of ['pendiente', 'en_curso']) {
+    const e = describirEstadoE5(cuadro({ e5_estado }));
+    assert.equal(e.activo, true);
+    assert.equal(e.puedeGenerar, false);
+    assert.equal(e.puedeDescargar, false);
+  }
+});
+
+test('E5: borrador y validado se descargan solo si hay archivo; el error permite reintentar', () => {
+  const validado = describirEstadoE5(cuadro({ e5_estado: 'validado', e5_revision: 2, cuadro_storage_file_id: 'f1' }));
+  assert.equal(validado.badge.texto, 'VALIDADO');
+  assert.equal(validado.puedeDescargar, true);
+  assert.equal(describirEstadoE5(cuadro({ e5_estado: 'borrador', cuadro_storage_file_id: null })).puedeDescargar, false);
+  assert.equal(describirEstadoE5(cuadro({ e5_estado: 'borrador', cuadro_storage_file_id: 'f1' })).badge.texto, 'BORRADOR');
+  const error = describirEstadoE5(cuadro({ e5_estado: 'error', e5_error: 'Falló' }));
+  assert.equal(error.puedeGenerar, true);
+  assert.equal(error.mensaje, 'Falló');
+});
+
+test('E5: el tipo de cambio es opcional, pero completo y positivo si se indica', () => {
+  assert.deepEqual(leerTipoCambio({ valor: '', fecha: '', fuente: '' }), { tipoCambio: null });
+  assert.deepEqual(leerTipoCambio({ valor: '3,75', fecha: '2026-10-29', fuente: ' SBS ' }), { tipoCambio: { valor: 3.75, fecha: '2026-10-29', fuente: 'SBS' } });
+  assert.match(leerTipoCambio({ valor: '0', fecha: '2026-10-29', fuente: 'SBS' }).error, /mayor que cero/);
+  assert.match(leerTipoCambio({ valor: 'abc', fecha: '2026-10-29', fuente: 'SBS' }).error, /mayor que cero/);
+  assert.match(leerTipoCambio({ valor: '3.75', fecha: '', fuente: 'SBS' }).error, /fecha/);
+  assert.match(leerTipoCambio({ valor: '3.75', fecha: '2026-10-29', fuente: '' }).error, /fuente/);
+});
+
+test('E5: nombre del archivo descargado', () => {
+  assert.equal(nombreArchivoCuadro('cuadro-MA-001-rev1.xlsx', 'MA-001', 1), 'cuadro-MA-001-rev1.xlsx');
+  assert.equal(nombreArchivoCuadro(null, 'Ascensores ñandú', 3), 'cuadro-Ascensores-nandu-rev3.xlsx');
+});
