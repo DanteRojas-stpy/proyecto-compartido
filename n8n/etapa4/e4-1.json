@@ -1,0 +1,599 @@
+{
+  "id": "costflowE4_1",
+  "name": "CostFlow - E4.1 Homologación de cotizaciones finales",
+  "active": false,
+  "nodes": [
+    {
+      "id": "4a89f925-0eab-5e14-b288-0b9e8a4732af",
+      "name": "Revisar la cola cada minuto",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "id": "a80f8ee4-0189-5e52-9c2c-5758546acc91",
+      "name": "Tomar homologación pendiente",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'tomar_e4',datos:{} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        220,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "0c971fae-759e-548d-b8d7-b44440b6d62c",
+      "name": "¿Hay algo que homologar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "112f1122-59e5-5a19-a10f-3da0c34b81cc",
+              "leftValue": "={{ $json.respuesta.resultado }}",
+              "rightValue": "tomada",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        440,
+        0
+      ]
+    },
+    {
+      "id": "5f2a927c-8db3-51f0-9d31-6f400362e871",
+      "name": "Consultar entrada en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'entrada_e4',datos:{ejecucion_id:$json.respuesta.ejecucion_id,token:$json.respuesta.token} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        660,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "96d8fc5f-6c8e-56c2-a050-1c701d444cd2",
+      "name": "Comprobar entrada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Sigue solo si Nhost entregó la entrada de esta homologación; si el intento venció, termina sin hacer nada.\nconst tomada = $('Tomar homologación pendiente').first().json.respuesta;\nconst entrada = $json.respuesta;\nif (entrada?.resultado !== 'entrada') return [];\nreturn [{ json: { ejecucion_id: tomada.ejecucion_id, token: tomada.token, paquete: entrada.paquete } }];"
+      },
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "07e9d4a5-21ea-544d-980d-ff665db26e8b",
+      "name": "Preparar petición para Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-homologacion:8094/e4/preparar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({paquete:$json.paquete}) }}",
+        "options": {
+          "timeout": 60000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1100,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "8a696a6f-e0fa-5e46-87d1-a3b386e68a63",
+      "name": "Verificar petición",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// El servicio de homologación debe devolver la petición lista para Claude.\nconst ctx = $('Comprobar entrada').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nif (!$json.cuerpo_claude) {\n  return [{ json: { ...base, ok: false, error: 'El servicio de homologación no preparó la petición: ' + String($json.detail ?? $json.error ?? 'sin detalle').slice(0, 300) } }];\n}\nreturn [{ json: { ...base, ok: true, cuerpo_claude: $json.cuerpo_claude, modelo: $json.modelo } }];"
+      },
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "e16c9ddb-7ddd-5554-918c-21ec3f88c760",
+      "name": "¿Petición lista?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "2a5b07c4-aadc-5781-8841-13ab3465b38f",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "id": "ef918d55-bd30-5b6c-9f6a-9ae9b9d155cc",
+      "name": "Claude Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo_claude) }}",
+        "options": {
+          "timeout": 280000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1760,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:claude"
+    },
+    {
+      "id": "147b1ab0-98e2-5f3f-a8d1-957b259bc183",
+      "name": "Interpretar respuesta de Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Convierte la respuesta de la API de Claude en texto utilizable o en un fallo con su motivo.\nconst ctx = $('Verificar petición').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nconst r = $json;\nconst fallo = (mensaje) => [{ json: { ...base, ok: false, error: mensaje } }];\nif (r.type === 'error' || r.error) return fallo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return fallo('Claude rechazó la petición por seguridad.');\nif (r.stop_reason !== 'end_turn') return fallo('Claude no terminó la respuesta (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');\nreturn [{ json: { ...base, ok: true, texto, modelo: r.model ?? ctx.modelo,\n  tokens_entrada: r.usage?.input_tokens ?? null, tokens_salida: r.usage?.output_tokens ?? null } }];"
+      },
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "id": "c7def64d-d70b-5568-bcbf-6e703e22bcc8",
+      "name": "¿Claude respondió bien?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "4f100071-fdf9-5f82-abf2-1420f8bf435b",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "id": "ad27f0e8-c82b-54b5-b448-11d43c707a1a",
+      "name": "Construir y validar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-homologacion:8094/e4/construir",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({paquete:$json.paquete,texto:$json.texto,modelo:$json.modelo}) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        2420,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "79ecb6a1-1f0a-5ef5-a57b-cfd67226e3cf",
+      "name": "Evaluar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// El servicio valida la respuesta contra la entrada; si no cuadra, es un fallo reintentable.\nconst ctx = $('Interpretar respuesta de Claude').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nif ($json.resultado !== 'construida') {\n  const errores = Array.isArray($json.errores) ? $json.errores.join('; ') : String($json.detail ?? $json.error ?? 'sin detalle');\n  return [{ json: { ...base, ok: false, error: 'La respuesta de Claude no pasó la validación: ' + errores.slice(0, 600) } }];\n}\nreturn [{ json: { ...base, ok: true, estado_revision: $json.estado_revision, resultado: $json.homologacion,\n  version_ids: $json.version_ids, huella: $json.huella, modelo: ctx.modelo, tokens_entrada: ctx.tokens_entrada, tokens_salida: ctx.tokens_salida } }];"
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "b8fff48a-d8d1-5e19-9990-732f4e3bdbd5",
+      "name": "¿Pasó la validación?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "fb982420-d014-5cea-bc03-240841673a83",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "id": "c93a8db5-5cc2-5d60-b7b3-32e47da7f3b7",
+      "name": "Guardar homologación",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'guardar_e4',datos:{ejecucion_id:$json.ejecucion_id,token:$json.token,estado_revision:$json.estado_revision,resultado:$json.resultado,version_ids:$json.version_ids,huella:$json.huella,modelo:$json.modelo,tokens_entrada:$json.tokens_entrada,tokens_salida:$json.tokens_salida} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        3080,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
+      "id": "9f0e0e8c-b9dc-501f-a27b-690d24a41a3d",
+      "name": "Registrar fallo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'fallo_e4',datos:{ejecucion_id:$json.ejecucion_id,token:$json.token,error:$json.error,recuperable:true} }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        3300,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    }
+  ],
+  "connections": {
+    "Revisar la cola cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Tomar homologación pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tomar homologación pendiente": {
+      "main": [
+        [
+          {
+            "node": "¿Hay algo que homologar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay algo que homologar?": {
+      "main": [
+        [
+          {
+            "node": "Consultar entrada en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar entrada en Nhost": {
+      "main": [
+        [
+          {
+            "node": "Comprobar entrada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar entrada": {
+      "main": [
+        [
+          {
+            "node": "Preparar petición para Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar petición para Claude": {
+      "main": [
+        [
+          {
+            "node": "Verificar petición",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar petición": {
+      "main": [
+        [
+          {
+            "node": "¿Petición lista?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Petición lista?": {
+      "main": [
+        [
+          {
+            "node": "Claude Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Messages": {
+      "main": [
+        [
+          {
+            "node": "Interpretar respuesta de Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Interpretar respuesta de Claude": {
+      "main": [
+        [
+          {
+            "node": "¿Claude respondió bien?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Claude respondió bien?": {
+      "main": [
+        [
+          {
+            "node": "Construir y validar",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construir y validar": {
+      "main": [
+        [
+          {
+            "node": "Evaluar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar resultado": {
+      "main": [
+        [
+          {
+            "node": "¿Pasó la validación?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pasó la validación?": {
+      "main": [
+        [
+          {
+            "node": "Guardar homologación",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  }
+}

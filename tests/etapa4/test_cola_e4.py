@@ -1,54 +1,18 @@
 """Cola, resultados y permisos de E4/E5 contra un PostgreSQL aislado (misma base que usan las demás etapas)."""
-import os
 import shutil
 import subprocess
-import time
-import uuid
 from pathlib import Path
 
 import pytest
 
+from conftest import instalar, migraciones
+
 ROOT = Path(__file__).resolve().parents[2]
-
-
-def migraciones():
-    archivos = [*ROOT.glob('db/migraciones/*.sql'), *ROOT.glob('db/etapa3/*.sql'), *ROOT.glob('db/etapa4/*.sql')]
-    return sorted(archivos, key=lambda p: int(p.name.split('_', 1)[0]))
-
-
-@pytest.fixture
-def postgres():
-    imagen = os.environ.get('COSTFLOW_TEST_POSTGRES_IMAGE')
-    if not imagen:
-        pytest.skip('Definir COSTFLOW_TEST_POSTGRES_IMAGE para probar PostgreSQL aislado.')
-    if not shutil.which('docker'):
-        pytest.fail('Se solicitó la prueba PostgreSQL, pero Docker no está disponible.')
-    nombre = 'costflow-e4-' + uuid.uuid4().hex[:12]
-    subprocess.run(['docker', 'run', '--rm', '-d', '--name', nombre, '--network', 'none', '--tmpfs', '/var/lib/postgresql:rw',
-                    '-e', 'POSTGRES_HOST_AUTH_METHOD=trust', imagen], check=True, capture_output=True, timeout=120)
-    try:
-        for _ in range(90):
-            if subprocess.run(['docker', 'exec', nombre, 'pg_isready', '-q', '-U', 'postgres'], capture_output=True, timeout=5).returncode == 0:
-                break
-            time.sleep(0.5)
-        else:
-            pytest.fail('PostgreSQL de prueba no inició a tiempo.')
-
-        def sql(texto):
-            r = subprocess.run(['docker', 'exec', '-i', nombre, 'psql', '-X', '-qAt', '-v', 'ON_ERROR_STOP=1', '-U', 'postgres', '-d', 'postgres'],
-                               input=texto, capture_output=True, text=True, encoding='utf-8', timeout=120)
-            assert r.returncode == 0, r.stderr
-            return r.stdout.strip()
-        yield sql
-    finally:
-        subprocess.run(['docker', 'rm', '-f', nombre], capture_output=True, timeout=20)
 
 
 def test_e4_e5_operaciones_permisos_y_cola(postgres):
     sql = postgres
-    sql('CREATE SCHEMA auth; CREATE TABLE auth.users (id uuid PRIMARY KEY);')
-    for ruta in migraciones():
-        sql(ruta.read_text(encoding='utf-8'))
+    instalar(sql)
     # La migración se puede repetir sin cambiar nada.
     sql((ROOT / 'db/etapa4/017_homologacion_cuadro.sql').read_text(encoding='utf-8'))
     salida = sql((ROOT / 'tests/etapa4/integracion_e4.sql').read_text(encoding='utf-8'))
