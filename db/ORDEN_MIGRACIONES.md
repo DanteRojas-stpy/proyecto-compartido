@@ -25,6 +25,7 @@ carpetas. La numeración de esta lista es global y no se repite entre carpetas.
 | 014 | [014_decisiones_y_salida.sql](etapa3/014_decisiones_y_salida.sql) | Decisiones autenticadas, protección de versión final y vistas E3/E4 | 013 |
 | 015 | [015_modelo_gemini_disponible.sql](etapa3/015_modelo_gemini_disponible.sql) | Modelo predeterminado `gemini-3.5-flash-lite`; reemplaza la configuración antigua 3.8 | 012–014 |
 | 016 | [016_aceptar_con_observaciones.sql](etapa3/016_aceptar_con_observaciones.sql) | Las observaciones pendientes ya no bloquean la aceptación final: E3 pide confirmación al especialista y registra cuántas quedaban | 012–015 |
+| 017 | [017_homologacion_cuadro.sql](etapa4/017_homologacion_cuadro.sql) | E4 (homologación) y E5 (cuadro): cola con botón del especialista, resultados, avisos y vista de estado | 012–016 |
 
 La 011 reproduce la estructura base comprobada en `costflow-dev` el 28/10/2026.
 La 012 añade las columnas y reglas propias de E3: entre ambas completan la tabla
