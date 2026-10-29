@@ -101,9 +101,44 @@ def test_con_todo_resuelto_el_cuadro_queda_validado():
     assert sin_avisos == []
 
 
-def test_varias_partidas_se_rechazan_sin_adivinar():
-    with pytest.raises(CuadroNoGenerable, match="una sola fila"):
-        generar(plantilla_minima(), homologacion(una_partida=False), {"valor": 3.75})
+def test_un_proveedor_con_dos_tipos_ocupa_dos_bloques():
+    h = homologacion(una_partida=False)
+    archivo, validacion = generar(plantilla_minima(), h, {"valor": 3.75})
+    xml = hoja_xml(archivo)
+    # Alfa y Beta cotizan solo el tipo 1; Gamma cotiza los dos y ocupa dos bloques.
+    assert validacion["bloques"] == 4
+    assert "Gamma Lift (TIPO 1)" in celda(xml, "P6") and "Gamma Lift (TIPO 2)" in celda(xml, "T6")
+    assert "Alfa SAC</t>" in celda(xml, "H6") and "TIPO" not in celda(xml, "H6")
+    assert "Tipo 2: Ascensor de pasajeros 750 kg" in celda(xml, "T36")
+    assert "<v>36849.07</v>" in celda(xml, "U13") and "<v>37790</v>" in celda(xml, "Q13")
+    assert "ELEVADORES" in celda(xml, "I3") or "Ascensores" in celda(xml, "I3")
+
+
+def test_mas_bloques_que_los_de_la_plantilla_se_rechaza():
+    h = homologacion(una_partida=False)
+    extra = copy.deepcopy(h["postores"][0])
+    for i in range(5):
+        otro = copy.deepcopy(extra)
+        otro["proveedor_id"] = f"extra-{i}"
+        otro["nombre"] = f"Extra {i}"
+        h["postores"].append(otro)
+        for partida in h["partidas"]:
+            partida["ofertas"].append({**copy.deepcopy(partida["ofertas"][0]), "proveedor_id": f"extra-{i}"})
+    with pytest.raises(CuadroNoGenerable, match="bloques"):
+        generar(plantilla_minima(), h, {"valor": 3.75})
+
+
+def test_moneda_desconocida_o_sin_importes_deja_el_bloque_vacio_y_en_borrador():
+    h = homologacion()
+    beta = next(p for p in h["postores"] if p["nombre"] == "Beta SA")
+    beta["moneda"] = None
+    archivo, validacion = generar(plantilla_minima(), h, {"valor": 3.75})
+    assert validacion["validado"] is False and any("Beta SA: moneda" in a for a in validacion["avisos"])
+    alfa = next(o for o in h["partidas"][0]["ofertas"] if o["proveedor_id"] == ALFA)
+    for i in alfa["items"]:
+        i["original"]["parcial"] = None
+    resultado = plan(h, {"valor": 3.75})
+    assert any("faltan importes" in a for a in resultado["avisos"])
 
 
 def test_tipo_de_cambio_invalido_o_plantilla_ajena_se_rechazan():
@@ -115,13 +150,6 @@ def test_tipo_de_cambio_invalido_o_plantilla_ajena_se_rechazan():
     otra.save(salida)
     with pytest.raises(CuadroNoGenerable):
         generar(salida.getvalue(), homologacion(), {"valor": 3.75})
-
-
-def test_importe_ausente_no_se_inventa():
-    h = homologacion()
-    h["partidas"][0]["ofertas"][0]["items"][0]["original"]["parcial"] = None
-    with pytest.raises(CuadroNoGenerable, match="parcial"):
-        generar(plantilla_minima(), h, {"valor": 3.75})
 
 
 @pytest.fixture
@@ -141,7 +169,7 @@ def test_servicio_exige_clave_y_devuelve_xlsx_en_base64(cliente):
 
 def test_servicio_responde_error_no_recuperable(cliente):
     cabecera = {"X-Costflow-Internal-Key": "clave"}
-    r = cliente.post("/e5/generar", json={"homologacion": homologacion(False), "plantilla_b64": base64.b64encode(plantilla_minima()).decode()}, headers=cabecera)
+    r = cliente.post("/e5/generar", json={"homologacion": {**homologacion(), "partidas": []}, "plantilla_b64": base64.b64encode(plantilla_minima()).decode()}, headers=cabecera)
     assert r.status_code == 422 and r.json()["recuperable"] is False
     r = cliente.post("/e5/generar", json={"homologacion": homologacion(), "plantilla_b64": "no-es-base64"}, headers=cabecera)
     assert r.status_code == 422
