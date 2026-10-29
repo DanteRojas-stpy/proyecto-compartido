@@ -123,6 +123,12 @@ BEGIN
  e:=public.e4_operar('entrada_e5',jsonb_build_object('cuadro_id',e->>'cuadro_id','token',e->>'token'));
  ASSERT (e#>>'{tipo_cambio,valor}')::numeric=3.75 AND e#>>'{tipo_cambio,autorizado_por}'=usuario::text AND e#>>'{tipo_cambio,sentido}'='USD_PEN','El tipo de cambio no llegó a E5';
  INSERT INTO e4_prueba VALUES('tipo_de_cambio_autorizado',true);
+ -- La descarga solo la ve quien tiene acceso a la solicitud, y solo cuando el cuadro ya tiene archivo.
+ ASSERT public.e5_cuadro_para_descarga(usuario,cuadro)->>'ok'='true' AND public.e5_cuadro_para_descarga(usuario,cuadro)->>'nombre_archivo'='cuadro_rev1.xlsx','El dueño no puede descargar';
+ ASSERT (public.e5_cuadro_para_descarga(ajeno,cuadro)->>'http_code')::int=403,'Un ajeno descargó el cuadro';
+ ASSERT (public.e5_cuadro_para_descarga(NULL,cuadro)->>'http_code')::int=401,'Sin sesión descargó el cuadro';
+ ASSERT (public.e5_cuadro_para_descarga(usuario,(e->>'cuadro_id')::uuid)->>'http_code')::int=409,'Descargó un cuadro sin archivo';
+ INSERT INTO e4_prueba VALUES('descarga_con_acceso',true);
 END;$t$;
 SELECT caso||'|'||correcto FROM e4_prueba;
 ROLLBACK;

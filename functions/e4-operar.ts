@@ -4,6 +4,8 @@ import type { Request, Response } from 'express'
 // Solicitar E4 o E5 las hace el especialista desde el front, con su propia sesión.
 // El resto de operaciones las usan n8n y los servicios, con la clave interna.
 const OPERACIONES_DEL_ESPECIALISTA = new Set(['solicitar_e4', 'solicitar_e5'])
+// El especialista descarga el Excel del cuadro a través de la Function: Storage solo lo lee la credencial administrativa.
+const DESCARGAR_CUADRO = 'descargar_e5'
 const OPERACIONES_INTERNAS = new Set([
   'tomar_e4',
   'entrada_e4',
@@ -71,6 +73,48 @@ const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGINS ?? 'http://localhost:8000,
   .map((origen) => origen.trim())
   .filter(Boolean)
 
+function baseStorage(): string {
+  return `${baseHasura().replace('.hasura.', '.storage.')}/v1/files`
+}
+
+async function descargarCuadro(req: Request, res: Response, datos: unknown) {
+  const usuario = await usuarioVerificado(req)
+  if (!usuario) return res.status(401).json({ error: 'Inicia sesión para continuar.' })
+  const cuadroId = typeof (datos as { cuadro_id?: unknown })?.cuadro_id === 'string' ? (datos as { cuadro_id: string }).cuadro_id : ''
+  if (!/^[0-9a-f-]{36}$/i.test(cuadroId)) return res.status(400).json({ error: 'Operación o datos inválidos.' })
+  const admin = process.env.NHOST_ADMIN_SECRET ?? process.env.HASURA_GRAPHQL_ADMIN_SECRET ?? ''
+  if (!admin) return res.status(503).json({ error: 'Nhost no proporcionó su credencial administrativa.' })
+  try {
+    const sql = `SELECT public.e5_cuadro_para_descarga(${literal(usuario)}::uuid,${literal(cuadroId)}::uuid)::text AS respuesta;`
+    const consulta = await fetch(`${baseHasura()}/v2/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-hasura-admin-secret': admin },
+      body: JSON.stringify({ type: 'run_sql', args: { source: 'default', sql, cascade: false, read_only: true, check_metadata_consistency: false } }),
+      signal: AbortSignal.timeout(30000),
+    })
+    const acceso = respuestaRunSql(await consulta.json().catch(() => null)) as {
+      ok?: boolean
+      http_code?: number
+      mensaje?: string
+      storage_file_id?: string
+      nombre_archivo?: string
+    }
+    if (!consulta.ok || acceso.ok !== true) {
+      return res.status(acceso.http_code ?? 502).json({ error: acceso.mensaje ?? 'No se pudo comprobar el acceso al cuadro.' })
+    }
+    const archivo = await fetch(`${baseStorage()}/${acceso.storage_file_id}`, {
+      headers: { 'x-hasura-admin-secret': admin, 'Cache-Control': 'no-cache' },
+      signal: AbortSignal.timeout(60000),
+    })
+    if (!archivo.ok) return res.status(502).json({ error: 'El archivo del cuadro no está disponible en Storage.' })
+    const bytes = Buffer.from(await archivo.arrayBuffer())
+    return res.status(200).json({ nombre_archivo: acceso.nombre_archivo, archivo_b64: bytes.toString('base64') })
+  } catch {
+    console.error('Fallo interno al descargar el cuadro; revisa Storage y Hasura.')
+    return res.status(500).json({ error: 'No fue posible descargar el cuadro.' })
+  }
+}
+
 export default async function handler(req: Request, res: Response) {
   res.setHeader('Cache-Control', 'no-store')
   const origen = String(req.header('origin') ?? '')
@@ -85,6 +129,8 @@ export default async function handler(req: Request, res: Response) {
 
   const operacion = typeof req.body?.operacion === 'string' ? req.body.operacion : ''
   let datos = req.body?.datos
+
+  if (operacion === DESCARGAR_CUADRO) return descargarCuadro(req, res, datos)
 
   if (OPERACIONES_DEL_ESPECIALISTA.has(operacion)) {
     // La identidad sale de Nhost Auth, nunca de un campo que envía el cliente.
@@ -137,4 +183,4 @@ export default async function handler(req: Request, res: Response) {
   }
 }
 
-export { OPERACIONES_DEL_ESPECIALISTA, OPERACIONES_INTERNAS, literal, respuestaRunSql, secretoValido }
+export { DESCARGAR_CUADRO, OPERACIONES_DEL_ESPECIALISTA, OPERACIONES_INTERNAS, literal, respuestaRunSql, secretoValido }
