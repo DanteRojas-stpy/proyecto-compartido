@@ -30,11 +30,23 @@ def test_numero_tecnico_falso_no_se_guarda():
 
 def test_moneda_ambigua_no_se_asume_usd():
     data, source, context = sample()
-    source['fragmentos'][0]['texto'] += ' $'
+    # Un documento que solo escribe "$", sin nombrar la moneda en ninguna parte.
+    source['fragmentos'][0]['texto'] = source['fragmentos'][0]['texto'].replace('USD ', '$ ') + ' $'
     data['evidencias'][0]['texto_fuente'] = source['fragmentos'][0]['texto']
     data['comerciales'][0]['originales']['moneda'] = '$'
-    with pytest.raises(ValueError, match='moneda'):
-        contract.combine([data], [source], context, 'prueba')
+    result = contract.combine([data], [source], context, 'prueba')
+    assert result['datos_comerciales']['moneda'] is None
+    assert any(o['tipo'] == 'moneda_ambigua' and o['requiere_aclaracion'] for o in result['observaciones'])
+    assert result['datos_comerciales']['total'] == 236
+
+
+def test_moneda_con_formato_invalido_no_descarta_la_lectura():
+    data, source, context = sample()
+    data['comerciales'][0]['valores']['moneda'] = 'Soles'
+    data['comerciales'][0]['originales']['moneda'] = 'USD'
+    result = contract.combine([data], [source], context, 'prueba')
+    assert result['datos_comerciales']['moneda'] is None
+    assert any(o['tipo'] == 'moneda_ambigua' for o in result['observaciones'])
 
 
 def test_un_numero_no_puede_salir_de_recortar_otro():
