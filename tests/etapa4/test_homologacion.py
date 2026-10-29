@@ -59,6 +59,7 @@ def test_con_itemizado_y_equivalencias_con_evidencia_queda_lista_para_el_cuadro(
     _, prep, salida = armar(True)
     h = build(prep, salida, "claude-sonnet-5-5")
     assert h["estado_revision"] == "listo_para_cuadro", tipos(h, True)
+    assert h["proveedores_sin_final"] == [{"proveedor_id": DELTA, "nombre": "Delta SRL"}]
     assert h["base"] == {"tipo": "itemizado", "identificador": SOLICITUD, "version": None, "origen_proveedor_id": None, "nota": None}
     assert h["moneda_comparacion"] == "USD" and h["tipo_cambio"] is None and h["escenarios"] == []
 

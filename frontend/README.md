@@ -54,3 +54,15 @@ RUC o correo y reutiliza su ficha si ya existe. El mismo proveedor puede quedar
 vinculado con varias solicitudes, incluso de proyectos distintos. Después sube
 los Excel al bucket `solicitudes` y activa `preparada_para_envio` al terminar.
 El envío de correos no cambia el estado de negocio.
+
+## Homologación (E4)
+
+Cada solicitud muestra un bloque «Homologación (E4)» con el estado, el botón **Homologar** y, cuando hay resultado,
+**Ver resultado** y **Descargar JSON**.
+
+- El botón se habilita cuando la solicitud tiene al menos una cotización aceptada como final. Llama a la Function
+  `e4-operar` con la sesión del especialista; n8n hace el trabajo y se avisa al terminar. Mientras tanto la
+  tarjeta se actualiza sola.
+- La lógica de pantalla (qué mostrar y qué habilitar) está en `js/e4.js`, sin acceso al DOM, y se prueba con Node
+  en `tests/etapa4/front_e4.test.mjs`.
+- Si la migración 017 o sus permisos no están aplicados, el bloque no aparece y el resto de la pantalla funciona igual.

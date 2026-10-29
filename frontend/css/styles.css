@@ -283,3 +283,11 @@ dialog::backdrop { background: rgb(22 59 131 / 40%); }
 .estado-correo-aviso { margin: .4rem 0 0; font-weight: 650; }
 .estado-correo-aviso.error { color: var(--cf-critical); }
 .estado-correo-aviso.exito { color: #247a28; }
+
+/* Homologación (E4) dentro de cada solicitud */
+.homologacion { display: grid; gap: .6rem; margin: 1rem 0; padding: 1rem; border: 1px solid var(--cf-border); border-radius: 12px; background: var(--cf-surface-muted); }
+.homologacion-cabecera { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+.homologacion p { margin: 0; }
+.homologacion-resultado { padding: .75rem 1rem; border-top: 1px solid var(--cf-border); }
+.homologacion-resultado h4 { margin: 1rem 0 .4rem; }
+.homologacion-resultado ul { margin: .25rem 0 .75rem; padding-left: 1.2rem; line-height: 1.5; }

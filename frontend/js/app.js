@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@nhost/nhost-js@4.9.0";
 import { createClient as createSubscriptionClient } from "https://esm.sh/graphql-ws@5.16.2";
+import { describirEstadoE4, formatearImporte, nombreArchivoHomologacion, resumirHomologacion } from "./e4.js";
 
 const ui = {
   configuracion: document.querySelector("#configuracion"),
@@ -786,6 +787,205 @@ function crearDatoResumen(etiqueta, valor) {
   return elemento;
 }
 
+// ---- E4: homologación ---------------------------------------------------------------------------------
+// El especialista decide cuándo homologar. La Function e4-operar verifica su sesión; n8n hace el trabajo y avisa al terminar.
+
+async function llamarFuncionNhost(funcion, operacion, datos) {
+  const token = nhost.getUserSession()?.accessToken;
+  if (!token) throw new Error("La sesión venció. Vuelve a ingresar.");
+  const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.functions.${configuracionNhost.NHOST_REGION}.nhost.run/v1/${funcion}`;
+  const respuesta = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ operacion, datos }),
+  });
+  const cuerpo = await respuesta.json().catch(() => ({}));
+  if (!respuesta.ok && !cuerpo.respuesta) throw new Error(cuerpo.error ?? "No se pudo completar la operación.");
+  return cuerpo.respuesta ?? cuerpo;
+}
+
+const CAMPOS_ESTADO_E4 = "solicitud_id finales_e3 e4_estado e4_solicitada_at e4_error homologacion_id estado_revision homologada_at e4_modelo";
+
+async function cargarEstadosE4(proyectoId) {
+  try {
+    const datos = await graphql(
+      `query EstadoE4($id: uuid!) {
+        e4_estado_solicitud(where: { solicitud_e3: { proyecto_id: { _eq: $id } } }) { ${CAMPOS_ESTADO_E4} }
+      }`,
+      { id: proyectoId },
+    );
+    return new Map(datos.e4_estado_solicitud.map((fila) => [fila.solicitud_id, fila]));
+  } catch (error) {
+    // Sin la migración 017 o sus permisos, la pantalla sigue funcionando sin el bloque de homologación.
+    console.warn("E4 no disponible:", mensajeError(error));
+    return null;
+  }
+}
+
+async function cargarEstadoE4DeSolicitud(solicitudId) {
+  const datos = await graphql(
+    `query EstadoE4Solicitud($id: uuid!) { e4_estado_solicitud(where: { solicitud_id: { _eq: $id } }) { ${CAMPOS_ESTADO_E4} } }`,
+    { id: solicitudId },
+  );
+  return datos.e4_estado_solicitud?.[0] ?? null;
+}
+
+async function cargarResultadoE4(homologacionId) {
+  const datos = await graphql(
+    `query ResultadoE4($id: uuid!) { e4_homologaciones(where: { id: { _eq: $id } }) { resultado created_at modelo } }`,
+    { id: homologacionId },
+  );
+  const fila = datos.e4_homologaciones?.[0];
+  if (!fila) throw new Error("No se encontró el resultado de la homologación.");
+  return fila;
+}
+
+function crearTextoE4(etiqueta, texto, clase = "") {
+  const nodo = document.createElement(etiqueta);
+  if (clase) nodo.className = clase;
+  nodo.textContent = texto;
+  return nodo;
+}
+
+function dibujarResumenE4(panel, resumen) {
+  panel.replaceChildren();
+  const moneda = resumen.moneda ? `Moneda de comparación: ${resumen.moneda}` : "Moneda de comparación sin definir";
+  panel.append(crearTextoE4("p", `${resumen.estado} · ${moneda} · ${resumen.base}`, "ayuda"));
+
+  panel.append(crearTextoE4("h4", "Proveedores"));
+  const proveedores = document.createElement("ul");
+  for (const postor of resumen.postores) {
+    const totales = postor.total !== null
+      ? formatearImporte(postor.total, postor.moneda)
+      : postor.porDocumento.length
+        ? `por documento: ${postor.porDocumento.map((total) => formatearImporte(total, postor.moneda)).join(" y ")}`
+        : "no informado";
+    const linea = `${postor.nombre} — total declarado ${totales}`
+      + `${postor.plazo ? ` · plazo ${postor.plazo}` : ""}${postor.vigencia ? ` · vigencia ${postor.vigencia}` : ""}`
+      + `${postor.comparable ? "" : " · no comparable en la moneda de comparación"}`;
+    proveedores.append(crearTextoE4("li", linea));
+  }
+  panel.append(proveedores);
+
+  panel.append(crearTextoE4("h4", "Partidas"));
+  for (const partida of resumen.partidas) {
+    panel.append(crearTextoE4("strong", partida.titulo || "Partida sin descripción"));
+    const ofertas = document.createElement("ul");
+    for (const oferta of partida.ofertas) {
+      ofertas.append(crearTextoE4("li", `${oferta.proveedor}: ${oferta.estado} · ${oferta.equivalencia}`));
+    }
+    panel.append(ofertas);
+  }
+  if (resumen.adicionales) panel.append(crearTextoE4("p", `Ítems adicionales fuera de la base: ${resumen.adicionales}.`, "ayuda"));
+
+  panel.append(crearTextoE4("h4", `Pendientes: ${resumen.bloqueantes} bloquean la comparación, ${resumen.informativos} informativos`));
+  const pendientes = document.createElement("ul");
+  for (const pendiente of resumen.pendientes) {
+    const item = document.createElement("li");
+    item.append(
+      crearTextoE4("strong", pendiente.bloquea ? "Bloquea · " : "Informativo · "),
+      document.createTextNode(`${pendiente.motivo}${pendiente.decision ? ` Decisión: ${pendiente.decision}` : ""}`),
+    );
+    pendientes.append(item);
+  }
+  panel.append(pendientes);
+}
+
+async function descargarHomologacion(solicitud, homologacionId) {
+  const fila = await cargarResultadoE4(homologacionId);
+  const archivo = new File([JSON.stringify(fila.resultado, null, 2)], nombreArchivoHomologacion(solicitud.codigo, fila.created_at), { type: "application/json" });
+  const enlace = document.createElement("a");
+  enlace.href = URL.createObjectURL(archivo);
+  enlace.download = archivo.name;
+  enlace.click();
+  URL.revokeObjectURL(enlace.href);
+}
+
+async function refrescarSeccionE4(seccion, solicitud, avisoInicial = "") {
+  const fila = await cargarEstadoE4DeSolicitud(solicitud.id);
+  if (!seccion.isConnected) return;
+  seccion.replaceWith(crearSeccionHomologacion(solicitud, fila, avisoInicial));
+  if (!describirEstadoE4(fila).activo) cargarNotificaciones().catch(() => {});
+}
+
+// Mientras E4 trabaja, la tarjeta se actualiza sola hasta que termine o el usuario cambie de pantalla.
+function programarActualizacionE4(seccion, solicitud) {
+  setTimeout(async () => {
+    if (!seccion.isConnected) return;
+    try {
+      await refrescarSeccionE4(seccion, solicitud);
+    } catch {
+      if (seccion.isConnected) programarActualizacionE4(seccion, solicitud);
+    }
+  }, 8000);
+}
+
+async function solicitarHomologacion(solicitud, seccion, boton, aviso) {
+  boton.disabled = true;
+  avisarCorreo(aviso, "Solicitando la homologación…");
+  try {
+    const resultado = await llamarFuncionNhost("e4-operar", "solicitar_e4", { solicitud_id: solicitud.id });
+    if (resultado.ok !== true) throw new Error(resultado.mensaje ?? "No se pudo solicitar la homologación.");
+    await refrescarSeccionE4(seccion, solicitud, "Homologación solicitada. Te avisaremos cuando termine.");
+  } catch (error) {
+    avisarCorreo(aviso, `No se pudo homologar: ${mensajeError(error)}`, "error");
+    boton.disabled = false;
+  }
+}
+
+function crearSeccionHomologacion(solicitud, fila, avisoInicial = "") {
+  const estado = describirEstadoE4(fila);
+  const seccion = document.createElement("section");
+  seccion.className = "homologacion";
+  const cabecera = document.createElement("div");
+  cabecera.className = "homologacion-cabecera";
+  cabecera.append(crearTextoE4("strong", "Homologación (E4)"), crearTextoE4("span", estado.badge.texto, `badge ${estado.badge.clase}`));
+
+  const acciones = document.createElement("div");
+  acciones.className = "acciones";
+  const aviso = crearTextoE4("p", avisoInicial, `ayuda estado-correo-aviso${avisoInicial ? " exito" : ""}`);
+  aviso.setAttribute("role", "status");
+  const homologar = crearTextoE4("button", estado.etiqueta);
+  homologar.type = "button";
+  homologar.disabled = !estado.puedeHomologar;
+  homologar.addEventListener("click", () => solicitarHomologacion(solicitud, seccion, homologar, aviso));
+  acciones.append(homologar);
+
+  const panel = document.createElement("div");
+  panel.className = "homologacion-resultado";
+  panel.hidden = true;
+  if (estado.puedeVerResultado) {
+    const ver = crearTextoE4("button", "Ver resultado", "secundario");
+    ver.type = "button";
+    ver.addEventListener("click", async () => {
+      if (!panel.hidden) {
+        panel.hidden = true;
+        ver.textContent = "Ver resultado";
+        return;
+      }
+      ver.disabled = true;
+      try {
+        const datos = await cargarResultadoE4(fila.homologacion_id);
+        dibujarResumenE4(panel, resumirHomologacion(datos.resultado));
+        panel.hidden = false;
+        ver.textContent = "Ocultar resultado";
+      } catch (error) {
+        avisarCorreo(aviso, mensajeError(error), "error");
+      } finally {
+        ver.disabled = false;
+      }
+    });
+    const descargar = crearTextoE4("button", "Descargar JSON", "secundario");
+    descargar.type = "button";
+    descargar.addEventListener("click", () => descargarHomologacion(solicitud, fila.homologacion_id)
+      .catch((error) => avisarCorreo(aviso, mensajeError(error), "error")));
+    acciones.append(ver, descargar);
+  }
+  seccion.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), acciones, aviso, panel);
+  if (estado.activo) programarActualizacionE4(seccion, solicitud);
+  return seccion;
+}
+
 async function cargarDetalleProyecto() {
   const proyectoId = ui.proyectoId.value;
   const abiertos = new Set(
@@ -832,6 +1032,8 @@ async function cargarDetalleProyecto() {
       order_by: { created_at: desc }
     ) { id correo_id tipo nombre_original version documento_estado }
   }`, { id: proyectoId });
+  if (ui.proyectoId.value !== proyectoId) return;
+  const estadosE4 = await cargarEstadosE4(proyectoId);
   if (ui.proyectoId.value !== proyectoId) return;
 
   const aclaracionesPorProveedor = new Map();
@@ -913,6 +1115,7 @@ async function cargarDetalleProyecto() {
       barra.append(cerrar);
     }
     contenido.append(barra);
+    if (estadosE4) contenido.append(crearSeccionHomologacion(solicitud, estadosE4.get(solicitud.id) ?? null));
 
     const proveedores = document.createElement("div");
     proveedores.className = "proveedores-solicitud";

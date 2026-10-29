@@ -214,7 +214,7 @@ def build(preparado: dict, salida: dict, modelo: str, ahora: datetime | None = N
         "base": {"tipo": base["tipo"], "identificador": solicitud["id"] if base["tipo"] == "itemizado" else None, "version": None,
                  "origen_proveedor_id": salida["base"]["origen_proveedor_id"], "nota": salida["base"]["nota"]},
         "moneda_comparacion": moneda_comparacion, "tipo_cambio": None,
-        "postores": salida_postores, "partidas": salida_partidas, "adicionales": adicionales,
+        "postores": salida_postores, "proveedores_sin_final": preparado["sin_final"], "partidas": salida_partidas, "adicionales": adicionales,
         "trazabilidad": {"entrada": "Resultados de E3 de las versiones aceptadas como final; no se leyeron PDF ni Excel.",
                          "version_ids": preparado["version_ids"], "huella": preparado["huella"],
                          "operaciones": ["Los importes se copian de E3 sin cambio; no hay conversión de moneda ni ajuste de IGV."],

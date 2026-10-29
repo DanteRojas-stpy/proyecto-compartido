@@ -59,3 +59,37 @@ def test_permisos_de_hasura_solo_lectura_sin_datos_internos():
         assert [p['role'] for p in permisos] == ['user']
         assert not {'token', 'lease_hasta', 'intentos', 'error', 'solicitado_por'} & set(permisos[0]['permission']['columns'])
         assert 'insert_permissions' not in tablas[nombre] and 'update_permissions' not in tablas[nombre]
+
+
+def test_pantalla_de_e4_con_el_resultado_real_del_constructor():
+    """La lógica del front se prueba con Node y con lo que de verdad produce el constructor de E4."""
+    import json
+    import sys
+    sys.path.insert(0, str(ROOT / 'tests/etapa4'))
+    from app.homologacion import entrada
+    from app.homologacion.construir import build
+    from datos_ficticios import paquete, respuesta_modelo
+    preparado = entrada.prepare(paquete())
+    homologacion = build(preparado, respuesta_modelo(preparado), 'claude-sonnet-5-5')
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('La prueba de la pantalla requiere Node.js.')
+    version = subprocess.check_output([node, '--version'], text=True).strip().lstrip('v')
+    mayor, menor, *_ = map(int, version.split('.'))
+    if (mayor, menor) < (22, 7):
+        pytest.skip('Se necesita Node.js 22.7 o posterior para leer módulos ES sin package.json.')
+    r = subprocess.run([node, '--test', str(ROOT / 'tests/etapa4/front_e4.test.mjs')], capture_output=True, text=True, encoding='utf-8',
+                       timeout=60, env={**__import__('os').environ, 'HOMOLOGACION_JSON': json.dumps(homologacion)})
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_el_front_conecta_el_boton_con_la_function_y_no_usa_html_sin_escapar():
+    app = (ROOT / 'frontend/js/app.js').read_text(encoding='utf-8')
+    assert 'from "./e4.js"' in app
+    assert '"e4-operar", "solicitar_e4"' in app
+    assert 'e4_estado_solicitud(' in app and 'e4_homologaciones(' in app
+    bloque = app[app.index('// ---- E4: homologación'):app.index('async function cargarDetalleProyecto()')]
+    assert 'innerHTML' not in bloque, 'los textos de proveedores y pendientes se muestran con textContent'
+    assert 'estadosE4.get(solicitud.id)' in app
+    modulo = (ROOT / 'frontend/js/e4.js').read_text(encoding='utf-8')
+    assert 'document.' not in modulo and 'window.' not in modulo, 'e4.js no toca el DOM'
