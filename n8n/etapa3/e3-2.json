@@ -1,6 +1,6 @@
 {
   "id": "costflowEtapa3_2",
-  "name": "CostFlow - E3.2 Lectura OCR RAG Gemini y validación",
+  "name": "CostFlow - E3.2 Lectura OCR RAG y validación",
   "active": false,
   "nodes": [
     {
@@ -133,13 +133,13 @@
       ]
     },
     {
-      "id": "9facbc23-3067-5e03-bfbf-a0acd83b9f4f",
-      "name": "Gemini interno",
+      "id": "81336104-ca01-5109-8097-cb464d9901e2",
+      "name": "Lector interno",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "parameters": {
         "httpMethod": "POST",
-        "path": "e3-interno-gemini",
+        "path": "e3-interno-lector",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
@@ -148,7 +148,7 @@
         880,
         0
       ],
-      "webhookId": "7ab90401-cfbd-5067-9adf-7117da46d6e1",
+      "webhookId": "144fea02-2cd5-54e1-be0e-90ec00d5810a",
       "notes": "CREDENCIAL_E3:internal"
     },
     {
@@ -157,42 +157,10 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "if(!/^[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('Modelo inválido');return [{json:$json.body}];"
+        "jsCode": "if(!/^claude-[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('El modelo debe ser de Claude (claude-...)');return [{json:$json.body}];"
       },
       "position": [
         1100,
-        0
-      ]
-    },
-    {
-      "id": "387080e5-07f9-5b7d-90f7-c4c69e81c4e5",
-      "name": "¿Modelo de Claude?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "8ef4ce6c-bfa5-5739-9f70-8574b82ba1be",
-              "leftValue": "={{ $json.modelo }}",
-              "rightValue": "claude-",
-              "operator": {
-                "type": "string",
-                "operation": "startsWith"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "position": [
-        1320,
         0
       ]
     },
@@ -202,11 +170,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "// Traduce la petición del lector (formato Gemini) al formato de la API de mensajes de Claude.\nconst { modelo, peticion } = $json;\nconst partes = (x) => (x?.parts ?? []).map((p) => p.text ?? '').join('\\n');\nconst sistema = partes(peticion.systemInstruction);\nconst contenido = (peticion.contents ?? []).map((c) => partes(c)).join('\\n');\nconst esquema = peticion.generationConfig?.responseJsonSchema ?? {};\nif (!contenido.trim()) throw new Error('La petición no trae contenido para leer');\nconst instruccion = sistema\n  + '\\n\\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '\n  + 'Sin texto adicional, sin comentarios y sin bloques de código:\\n' + JSON.stringify(esquema);\nconst cuerpo = {\n  model: modelo,\n  max_tokens: 16000,\n  system: instruccion,\n  messages: [{ role: 'user', content: contenido }],\n};\n// Extraer datos no necesita razonar a fondo: el esfuerzo bajo deja los tokens para el JSON (modelos 5.x).\nif (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };\nreturn [{ json: { modelo, cuerpo } }];"
+        "jsCode": "// Traduce la petición del lector (formato interno del lector) al formato de la API de mensajes de Claude.\nconst { modelo, peticion } = $json;\nconst partes = (x) => (x?.parts ?? []).map((p) => p.text ?? '').join('\\n');\nconst sistema = partes(peticion.systemInstruction);\nconst contenido = (peticion.contents ?? []).map((c) => partes(c)).join('\\n');\nconst esquema = peticion.generationConfig?.responseJsonSchema ?? {};\nif (!contenido.trim()) throw new Error('La petición no trae contenido para leer');\nconst instruccion = sistema\n  + '\\n\\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '\n  + 'Sin texto adicional, sin comentarios y sin bloques de código:\\n' + JSON.stringify(esquema);\nconst cuerpo = {\n  model: modelo,\n  max_tokens: 16000,\n  system: instruccion,\n  messages: [{ role: 'user', content: contenido }],\n};\n// Extraer datos no necesita razonar a fondo: el esfuerzo bajo deja los tokens para el JSON (modelos 5.x).\nif (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };\nreturn [{ json: { modelo, cuerpo } }];"
       },
       "position": [
-        1540,
-        -160
+        1320,
+        0
       ]
     },
     {
@@ -242,8 +210,8 @@
         }
       },
       "position": [
-        1760,
-        -160
+        1540,
+        0
       ],
       "notes": "CREDENCIAL_E3:claude"
     },
@@ -253,41 +221,12 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "// Devuelve la respuesta de Claude con la misma forma que usa el lector para Gemini.\nconst r = $json;\nconst rechazo = (mensaje) => [{ json: { error: { message: mensaje } } }];\nif (r.type === 'error' || r.error) return rechazo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return rechazo('Claude rechazó la petición por seguridad.');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();\nlet limpio = texto.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\nconst ini = limpio.indexOf('{');\nconst fin = limpio.lastIndexOf('}');\nif (ini >= 0 && fin > ini) limpio = limpio.slice(ini, fin + 1);\nconst completo = r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence';\nif (!completo) return rechazo('Claude no devolvió una respuesta completa (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');\nreturn [{ json: {\n  candidates: [{ finishReason: 'STOP', content: { parts: [{ text: limpio }] } }],\n  usageMetadata: { promptTokenCount: r.usage?.input_tokens, candidatesTokenCount: r.usage?.output_tokens },\n  modelVersion: r.model,\n} }];"
+        "jsCode": "// Devuelve la respuesta de Claude con la forma que espera el lector.\nconst r = $json;\nconst rechazo = (mensaje) => [{ json: { error: { message: mensaje } } }];\nif (r.type === 'error' || r.error) return rechazo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return rechazo('Claude rechazó la petición por seguridad.');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();\nlet limpio = texto.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\nconst ini = limpio.indexOf('{');\nconst fin = limpio.lastIndexOf('}');\nif (ini >= 0 && fin > ini) limpio = limpio.slice(ini, fin + 1);\nconst completo = r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence';\nif (!completo) return rechazo('Claude no devolvió una respuesta completa (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');\nreturn [{ json: {\n  candidates: [{ finishReason: 'STOP', content: { parts: [{ text: limpio }] } }],\n  usageMetadata: { promptTokenCount: r.usage?.input_tokens, candidatesTokenCount: r.usage?.output_tokens },\n  modelVersion: r.model,\n} }];"
       },
       "position": [
-        1980,
-        -160
+        1760,
+        0
       ]
-    },
-    {
-      "id": "605c0239-b417-53cd-9d5d-a232cee647d5",
-      "name": "Gemini JSON fijo",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "parameters": {
-        "method": "POST",
-        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/'+$json.modelo+':generateContent' }}",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.peticion) }}",
-        "options": {
-          "timeout": 150000,
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
-      },
-      "position": [
-        1540,
-        100
-      ],
-      "notes": "CREDENCIAL_E3:gemini"
     },
     {
       "id": "0d407f1d-345f-5196-9608-3c5d0cdbed2c",
@@ -302,7 +241,7 @@
         }
       },
       "position": [
-        2200,
+        1980,
         0
       ]
     }
@@ -348,7 +287,7 @@
         ]
       ]
     },
-    "Gemini interno": {
+    "Lector interno": {
       "main": [
         [
           {
@@ -363,25 +302,7 @@
       "main": [
         [
           {
-            "node": "¿Modelo de Claude?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Modelo de Claude?": {
-      "main": [
-        [
-          {
             "node": "Convertir a Claude",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Gemini JSON fijo",
             "type": "main",
             "index": 0
           }
@@ -411,17 +332,6 @@
       ]
     },
     "Claude a formato del lector": {
-      "main": [
-        [
-          {
-            "node": "Devolver respuesta del lector",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Gemini JSON fijo": {
       "main": [
         [
           {

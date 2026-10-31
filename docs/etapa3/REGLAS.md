@@ -39,7 +39,7 @@ La IA recupera, interpreta y estructura la información. El especialista decide 
 - CSV.
 - OCR.
 - RAG.
-- Gemini.
+- Claude (modelo lector).
 - Verificaciones determinísticas.
 - Observaciones.
 - Notificaciones dentro de la aplicación.
@@ -117,7 +117,7 @@ El usuario selecciona la versión final desde el frontend.
 5. El correo seleccionado cambia a `cotizacion_o_ficha_tecnica_aceptada_final`.
 6. La versión final anterior del mismo proveedor y solicitud vuelve a `cotizacion_o_ficha_tecnica_recibida`.
 7. Se conserva toda la información de la versión anterior.
-8. No se ejecutan nuevamente OCR, RAG, Gemini ni la extracción.
+8. No se ejecutan nuevamente OCR, RAG, el modelo lector ni la extracción.
 9. Se registra el especialista, la fecha y el historial.
 10. La operación completa debe ser atómica.
 
@@ -201,7 +201,7 @@ Cada documento debe conservar:
 4. Crear el índice utilizado por RAG.
 5. Consultar el índice por cada criterio del esquema.
 6. Comprobar que todas las páginas fueron cubiertas.
-7. Enviar la evidencia recuperada a Gemini.
+7. Enviar la evidencia recuperada al modelo lector.
 
 ### PDF escaneado o imagen
 
@@ -210,7 +210,7 @@ Cada documento debe conservar:
 3. Conservar página, bloque y nivel de confianza.
 4. Dividir e indexar el texto obtenido.
 5. Aplicar RAG.
-6. Enviar el resultado a Gemini.
+6. Enviar el resultado al modelo lector.
 
 Aplicar OCR correctamente no constituye una observación.
 
@@ -223,14 +223,14 @@ Solo se genera una observación si el documento es ilegible, está incompleto o 
 3. Conservar la posición de cada dato.
 4. Leer valores y resultados de fórmulas.
 5. Normalizar tipos sin perder el valor original.
-6. Enviar la estructura tabular a Gemini.
+6. Enviar la estructura tabular al modelo lector.
 7. Validar que ninguna hoja relevante quede sin procesar.
 
 Excel y CSV no requieren RAG para la lectura tabular.
 
 ---
 
-## 9. Reglas para OCR, RAG y Gemini
+## 9. Reglas para OCR, RAG y el modelo lector
 
 ### OCR
 
@@ -252,13 +252,13 @@ RAG se utilizará para:
 - relacionar información distribuida;
 - recuperar evidencia;
 - consultar fichas técnicas extensas;
-- reducir el contexto enviado a Gemini.
+- reducir el contexto enviado al modelo lector.
 
 RAG no reemplaza el control de cobertura completa. Todas las páginas deben registrarse como procesadas o no procesadas.
 
-### Gemini
+### Modelo lector (Claude)
 
-Gemini debe:
+El modelo lector debe:
 
 - responder con un esquema JSON fijo;
 - no inventar valores;
@@ -275,7 +275,7 @@ Gemini debe:
 
 ## 10. Validaciones determinísticas
 
-Después de Gemini deben ejecutarse reglas de validación independientes.
+Después del modelo lector deben ejecutarse reglas de validación independientes.
 
 Como mínimo:
 
@@ -297,7 +297,7 @@ Como mínimo:
 - campos necesarios para E4;
 - referencias de evidencia existentes.
 
-Gemini propone la lectura. Las reglas determinísticas verifican que pueda guardarse y utilizarse.
+El modelo lector propone la lectura. Las reglas determinísticas verifican que pueda guardarse y utilizarse.
 
 ---
 
@@ -333,7 +333,7 @@ No se genera un Excel de salida.
   "evidencias": [],
   "observaciones": [],
   "procesamiento": {
-    "modelo": "gemini",
+    "modelo": "claude-opus-5-5",
     "uso_ocr": false,
     "uso_rag": false,
     "procesado_at": null
@@ -547,7 +547,7 @@ Versión creada por E3.1 o reintento autorizado por E3.5.
 2. Cambiar el estado a `procesando`.
 3. Determinar el formato de cada archivo.
 4. Aplicar lectura directa, OCR o RAG.
-5. Crear el contexto para Gemini.
+5. Crear el contexto para el modelo lector.
 6. Solicitar el JSON estructurado.
 7. Validar el esquema.
 8. Ejecutar verificaciones determinísticas.
@@ -889,7 +889,7 @@ El flujo existente debe modificarse para:
 6. Procesar todos los formatos admitidos.
 7. Incorporar OCR.
 8. Incorporar RAG.
-9. Reemplazar Qwen por Gemini.
+9. Reemplazar Qwen por Claude.
 10. Eliminar bloques de código duplicados.
 11. Aplicar un esquema JSON fijo.
 12. Agregar validaciones determinísticas.
@@ -913,7 +913,7 @@ Antes de considerar E3 terminada deben validarse estos casos:
 5. Un PDF con texto se procesa con trazabilidad.
 6. Un PDF escaneado utiliza OCR y RAG.
 7. Un Excel procesa todas sus hojas.
-8. Gemini devuelve JSON válido.
+8. El modelo lector devuelve JSON válido.
 9. Los valores guardan evidencia.
 10. Las observaciones altas y medias aparecen en el frontend.
 11. Las bajas permanecen ocultas.
@@ -934,7 +934,7 @@ Antes de considerar E3 terminada deben validarse estos casos:
 
 Las reglas funcionales están cerradas. Aún deben elegirse estas configuraciones técnicas:
 
-- modelo exacto de Gemini;
+- modelo exacto del lector;
 - servicio o método de OCR;
 - modelo de embeddings;
 - almacenamiento del índice RAG;

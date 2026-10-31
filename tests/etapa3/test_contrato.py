@@ -30,7 +30,7 @@ def sample():
 
 def test_modelo_estructura_y_trazabilidad_sin_excel():
     data, source, context = sample()
-    result = contract.combine([data], [source], context, "gemini-prueba")
+    result = contract.combine([data], [source], context, "modelo-prueba")
     assert result["estado_procesamiento"] == "completado"
     assert result["items"][0]["precio_unitario"] == 100
     assert result["evidencias"][0]["ubicacion"]["pagina"] == 1
@@ -49,20 +49,20 @@ def test_cita_inventada_y_documento_de_otra_version_se_rechazan():
     data, source, context = sample()
     data["evidencias"][0]["texto_fuente"] = "dato que no existe"
     with pytest.raises(ValueError):
-        contract.combine([data], [source], context, "gemini-prueba")
+        contract.combine([data], [source], context, "modelo-prueba")
     data, source, context = sample()
     data["items"][0]["documento_id"] = str(uuid.uuid4())
     with pytest.raises(ValueError):
-        contract.combine([data], [source], context, "gemini-prueba")
+        contract.combine([data], [source], context, "modelo-prueba")
 
 
-def test_incoherencia_aritmetica_independiente_de_gemini():
+def test_incoherencia_aritmetica_independiente_del_modelo():
     data, source, context = sample()
     data["items"][0]["cantidad"] = 3
     data["items"][0]["originales"]["cantidad"] = "3"
     source["fragmentos"][0]["texto"] += " cantidad 3"
     data["evidencias"][0]["texto_fuente"] = source["fragmentos"][0]["texto"]
-    result = contract.combine([data], [source], context, "gemini-prueba")
+    result = contract.combine([data], [source], context, "modelo-prueba")
     assert any(o["tipo"] == "incoherencia_parcial" and o["requiere_aclaracion"] for o in result["observaciones"])
     assert result["items"][0]["parcial"] == 200  # No corrige el precio del proveedor.
 
@@ -72,9 +72,9 @@ def test_evidencia_de_importes_no_respalda_moneda_y_condiciones():
     # Los datos existen en el documento, pero la cita elegida no los respalda todos.
     data["evidencias"][0]["texto_fuente"] = "subtotal 200 impuestos 36 total 236"
     with pytest.raises(ValueError, match="moneda no tiene texto original verificable"):
-        contract.combine([data], [source], context, "gemini-prueba")
+        contract.combine([data], [source], context, "modelo-prueba")
     data["evidencias"][0]["texto_fuente"] = source["fragmentos"][0]["texto"]
-    result = contract.combine([data], [source], context, "gemini-prueba")
+    result = contract.combine([data], [source], context, "modelo-prueba")
     assert result["datos_comerciales"]["moneda"] == "USD"
     assert result["datos_comerciales"]["condiciones_pago"] == "contado"
 
@@ -83,7 +83,7 @@ def test_ausente_es_null_y_no_valor_inventado():
     data, source, context = sample()
     data["comerciales"][0]["valores"]["vigencia_oferta"] = None
     data["comerciales"][0]["originales"]["vigencia_oferta"] = None
-    result = contract.combine([data], [source], context, "gemini-prueba")
+    result = contract.combine([data], [source], context, "modelo-prueba")
     assert result["datos_comerciales"]["vigencia_oferta"] is None
     assert any(o["tipo"] == "dato_no_encontrado" for o in result["observaciones"])
 

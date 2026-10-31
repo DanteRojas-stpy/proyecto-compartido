@@ -23,12 +23,13 @@ carpetas. La numeración de esta lista es global y no se repite entre carpetas.
 | 012 | [012_entidades.sql](etapa3/012_entidades.sql) | Configuración, eventos, reservas, resultados, fragmentos, evidencias, observaciones y decisiones de E3 | 011 |
 | 013 | [013_procesamiento.sql](etapa3/013_procesamiento.sql) | Operaciones transaccionales `e3_operar` y recuperación | 012 |
 | 014 | [014_decisiones_y_salida.sql](etapa3/014_decisiones_y_salida.sql) | Decisiones autenticadas, protección de versión final y vistas E3/E4 | 013 |
-| 015 | [015_modelo_gemini_disponible.sql](etapa3/015_modelo_gemini_disponible.sql) | Modelo predeterminado `gemini-3.5-flash-lite`; reemplaza la configuración antigua 3.8 | 012–014 |
+| 015 | [015_modelo_gemini_disponible.sql](etapa3/015_modelo_gemini_disponible.sql) | Histórica: dejó un modelo de Gemini como predeterminado. La 021 lo reemplaza por Claude | 012–014 |
 | 016 | [016_aceptar_con_observaciones.sql](etapa3/016_aceptar_con_observaciones.sql) | Las observaciones pendientes ya no bloquean la aceptación final: E3 pide confirmación al especialista y registra cuántas quedaban | 012–015 |
 | 017 | [017_homologacion_cuadro.sql](etapa4/017_homologacion_cuadro.sql) | E4 (homologación) y E5 (cuadro): cola con botón del especialista, resultados, avisos y vista de estado | 012–016 |
 | 018 | [018_tipo_cambio_cuadro.sql](etapa4/018_tipo_cambio_cuadro.sql) | E5: tipo de cambio autorizado por el especialista al pedir el cuadro (columna y e4_operar ampliada) | 017 |
 | 019 | [019_motivo_error_cuadro.sql](etapa4/019_motivo_error_cuadro.sql) | E5: la vista de estado muestra el motivo real del error del cuadro | 017 |
 | 020 | [020_descarga_cuadro.sql](etapa4/020_descarga_cuadro.sql) | E5: comprobación de acceso para descargar el Excel del cuadro con la sesión del especialista | 017 |
+| 021 | [021_lector_claude.sql](etapa3/021_lector_claude.sql) | El lector de E3 es Claude: la bandera pasa a `lector_habilitado` y el modelo predeterminado a `claude-opus-5-5` | 012–015 |
 
 La 011 reproduce la estructura base comprobada en `costflow-dev` el 28/10/2026.
 La 012 añade las columnas y reglas propias de E3: entre ambas completan la tabla
@@ -64,7 +65,7 @@ y sus demás tablas nuevas. No se recrean módulos antiguos que ya no se utiliza
    [functions/README.md](../functions/README.md).
 3. Importar/publicar los cinco flujos según
    [n8n/etapa3/README.md](../n8n/etapa3/README.md).
-4. Mantener `recepcion_habilitada=false` y `gemini_habilitado=false` hasta completar
+4. Mantener `recepcion_habilitada=false` y `lector_habilitado=false` hasta completar
    las comprobaciones y la prueba integrada autorizada.
 
 El enlace de GitHub del equipo publica la carpeta `functions/`. Los SQL de estas

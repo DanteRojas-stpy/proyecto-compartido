@@ -10,9 +10,8 @@ INTERNAL = "http://costflow-etapa3:8093"
 NHOST = "https://SUBDOMINIO.storage.REGION.nhost.run/v1/files"
 NHOST_E3 = "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar"
 
-# Traducción entre el formato del lector (Gemini) y la API de mensajes de Claude.
-# El servicio de E3 no cambia: sigue enviando y leyendo el formato de Gemini.
-CLAUDE_REQUEST = r"""// Traduce la petición del lector (formato Gemini) al formato de la API de mensajes de Claude.
+# Traducción entre el formato interno del lector (el que habla el servicio de E3) y la API de mensajes de Claude.
+CLAUDE_REQUEST = r"""// Traduce la petición del lector (formato interno del lector) al formato de la API de mensajes de Claude.
 const { modelo, peticion } = $json;
 const partes = (x) => (x?.parts ?? []).map((p) => p.text ?? '').join('\n');
 const sistema = partes(peticion.systemInstruction);
@@ -32,7 +31,7 @@ const cuerpo = {
 if (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };
 return [{ json: { modelo, cuerpo } }];"""
 
-CLAUDE_RESPONSE = r"""// Devuelve la respuesta de Claude con la misma forma que usa el lector para Gemini.
+CLAUDE_RESPONSE = r"""// Devuelve la respuesta de Claude con la forma que espera el lector.
 const r = $json;
 const rechazo = (mensaje) => [{ json: { error: { message: mensaje } } }];
 if (r.type === 'error' || r.error) return rechazo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));
@@ -178,41 +177,29 @@ result.push({json:{contexto,archivos,error:item.json.error??null},pairedItem:{it
     first.link(reserve, unpack); first.link(unpack, branch); first.link(branch, gmail); first.link(gmail, attachments)
     first.link(attachments, receive); first.link(receive, outcome); first.link(outcome, read, 0); first.link(outcome, notify_error, 1)
 
-    second = Flow(2, "Lectura OCR RAG Gemini y validación")
+    second = Flow(2, "Lectura OCR RAG y validación")
     trigger = second.subtrigger()
     read = second.worker("Leer y verificar versión completa", "/read")
     branch = second.switch("Resultado de la lectura", "resultado", ["procesamiento_completado", "error_procesamiento"])
     notify = second.execute(3, "Invocar E3.3")
     second.link(trigger, read); second.link(read, branch); second.link(branch, notify, 0); second.link(branch, notify, 1)
-    gemini_hook = second.webhook("Gemini interno", "e3-interno-gemini")
-    validate = second.code("Preparar petición estructurada", "if(!/^[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('Modelo inválido');return [{json:$json.body}];")
+    reader_hook = second.webhook("Lector interno", "e3-interno-lector")
+    validate = second.code("Preparar petición estructurada", "if(!/^claude-[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('El modelo debe ser de Claude (claude-...)');return [{json:$json.body}];")
     x = len(second.value["nodes"]) * 220
-    use_claude = second.node("¿Modelo de Claude?", "if", {"conditions": {
-        "options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"},
-        "conditions": [{"id": str(uuid.uuid5(uuid.NAMESPACE_URL, "e3-2:modelo-claude")), "leftValue": "={{ $json.modelo }}",
-            "rightValue": "claude-", "operator": {"type": "string", "operation": "startsWith"}}],
-        "combinator": "and"}, "options": {}}, 2, position=[x, 0])
     to_claude = second.code("Convertir a Claude", CLAUDE_REQUEST)
-    second.value["nodes"][-1]["position"] = [x + 220, -160]
+    second.value["nodes"][-1]["position"] = [x, 0]
     claude = second.node("Claude Messages", "httpRequest", {"method": "POST", "url": "https://api.anthropic.com/v1/messages",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "sendHeaders": True, "headerParameters": {"parameters": [{"name": "anthropic-version", "value": "2023-06-01"}]},
         "sendBody": True, "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.cuerpo) }}",
         "options": {"timeout": 170000, "response": {"response": {"neverError": True, "responseFormat": "json"}}}},
-        4.2, "claude", [x + 440, -160])
+        4.2, "claude", [x + 220, 0])
     from_claude = second.code("Claude a formato del lector", CLAUDE_RESPONSE)
-    second.value["nodes"][-1]["position"] = [x + 660, -160]
-    gemini = second.node("Gemini JSON fijo", "httpRequest", {"method": "POST",
-        "url": "={{ 'https://generativelanguage.googleapis.com/v1beta/models/'+$json.modelo+':generateContent' }}",
-        "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth", "sendBody": True,
-        "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.peticion) }}",
-        "options": {"timeout": 150000, "response": {"response": {"neverError": True, "responseFormat": "json"}}}}, 4.2, "gemini",
-        [x + 220, 100])
+    second.value["nodes"][-1]["position"] = [x + 440, 0]
     answer = second.respond("Devolver respuesta del lector")
-    second.value["nodes"][-1]["position"] = [x + 880, 0]
-    second.link(gemini_hook, validate); second.link(validate, use_claude)
-    second.link(use_claude, to_claude, 0); second.link(use_claude, gemini, 1)
-    second.link(to_claude, claude); second.link(claude, from_claude); second.link(from_claude, answer); second.link(gemini, answer)
+    second.value["nodes"][-1]["position"] = [x + 660, 0]
+    second.link(reader_hook, validate); second.link(validate, to_claude)
+    second.link(to_claude, claude); second.link(claude, from_claude); second.link(from_claude, answer)
 
     third = Flow(3, "Notificaciones solo en frontend")
     trigger = third.subtrigger(); notify = third.worker("Registrar notificación única en Nhost", "/notify")

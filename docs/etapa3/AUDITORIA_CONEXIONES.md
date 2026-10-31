@@ -1,4 +1,6 @@
 # Comprobación de conexiones de E3 — actualización 28/10/2026
+> **Registro histórico.** Esta auditoría describe las pruebas hechas cuando el lector de E3 era otro proveedor de IA (Gemini). Desde la migración 021 el lector es Claude; las menciones de abajo se conservan como lo que se comprobó entonces.
+
 
 Auditoría realizada por Codex después de configurar las credenciales del equipo.
 No se ejecutó el procesamiento completo ni se habilitaron las dos banderas de E3.

@@ -37,9 +37,9 @@ const rows=db.prepare('SELECT id,nodes FROM workflow_entity').all();const source
 const configured=kind=>rows.filter(w=>/^costflowEtapa3_[1-5]$/.test(w.id)).flatMap(w=>JSON.parse(w.nodes)).find(n=>n.notes==='CREDENCIAL_E3:'+kind&&n.credentials);
 const reference=kind=>{const n=configured(kind);return n?.credentials?.[kind==='gmail'?'gmailOAuth2':'httpHeaderAuth'];};
 const storage=reference('storage')||(source?JSON.parse(source.nodes).find(n=>n.type==='n8n-nodes-base.httpRequest'&&n.credentials?.httpHeaderAuth)?.credentials.httpHeaderAuth:null);
-const headers=creds.filter(c=>c.type==='httpHeaderAuth'&&!/gemini|interno/i.test(c.name));
+const headers=creds.filter(c=>c.type==='httpHeaderAuth'&&!/claude|interno/i.test(c.name));
 console.log(JSON.stringify({gmail:reference('gmail')||creds.find(c=>c.type==='gmailOAuth2'),storage:storage||headers.find(c=>/nhost|storage|hasura/i.test(c.name))||(headers.length===1?headers[0]:null),
-gemini:reference('gemini')||creds.find(c=>c.type==='httpHeaderAuth'&&/gemini/i.test(c.name)),running:db.prepare("SELECT count(*) n FROM execution_entity WHERE status='running' AND deletedAt IS NULL").get().n}));"""
+claude:reference('claude')||creds.find(c=>c.type==='httpHeaderAuth'&&/claude/i.test(c.name)),running:db.prepare("SELECT count(*) n FROM execution_entity WHERE status='running' AND deletedAt IS NULL").get().n}));"""
     return json.loads(docker("exec", "n8n", "node", "-e", code, capture=True))
 
 
@@ -138,7 +138,7 @@ def install(publicar=False, retirar=False):
         docker("network", "connect", "costflow_e3", "n8n")
     subprocess.run(["docker", "compose", "-f", "compose.etapa3.yml", "up", "-d", "--build"], cwd=ROOT, check=True)
     print("Cinco flujos importados. La consulta autorizada a la función Nhost se comprobó antes de instalar.")
-    print("Se conservaron las credenciales existentes. Comprueba Gemini y las pruebas de aceptación antes de habilitar E3.")
+    print("Se conservaron las credenciales existentes. Comprueba Claude y las pruebas de aceptación antes de habilitar E3.")
     if publicar:
         print("Reinicia n8n cuando no haya ejecuciones en curso para registrar las entradas publicadas.")
 

@@ -40,7 +40,7 @@ def index_document(document: dict, embedding_model=None) -> list[dict]:
 
 
 def context_batches(documents: list[dict], maximum: int | None = None) -> list[list[dict]]:
-    """Prioriza RAG y agrega el resto. Cada fragmento llega a Gemini exactamente una vez."""
+    """Prioriza RAG y agrega el resto. Cada fragmento llega al modelo exactamente una vez."""
     maximum = maximum or int(os.getenv("E3_CONTEXT_CHARS", "24000"))
     all_fragments = {x["id"]: x for d in documents for x in d["fragmentos"]}
     selected = list(dict.fromkeys(x for d in documents for q in d.get("consultas_rag", []) for x in q["fragmentos"]))
