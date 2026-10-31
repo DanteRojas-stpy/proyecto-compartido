@@ -920,16 +920,15 @@ function programarActualizacionE4(seccion, solicitud) {
   }, 8000);
 }
 
-// El cuadro está en Storage; se descarga con la sesión del especialista.
+// El Excel está en Storage; la Function e4-operar comprueba que sea del especialista y se lo entrega.
 async function descargarCuadro(solicitud, fila) {
-  const token = nhost.getUserSession()?.accessToken;
-  if (!token) throw new Error("La sesión venció. Vuelve a ingresar.");
-  const url = `https://${configuracionNhost.NHOST_SUBDOMAIN}.storage.${configuracionNhost.NHOST_REGION}.nhost.run/v1/files/${fila.cuadro_storage_file_id}`;
-  const respuesta = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-  if (!respuesta.ok) throw new Error("No se pudo descargar el cuadro. Vuelve a intentarlo.");
+  const respuesta = await llamarFuncionNhost("e4-operar", "descargar_e5", { cuadro_id: fila.cuadro_id });
+  if (!respuesta.archivo_b64) throw new Error(respuesta.error ?? "No se pudo descargar el cuadro. Vuelve a intentarlo.");
+  const bytes = Uint8Array.from(atob(respuesta.archivo_b64), (c) => c.charCodeAt(0));
+  const tipo = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
   const enlace = document.createElement("a");
-  enlace.href = URL.createObjectURL(await respuesta.blob());
-  enlace.download = nombreArchivoCuadro(fila.nombre_archivo, solicitud.codigo, fila.e5_revision);
+  enlace.href = URL.createObjectURL(new Blob([bytes], { type: tipo }));
+  enlace.download = nombreArchivoCuadro(respuesta.nombre_archivo ?? fila.nombre_archivo, solicitud.codigo, fila.e5_revision);
   enlace.click();
   URL.revokeObjectURL(enlace.href);
 }

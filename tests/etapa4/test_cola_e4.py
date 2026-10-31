@@ -14,11 +14,11 @@ def test_e4_e5_operaciones_permisos_y_cola(postgres):
     sql = postgres
     instalar(sql)
     # La migración se puede repetir sin cambiar nada.
-    for nombre in ('017_homologacion_cuadro.sql', '018_tipo_cambio_cuadro.sql'):
+    for nombre in ('017_homologacion_cuadro.sql', '018_tipo_cambio_cuadro.sql', '019_motivo_error_cuadro.sql', '020_descarga_cuadro.sql'):
         sql((ROOT / 'db/etapa4' / nombre).read_text(encoding='utf-8'))
     salida = sql((ROOT / 'tests/etapa4/integracion_e4.sql').read_text(encoding='utf-8'))
     lineas = salida.splitlines()
-    assert len(lineas) == 12, salida
+    assert len(lineas) == 13, salida
     assert all(linea.endswith('|true') for linea in lineas), salida
 
 
