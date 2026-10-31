@@ -1,4 +1,4 @@
-"""Servicio local de apoyo. n8n conserva las credenciales de Gmail, Storage y Gemini."""
+"""Servicio local de apoyo. n8n conserva las credenciales de Gmail, Storage y Claude."""
 from __future__ import annotations
 
 import base64
@@ -65,8 +65,8 @@ class Bridge:
         result = self.call("storage_get", {"storage_file_id": identifier(file_id)})
         return base64.b64decode(result["contenido_base64"], validate=True)
 
-    def gemini(self, model_name: str, body: dict) -> dict:
-        response = requests.post(self.root + "/webhook/e3-interno-gemini", headers=self.headers,
+    def lector(self, model_name: str, body: dict) -> dict:
+        response = requests.post(self.root + "/webhook/e3-interno-lector", headers=self.headers,
                                  json={"modelo": model_name, "peticion": body}, timeout=180)
         response.raise_for_status()
         return response.json()
@@ -92,7 +92,7 @@ def read_document(data: bytes, meta: dict) -> dict:
 
 @app.get("/health")
 def health():
-    return {"ok": True, "gemini": "credencial administrada por n8n", "salida": "json_nhost"}
+    return {"ok": True, "lector": "credencial administrada por n8n", "salida": "json_nhost"}
 
 
 @app.post("/receive", dependencies=[Depends(internal)])
@@ -163,7 +163,7 @@ def read(payload: dict):
         responses = []
         for batch in batches:
             bridge.call("renovar_lease", {"version_id": version_id, "token": context["token"]})
-            responses.append(contract.parse_response(bridge.gemini(config["modelo"], contract.request(batch, sources))))
+            responses.append(contract.parse_response(bridge.lector(config["modelo"], contract.request(batch, sources))))
         result = contract.combine(responses, sources, version, config["modelo"])
         return bridge.call("guardar_resultado", {"version_id": version_id, "token": context["token"], "resultado": result}, timeout=180)
     except Exception as exc:

@@ -71,7 +71,7 @@ La consulta autorizada `configuracion` debe devolver `respuesta.modelo`, usando
 la clave interna existente. Recibir `401` sin clave comprueba únicamente la
 protección: no demuestra acceso a la base. El instalador local exige la consulta
 autorizada correcta antes de reemplazar o publicar flujos; si falla, conserva la
-instalación que ya funcionaba. No habilita recepción ni Gemini automáticamente.
+instalación que ya funcionaba. No habilita recepción ni la lectura automáticamente.
 
 Pruebas del handler (Node.js 24, sin paquetes adicionales ni claves reales):
 

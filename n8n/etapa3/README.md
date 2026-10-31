@@ -36,20 +36,19 @@ Importa los cinco JSON y, en todos los nodos con el aviso
 `CREDENCIAL_E3:internal`, selecciona esa credencial. Reemplaza `SUBDOMINIO` y
 `REGION` en los tres nodos que llaman a `e3-operar`.
 
-Asigna además las credenciales existentes de Gmail, Gemini y Nhost Storage en
+Asigna además las credenciales existentes de Gmail, Claude y Nhost Storage en
 los nodos que muestran sus respectivos avisos.
 
 Los cuerpos de las tres peticiones a Nhost separan las llaves de cierre del
 objeto y de la expresión. No unas esos cierres: el evaluador de n8n puede leer
 el primer `}}` como fin anticipado y devolver `invalid syntax`/HTTP 500.
 
-## 2.1 Lector con Claude (opcional)
+## 2.1 Lector con Claude
 
-El nodo `¿Modelo de Claude?` de `e3-2.json` mira el modelo configurado en
-`e3_configuracion.modelo`. Si empieza con `claude-`, la lectura va a la API de
-mensajes de Claude; con cualquier otro valor (por ejemplo `gemini-3.5-flash-lite`)
-sigue por Gemini. El servicio de `app/etapa3` no cambia: n8n traduce la
-petición y la respuesta, y el validador de E3 revisa el resultado igual que antes.
+La lectura de `e3-2.json` va siempre a la API de mensajes de Claude, con el modelo
+configurado en `e3_configuracion.modelo` (debe empezar con `claude-`; si no, el flujo
+lo rechaza). El servicio de `app/etapa3` envía su petición en un formato interno y
+n8n la traduce; el validador de E3 revisa el resultado.
 
 Para usarlo:
 
@@ -66,8 +65,7 @@ Para usarlo:
    ```
 
    Alternativas: `claude-sonnet-5-5` (más barato) o `claude-haiku-5-5` (el más
-   económico, con menos precisión al citar). Para volver a Gemini, usa
-   `gemini-3.5-flash-lite` o el modelo de Gemini que prefieras.
+   económico, con menos precisión al citar).
 4. Reintenta una versión desde la aplicación y comprueba el resultado.
 
 El nodo no envía `temperature` ni `tool_choice`, que los modelos 5.x rechazan, y
@@ -83,11 +81,11 @@ sin `E3_INTERNAL_KEY`.
 
 ## 4. Prueba mínima
 
-1. Mantén `recepcion_habilitada=false` y `gemini_habilitado=false`.
+1. Mantén `recepcion_habilitada=false` y `lector_habilitado=false`.
 2. Ejecuta `Tomar eventos pendientes`: debe responder
    `configuracion_pendiente` o una lista vacía, sin solicitar PostgreSQL.
 3. Prueba Storage con un archivo temporal.
-4. Prueba Gemini con un contenido pequeño.
+4. Prueba el lector con un contenido pequeño.
 5. Habilita las banderas únicamente después de superar estas comprobaciones.
 
 PostgreSQL continúa dentro de Nhost. Las operaciones de base pasan por HTTPS y

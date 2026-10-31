@@ -1,5 +1,5 @@
 -- Prueba contra el esquema instalado. Los registros de prueba se revierten al terminar.
--- No cambia correos, decisiones ni documentos reales; no llama Gmail, Storage ni Gemini.
+-- No cambia correos, decisiones ni documentos reales; no llama Gmail, Storage ni al modelo.
 BEGIN;
 CREATE TEMP TABLE e3_prueba_resultados(caso text,correcto boolean) ON COMMIT DROP;
 DO $t$
@@ -52,12 +52,12 @@ BEGIN
  respuesta:=public.e3_operar('registrar_documentos',jsonb_build_object('version_id',v1,'token',token1,'documentos',documentos));
  ASSERT (SELECT count(*) FROM public.documentos WHERE version_id=v1 AND correo_id=mail1)=2,'Archivos fuera de su versión';
  INSERT INTO e3_prueba_resultados VALUES('dos_archivos_misma_version',true);
- UPDATE public.e3_configuracion SET gemini_habilitado=false WHERE id;
+ UPDATE public.e3_configuracion SET lector_habilitado=false WHERE id;
  respuesta:=public.e3_operar('iniciar_lectura',jsonb_build_object('version_id',v1));
- ASSERT respuesta->>'resultado'='configuracion_pendiente','No se respetó Gemini pendiente';
+ ASSERT respuesta->>'resultado'='configuracion_pendiente','No se respetó el lector pendiente';
  ASSERT (SELECT e3_intentos FROM public.versiones_cotizacion WHERE id=v1)=0,'Se consumió un intento sin clave';
- INSERT INTO e3_prueba_resultados VALUES('sin_gemini_no_consume_intentos',true);
- UPDATE public.e3_configuracion SET gemini_habilitado=true WHERE id;
+ INSERT INTO e3_prueba_resultados VALUES('sin_lector_no_consume_intentos',true);
+ UPDATE public.e3_configuracion SET lector_habilitado=true WHERE id;
  contexto:=public.e3_operar('iniciar_lectura',jsonb_build_object('version_id',v1));token1:=(contexto->>'token')::uuid;
  respuesta:=public.e3_operar('guardar_fuentes',jsonb_build_object('version_id',v1,'token',token1,'documentos',jsonb_build_array(
   jsonb_build_object('documento_id',d1,'fragmentos',jsonb_build_array(jsonb_build_object('id',f1,'texto','Equipo de prueba 100','ubicacion',jsonb_build_object('pagina',1)))),

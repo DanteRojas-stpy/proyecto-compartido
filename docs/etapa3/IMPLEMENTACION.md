@@ -13,25 +13,25 @@ para forzar relecturas. La función anterior de aceptación devuelve que fue ree
 
 **La instalación todavía no está lista para una corrida completa de producción.**
 
-- El código del PR #41 de Rodrigo se integró con la corrección de Gemini del #39.
+- El código del PR #41 de Rodrigo se integró con la corrección del lector del #39.
   La Function está desplegada en Nhost desde `juan-daniel/e3-reglas-y-flujos`.
   Se sincronizó la clave interna y se comprobó `configuracion` con HTTP 200 tanto
   directamente como por la cadena servicio E3 → n8n → Function → Nhost.
   Los tres accesos de base de E3.1/E3.5 ya utilizan HTTPS; se conservaron las demás
   credenciales y los cinco flujos publicados. El instalador verifica la Function
   antes de sustituir los flujos y se detiene si falla.
-- Las credenciales de Gemini, Gmail y Nhost ya están configuradas en la instalación
+- Las credenciales de Claude, Gmail y Nhost ya están configuradas en la instalación
   original. La variante portable elimina la credencial PostgreSQL de n8n y usa la
   Function protegida `functions/e3-operar.ts` por HTTPS.
 - Storage permite descargar originales y cargar un archivo temporal. Se corrigió
   una respuesta 404 guardada en caché que impedía descargar inmediatamente archivos nuevos.
 - Hasura ya permite administrar la configuración. Las consultas y permisos de E3/E4
   se publicaron y sus consultas GraphQL respondieron sin errores.
-- Gemini ya respondió con `gemini-3.5-flash-lite` usando la misma credencial de n8n.
+- El lector responde con Claude (`claude-opus-5-5`) usando la credencial de n8n.
   Se validó el contrato completo de E3 con una cotización ficticia: un ítem,
   evidencias literales, cantidades y precios correctos. El modelo anterior devolvía 503.
   No se enviaron cotizaciones reales a Google durante estas pruebas.
-- Se conservan `recepcion_habilitada=false` y `gemini_habilitado=false`. Los eventos se
+- Se conservan `recepcion_habilitada=false` y `lector_habilitado=false`. Los eventos se
   conservan pendientes hasta superar las pruebas restantes.
 - Falta una dirección pública HTTPS de n8n para el frontend del equipo; el servicio
   de procesamiento sigue privado. También falta probar una decisión con JWT real del especialista.
@@ -47,7 +47,7 @@ desde la interfaz real antes de habilitar producción. El detalle de conexiones 
 | Flujo | Entrada | Trabajo | Salida |
 |---|---|---|---|
 | E3.1 | Evento persistido al confirmar un correo en E2 | Una versión por correo, descarga exacta de adjuntos, huella SHA-256, deduplicación y originales en `cotizaciones` | Versión pendiente de lectura |
-| E3.2 | Versión registrada o recuperación autorizada | Extracción completa, OCR, búsqueda por criterios, Gemini, comprobaciones y guardado transaccional | JSON, evidencia y observaciones en Nhost |
+| E3.2 | Versión registrada o recuperación autorizada | Extracción completa, OCR, búsqueda por criterios, modelo lector, comprobaciones y guardado transaccional | JSON, evidencia y observaciones en Nhost |
 | E3.3 | Lectura terminada o error definitivo | Aviso único con versión, color y acceso al documento | Notificación del frontend; nunca Gmail |
 | E3.4 | Petición del frontend con sesión Nhost | Aceptar cualquier versión procesada elegida, descartar con motivo o registrar aclaración | Decisión auditada; ningún envío de correo |
 | E3.5 | Revisión cada minuto o reintento autorizado | Recuperar ejecuciones vencidas y pasos pendientes, volver al punto seguro | Lectura o error definitivo visible |
@@ -66,7 +66,7 @@ no sustituye una final. Desactivar la final anterior no crea un nuevo evento de 
 
 | Tema | Configuración implementada |
 |---|---|
-| Gemini | `gemini-3.5-flash-lite`, configurable en `e3_configuracion`; temperatura 0 y esquema JSON fijo |
+| Modelo lector | `claude-opus-5-5`, configurable en `e3_configuracion`; respuesta JSON con esquema fijo |
 | OCR | Tesseract local, español e inglés; conserva página, bloque, caja y confianza |
 | Búsqueda documental | FastEmbed/ONNX, `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, 384 dimensiones, dos hilos de CPU |
 | Índice | Fragmentos y vectores guardados por documento/versión en PostgreSQL; extracción local reutilizable |
@@ -80,7 +80,7 @@ no sustituye una final. Desactivar la final anterior no crea un nuevo evento de 
 | Salida | JSON independiente de una plantilla; conserva campos originales y normalizados, ítems comerciales y especificaciones extensibles para E4 |
 
 El modelo de búsqueda no es Ollama y no utiliza la tarjeta gráfica. Se descargó y
-probó localmente. Solo Gemini interpreta el contenido; su llamada real y el contrato
+probó localmente. Solo el modelo lector interpreta el contenido; su llamada real y el contrato
 de salida se comprobaron con datos ficticios.
 No se realizan conversiones monetarias, equivalencias técnicas ni homologación.
 Las unidades se normalizan por una lista de alias conservadora, sin alterar cantidades.
@@ -89,9 +89,7 @@ Las fórmulas de Excel se leen junto con su último resultado guardado. Si el ar
 no tiene ese resultado, se conserva la fórmula y se genera una observación; no se
 simula un cálculo ni se inventa el valor. Se incluyen hojas ocultas.
 
-Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-api/docs/models),
-[salida estructurada](https://ai.google.dev/gemini-api/docs/generate-content/structured-output),
-[modelos de FastEmbed](https://qdrant.github.io/fastembed/examples/Supported_Models/).
+Referencia de configuración: [modelos de FastEmbed](https://qdrant.github.io/fastembed/examples/Supported_Models/).
 
 ## Instalación reproducible
 
@@ -100,9 +98,9 @@ Referencias de configuración: [modelos de Gemini](https://ai.google.dev/gemini-
    `011_base_versiones_cotizacion.sql`. La base 011 crea las dependencias que
    existían fuera del repositorio; no sustituye las tablas ya presentes.
 2. En un proyecto nuevo, continuar en orden con `db/etapa3/012_entidades.sql`,
-   `013_procesamiento.sql`, `014_decisiones_y_salida.sql` y
-   `015_modelo_gemini_disponible.sql`. Esta última cambia el modelo anterior por el
-   probado; conserva una elección distinta del equipo y no activa las banderas.
+   `013_procesamiento.sql`, `014_decisiones_y_salida.sql`, `015_modelo_gemini_disponible.sql`
+   y `021_lector_claude.sql`. La 021 deja Claude como lector (bandera `lector_habilitado`,
+   modelo `claude-opus-5-5`) y no activa las banderas.
    Estos archivos antes se llamaban 001–004 dentro de `db/etapa3/`: el SQL se
    conserva. Si ya se aplicaron en el proyecto del equipo, no repetirlos.
 3. Desplegar `functions/e3-operar.ts` en el mismo proyecto Nhost y registrar el
@@ -153,19 +151,18 @@ lectura restringida a las solicitudes del usuario; no habilita escrituras direct
 de las tablas E3 desde el frontend. Aplica el cambio de forma atómica con control
 de revisión para evitar sobrescribir una modificación concurrente del equipo.
 
-**Gemini.** Crear una clave del proyecto de Google AI Studio. Guardarla directamente
-en una nueva credencial Header Auth de n8n: cabecera `x-goog-api-key`, valor la clave.
-Asignarla al nodo «Gemini JSON fijo» de E3.2, guardar y publicar. El instalador puede
-encontrarla por su nombre si contiene «Gemini». No pegar claves en el JSON del flujo.
-Comprobar disponibilidad y cuota del modelo elegido en la cuenta del equipo.
-La configuración vigente usa `gemini-3.5-flash-lite`; E3.2 recibe el nombre desde
-Nhost, por lo que este cambio no requiere otra clave ni modificar la URL del nodo.
+**Claude.** Crear una clave de la API de Anthropic. Guardarla directamente en una
+credencial Header Auth de n8n llamada `CostFlow E3 - Claude`: cabecera `x-api-key`,
+valor la clave. Asignarla al nodo «Claude Messages» de E3.2, guardar y publicar. El
+instalador puede encontrarla por su nombre si contiene «Claude». No pegar claves en
+el JSON del flujo. Comprobar disponibilidad y cuota del modelo elegido en la cuenta.
+La configuración vigente usa `claude-opus-5-5`; E3.2 recibe el nombre desde Nhost.
 
-Después de verificar Storage y una lectura de prueba con Gemini:
+Después de verificar Storage y una lectura de prueba con Claude:
 
 ```sql
 UPDATE public.e3_configuracion
-SET recepcion_habilitada=true, gemini_habilitado=true
+SET recepcion_habilitada=true, lector_habilitado=true
 WHERE id;
 ```
 
@@ -189,8 +186,7 @@ WHERE id;
 - Las consultas GraphQL de E3/E4 ya respondieron. Con el rol de usuario, el propietario
   pudo consultar sus versiones y una cuenta ajena no obtuvo ninguna. Esta prueba de
   permisos no sustituye la prueba pendiente con JWT real desde el frontend.
-- Gemini devolvió 503 con el modelo anterior. Se sustituyó por
-  `gemini-3.5-flash-lite`, que respondió por la entrada publicada de E3.2 y superó
+- La primera versión del lector (otro proveedor de IA) fue sustituida por Claude, que respondió por la entrada publicada de E3.2 y superó
   `parse_response` y `combine` con el esquema completo, datos originales y evidencias
   de una cotización ficticia (2 unidades × USD 100, parcial 200, total 236).
   También se reforzaron las instrucciones: las citas deben contener todos los
@@ -199,7 +195,7 @@ WHERE id;
   No se enviaron correos ni se ejecutó el procesamiento completo de cotizaciones.
 
 Los grupos SQL comprueban: correo sin documentos, una versión por correo,
-repetición sin duplicados, dos archivos en la misma versión, falta de Gemini sin
+repetición sin duplicados, dos archivos en la misma versión, falta del lector sin
 consumir intentos, bloqueo por aclaración incluso de severidad baja, descarte con
 motivo, selección de una versión anterior, cambio de final sin relectura, notificación
 única y tres fallos con reintento manual conservando historial. También verifican

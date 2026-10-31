@@ -24,7 +24,7 @@ Nunca publica la raíz del repositorio ni los Excel.
 Se excluye el `config.local.js` de la computadora y se genera uno con los
 identificadores públicos del proyecto `costflow-dev`: subdominio
 `zgorsmkvfyytsouacrpa` y región `sa-east-1` (variables en `netlify.toml`). No
-necesita secretos administrativos, contraseñas ni claves de Gemini.
+necesita secretos administrativos, contraseñas ni claves de modelos de IA.
 
 Cada fusión en `main` actualiza el sitio. Los Pull Requests generan una vista
 previa propia que Netlify muestra en el PR. El flujo de GitHub

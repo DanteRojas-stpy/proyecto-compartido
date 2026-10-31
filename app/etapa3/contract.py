@@ -1,4 +1,4 @@
-"""Contrato fijo para Gemini y validación independiente de la respuesta."""
+"""Contrato fijo para el modelo lector y validación independiente de la respuesta."""
 from __future__ import annotations
 
 import json
@@ -105,10 +105,10 @@ def request(fragments: list[dict], documents: list[dict]) -> dict:
 
 def parse_response(response: dict) -> dict:
     if response.get("error"):
-        raise ValueError("Gemini rechazó la petición: " + str(response["error"].get("message", "error")))
+        raise ValueError("El modelo rechazó la petición: " + str(response["error"].get("message", "error")))
     candidates = response.get("candidates", [])
     if not candidates or candidates[0].get("finishReason") != "STOP":
-        raise ValueError("Gemini no devolvió una respuesta completa.")
+        raise ValueError("El modelo no devolvió una respuesta completa.")
     parts = candidates[0].get("content", {}).get("parts", [])
     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
     data = json.loads(text)
@@ -200,7 +200,7 @@ def combine(responses: list[dict], documents: list[dict], version: dict, model_n
         for source in data["evidencias"]:
             fragment = fragments.get(source["fragmento_id"])
             if source["id"] in mapping or not fragment or fragment["documento_id"] != source["documento_id"]:
-                raise ValueError("Gemini devolvió una referencia de evidencia inválida.")
+                raise ValueError("El modelo devolvió una referencia de evidencia inválida.")
             if not source["texto_fuente"].strip() or source["texto_fuente"] not in fragment["texto"]:
                 raise ValueError("La cita de evidencia no existe en el fragmento indicado.")
             key = stable_id(f"{version_id}:evidencia:{batch_index}:{source['id']}")
@@ -314,7 +314,7 @@ def combine(responses: list[dict], documents: list[dict], version: dict, model_n
             observations.append({**entry, "evidencia_ids": [mapping[x] for x in entry["evidencia_ids"]]})
         inferences.extend(data["inferencias"])
     if set(document_types) != docids:
-        raise ValueError("Gemini no clasificó todos los documentos.")
+        raise ValueError("El modelo no clasificó todos los documentos.")
     unique_items = {}
     for entry in items:
         if entry["id"] in unique_items:

@@ -76,8 +76,8 @@ def test_instalacion_vacia_y_base_repetible_sin_cambiar_datos(postgres):
             assert sql("SELECT to_regclass('public.versiones_cotizacion') IS NULL;") == 't'
         sql(path.read_text(encoding='utf-8'))
 
-    assert sql("SELECT modelo||':'||recepcion_habilitada||':'||gemini_habilitado "
-               "FROM public.e3_configuracion;") == 'gemini-3.5-flash-lite:false:false'
+    assert sql("SELECT modelo||':'||recepcion_habilitada||':'||lector_habilitado "
+               "FROM public.e3_configuracion;") == 'claude-opus-5-5:false:false'
     assert sql("SELECT to_regprocedure('public.e3_operar(text,jsonb)') IS NOT NULL "
                "AND to_regclass('public.e3_finales_e4') IS NOT NULL;") == 't'
     sql("""

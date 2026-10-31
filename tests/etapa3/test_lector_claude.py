@@ -38,17 +38,14 @@ def ejecutar_nodo(codigo, entrada):
     return json.loads(resultado.stdout)[0]['json']
 
 
-def test_el_modelo_decide_entre_claude_y_gemini():
+def test_el_lector_solo_usa_claude():
     flujo = flujo_lectura()
     conexiones = flujo['connections']
-    assert conexiones['Preparar petición estructurada']['main'][0][0]['node'] == '¿Modelo de Claude?'
-    ramas = conexiones['¿Modelo de Claude?']['main']
-    assert ramas[0][0]['node'] == 'Convertir a Claude'
-    assert ramas[1][0]['node'] == 'Gemini JSON fijo'
-    condicion = nodo(flujo, '¿Modelo de Claude?')['parameters']['conditions']['conditions'][0]
-    assert condicion['rightValue'] == 'claude-' and condicion['operator']['operation'] == 'startsWith'
-    for origen in ('Claude a formato del lector', 'Gemini JSON fijo'):
-        assert conexiones[origen]['main'][0][0]['node'] == 'Devolver respuesta del lector'
+    assert conexiones['Lector interno']['main'][0][0]['node'] == 'Preparar petición estructurada'
+    assert conexiones['Preparar petición estructurada']['main'][0][0]['node'] == 'Convertir a Claude'
+    assert conexiones['Claude a formato del lector']['main'][0][0]['node'] == 'Devolver respuesta del lector'
+    assert 'claude-' in nodo(flujo, 'Preparar petición estructurada')['parameters']['jsCode']
+    assert 'gemini' not in json.dumps(flujo).lower()
 
 
 def test_nodo_de_claude_no_lleva_claves_y_exige_su_credencial():
