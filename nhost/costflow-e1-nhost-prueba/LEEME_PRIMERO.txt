@@ -1,0 +1,9 @@
+COSTFLOW - PRUEBA E1 CON NHOST
+
+1. Descomprime este archivo.
+2. Ejecuta scripts\iniciar_frontend.cmd.
+3. Escribe correo y una contrasena de 8 a 50 caracteres.
+4. Pulsa Crear cuenta solamente la primera vez.
+5. Completa la solicitud con archivos Excel de prueba, sin datos reales.
+
+La configuracion publica de costflow-dev ya esta incluida.
