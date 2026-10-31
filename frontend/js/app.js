@@ -949,6 +949,45 @@ async function solicitarCuadro(solicitud, seccion, boton, aviso, campos) {
   }
 }
 
+// E5 llena la plantilla cargada en la solicitud: se muestra cuál es y, si falta, se puede subir aquí.
+async function mostrarPlantillaCuadro(solicitud, linea, aviso) {
+  try {
+    const datos = await graphql(
+      `query PlantillaCuadro($id: uuid!) {
+        documentos(where: { solicitud_id: { _eq: $id }, tipo: { _eq: "plantilla_comparativo" } }, order_by: { created_at: desc }, limit: 1) { nombre_original }
+      }`,
+      { id: solicitud.id },
+    );
+    const documento = datos.documentos?.[0];
+    if (documento) {
+      linea.textContent = `Plantilla del cuadro: ${documento.nombre_original}`;
+      return;
+    }
+    linea.textContent = "Esta solicitud no tiene plantilla del cuadro (.xlsx). Súbela para poder generar el cuadro:";
+    const entrada = document.createElement("input");
+    entrada.type = "file";
+    entrada.accept = ".xlsx,.xls";
+    entrada.addEventListener("change", async () => {
+      const archivo = entrada.files?.[0];
+      if (!archivo) return;
+      entrada.disabled = true;
+      avisarCorreo(aviso, "Subiendo la plantilla…");
+      try {
+        await subirDocumento(solicitud.id, "plantilla_comparativo", archivo);
+        linea.textContent = `Plantilla del cuadro: ${archivo.name}`;
+        entrada.remove();
+        avisarCorreo(aviso, "Plantilla cargada.", "exito");
+      } catch (error) {
+        avisarCorreo(aviso, `No se pudo subir la plantilla: ${mensajeError(error)}`, "error");
+        entrada.disabled = false;
+      }
+    });
+    linea.after(entrada);
+  } catch (error) {
+    linea.textContent = `No se pudo comprobar la plantilla: ${mensajeError(error)}`;
+  }
+}
+
 function crearBloqueCuadro(solicitud, fila, seccion) {
   const estado = describirEstadoE5(fila);
   const bloque = document.createElement("div");
@@ -988,7 +1027,9 @@ function crearBloqueCuadro(solicitud, fila, seccion) {
     descargar.addEventListener("click", () => descargarCuadro(solicitud, fila).catch((error) => avisarCorreo(aviso, mensajeError(error), "error")));
     acciones.append(descargar);
   }
-  bloque.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), cambio, acciones, aviso);
+  const plantilla = crearTextoE4("p", "Buscando la plantilla del cuadro…", "ayuda");
+  bloque.append(cabecera, crearTextoE4("p", estado.mensaje, "ayuda"), plantilla, cambio, acciones, aviso);
+  mostrarPlantillaCuadro(solicitud, plantilla, aviso);
   return bloque;
 }
 
