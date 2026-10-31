@@ -1,0 +1,284 @@
+{
+  "name": "Comparación de cotizaciones contra la base de la plantilla",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "inicio-manual",
+      "name": "Iniciar comparación",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "tc", "name": "tipo_cambio", "value": null, "type": "number" },
+            { "id": "fuente", "name": "fuente_tipo_cambio", "value": "PENDIENTE: completar con el tipo de cambio aprobado", "type": "string" },
+            { "id": "base-metrado", "name": "base_metrado", "value": 2, "type": "number" },
+            { "id": "base-costo", "name": "base_costo_unitario_s", "value": 141344.6, "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "parametros",
+      "name": "Parámetros y base de la plantilla",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 80]
+    },
+    {
+      "parameters": {
+        "fileSelector": "C:\\Users\\Dante\\Downloads\\cotizacion_MA-001_82f0df6e-1a0f-49bb-8666-57173f4f9962.xlsx"
+      },
+      "id": "leer-1",
+      "name": "Leer cotización 1",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "fileSelector": "C:\\Users\\Dante\\Downloads\\cotizacion_MA-001_8cca1c5e-1423-42ff-b632-6461b3fd9331.xlsx"
+      },
+      "id": "leer-2",
+      "name": "Leer cotización 2",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [220, 440]
+    },
+    {
+      "parameters": {
+        "fileSelector": "C:\\Users\\Dante\\Downloads\\cotizacion_MA-001_a927db00-9389-4125-8790-52ed17a03791.xlsx"
+      },
+      "id": "leer-3",
+      "name": "Leer cotización 3",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [220, 580]
+    },
+    {
+      "parameters": {
+        "fileSelector": "C:\\Users\\Dante\\Downloads\\cotizacion_MA-001_dc043570-a6af-4176-a7df-4e27750fd1da.xlsx"
+      },
+      "id": "leer-4",
+      "name": "Leer cotización 4",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [220, 720]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "binaryPropertyName": "data",
+        "options": { "sheetName": "Datos cotizacion" }
+      },
+      "id": "excel-1",
+      "name": "Filas de cotización 1",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "binaryPropertyName": "data",
+        "options": { "sheetName": "Datos cotizacion" }
+      },
+      "id": "excel-2",
+      "name": "Filas de cotización 2",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [440, 440]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "binaryPropertyName": "data",
+        "options": { "sheetName": "Datos cotizacion" }
+      },
+      "id": "excel-3",
+      "name": "Filas de cotización 3",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [440, 580]
+    },
+    {
+      "parameters": {
+        "operation": "fromFile",
+        "binaryPropertyName": "data",
+        "options": { "sheetName": "Datos cotizacion" }
+      },
+      "id": "excel-4",
+      "name": "Filas de cotización 4",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [440, 720]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "arch-1", "name": "archivo", "value": "cotizacion_MA-001_82f0df6e", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "marca-1",
+      "name": "Marcar archivo 1",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "arch-2", "name": "archivo", "value": "cotizacion_MA-001_8cca1c5e", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "marca-2",
+      "name": "Marcar archivo 2",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 440]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "arch-3", "name": "archivo", "value": "cotizacion_MA-001_a927db00", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "marca-3",
+      "name": "Marcar archivo 3",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 580]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "arch-4", "name": "archivo", "value": "cotizacion_MA-001_dc043570", "type": "string" }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "marca-4",
+      "name": "Marcar archivo 4",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [660, 720]
+    },
+    {
+      "parameters": { "numberInputs": 4 },
+      "id": "unir",
+      "name": "Unir cotizaciones",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [880, 440]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Parámetros y base de la plantilla').first().json;\nconst BASE_METRADO = Number(p.base_metrado);\nconst BASE_COSTO = Number(p.base_costo_unitario_s);\nconst PRESUPUESTO_BASE = BASE_METRADO * BASE_COSTO;\nconst TC = p.tipo_cambio === null || p.tipo_cambio === undefined || p.tipo_cambio === '' ? null : Number(p.tipo_cambio);\n\nconst filas = $input.all().map(i => i.json).filter(r => r.Proveedor);\n\nreturn filas.map(r => {\n  const precio = Number(r.Precio_unitario) || null;\n  const cantidad = Number(r.Cantidad) || null;\n  const moneda = String(r.Moneda || '').toUpperCase();\n  const estado = [];\n  let precioPen = null;\n\n  if (precio === null) estado.push('sin_precio');\n  if (moneda === 'USD') {\n    if (TC) precioPen = precio * TC; else estado.push('pendiente_tipo_cambio');\n  } else if (moneda === 'PEN') {\n    precioPen = precio;\n  } else {\n    estado.push('moneda_no_indicada');\n  }\n\n  if (cantidad === null) estado.push('pendiente_cantidad');\n  else if (cantidad !== BASE_METRADO) estado.push('metrado_distinto_de_base');\n\n  const desvUnit = precioPen === null ? null : (precioPen - BASE_COSTO) / BASE_COSTO;\n  if (desvUnit !== null && Math.abs(desvUnit) > 0.5) estado.push('revisar_moneda_o_precio');\n\n  const parcial = precioPen !== null && cantidad !== null ? precioPen * cantidad : null;\n\n  return {\n    archivo: r.archivo,\n    Proveedor: r.Proveedor,\n    Descripcion: r.Descripcion,\n    Moneda: moneda || null,\n    Precio_original: precio,\n    Cantidad: cantidad,\n    Precio_unitario_S: precioPen === null ? null : Math.round(precioPen * 100) / 100,\n    Costo_base_unitario_S: BASE_COSTO,\n    Desviacion_unitaria_pct: desvUnit === null ? null : Math.round(desvUnit * 10000) / 100,\n    Parcial_S: parcial === null ? null : Math.round(parcial * 100) / 100,\n    Presupuesto_base_S: PRESUPUESTO_BASE,\n    Estado: estado.length ? estado.join(';') : 'comparable'\n  };\n});"
+      },
+      "id": "comparar",
+      "name": "Comparar contra la base",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 440]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "csv",
+        "fileName": "C:\\Users\\Dante\\Documents\\proyecto-compartido\\salidas\\comparacion_MA-001.csv",
+        "options": {}
+      },
+      "id": "escribir-csv",
+      "name": "Escribir comparación (CSV)",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const filas = $input.all().map(i => i.json);\nreturn [{ json: { texto: JSON.stringify(filas) } }];"
+      },
+      "id": "resumen-entrada",
+      "name": "Resumen para el modelo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 560]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ 'Eres un asistente de costos de obra. Con estas filas de comparación, escribe en español, en 6 viñetas como máximo, qué proveedores son comparables, cuáles tienen pendientes (tipo de cambio, cantidad, moneda o precio sospechoso) y qué debe confirmar el especialista. No inventes valores ni tipos de cambio. Datos: ' + $json.texto }}"
+      },
+      "id": "resumen-ia",
+      "name": "Resumen con el modelo",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1540, 560]
+    },
+    {
+      "parameters": {
+        "model": "qwen3:8b",
+        "options": { "temperature": 0, "numCtx": 16384, "numPredict": 1500, "think": false }
+      },
+      "id": "modelo-local",
+      "name": "Modelo local (Ollama)",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [1540, 740],
+      "credentials": {
+        "ollamaApi": { "id": "REEMPLAZAR_credencial_ollama", "name": "Ollama local" }
+      }
+    }
+  ],
+  "connections": {
+    "Iniciar comparación": {
+      "main": [
+        [{ "node": "Parámetros y base de la plantilla", "type": "main", "index": 0 }],
+        [{ "node": "Leer cotización 1", "type": "main", "index": 0 }],
+        [{ "node": "Leer cotización 2", "type": "main", "index": 0 }],
+        [{ "node": "Leer cotización 3", "type": "main", "index": 0 }],
+        [{ "node": "Leer cotización 4", "type": "main", "index": 0 }]
+      ]
+    },
+    "Leer cotización 1": { "main": [[{ "node": "Filas de cotización 1", "type": "main", "index": 0 }]] },
+    "Leer cotización 2": { "main": [[{ "node": "Filas de cotización 2", "type": "main", "index": 0 }]] },
+    "Leer cotización 3": { "main": [[{ "node": "Filas de cotización 3", "type": "main", "index": 0 }]] },
+    "Leer cotización 4": { "main": [[{ "node": "Filas de cotización 4", "type": "main", "index": 0 }]] },
+    "Filas de cotización 1": { "main": [[{ "node": "Marcar archivo 1", "type": "main", "index": 0 }]] },
+    "Filas de cotización 2": { "main": [[{ "node": "Marcar archivo 2", "type": "main", "index": 0 }]] },
+    "Filas de cotización 3": { "main": [[{ "node": "Marcar archivo 3", "type": "main", "index": 0 }]] },
+    "Filas de cotización 4": { "main": [[{ "node": "Marcar archivo 4", "type": "main", "index": 0 }]] },
+    "Marcar archivo 1": { "main": [[{ "node": "Unir cotizaciones", "type": "main", "index": 0 }]] },
+    "Marcar archivo 2": { "main": [[{ "node": "Unir cotizaciones", "type": "main", "index": 1 }]] },
+    "Marcar archivo 3": { "main": [[{ "node": "Unir cotizaciones", "type": "main", "index": 2 }]] },
+    "Marcar archivo 4": { "main": [[{ "node": "Unir cotizaciones", "type": "main", "index": 3 }]] },
+    "Unir cotizaciones": { "main": [[{ "node": "Comparar contra la base", "type": "main", "index": 0 }]] },
+    "Comparar contra la base": {
+      "main": [
+        [{ "node": "Escribir comparación (CSV)", "type": "main", "index": 0 }],
+        [{ "node": "Resumen para el modelo", "type": "main", "index": 0 }]
+      ]
+    },
+    "Resumen para el modelo": { "main": [[{ "node": "Resumen con el modelo", "type": "main", "index": 0 }]] },
+    "Modelo local (Ollama)": { "ai_languageModel": [[{ "node": "Resumen con el modelo", "type": "ai_languageModel", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "America/Lima" },
+  "active": false,
+  "tags": []
+}
