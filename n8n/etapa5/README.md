@@ -15,13 +15,15 @@ Cada minuto revisa la cola. Cuando el especialista pulsa «Generar cuadro», el 
    partidas) cierra de inmediato con un aviso.
 
 ## Límites de esta versión
-- La plantilla tiene una sola fila de partida: si la homologación trae varias, el cuadro se rechaza con un mensaje claro.
+- La plantilla tiene una fila de partida y 7 bloques de proveedor. Un proveedor que cotiza varios tipos (partidas de E4)
+  ocupa un bloque por tipo: «PROVEEDOR (TIPO 1)», «PROVEEDOR (TIPO 2)». Si se necesitan más de 7 bloques, el cuadro se rechaza.
+- Un bloque sin moneda identificada o sin importes en E3 queda sin precios y el cuadro sale como borrador; no se inventan.
 - Las columnas en S/ de ofertas en dólares dependen del tipo de cambio que indique el especialista; sin él quedan vacías
   y el cuadro sale como borrador. Nunca se inventa.
 - Es «validado» solo si la homologación no tiene pendientes que bloqueen y todas las comprobaciones cuadran.
 
 ## Preparación
-1. En Nhost: ejecuta `db/etapa4/018_tipo_cambio_cuadro.sql` (requiere la 017). La Function `e4-operar` no cambia.
+1. En Nhost: ejecuta `db/etapa4/018_tipo_cambio_cuadro.sql` y `019_motivo_error_cuadro.sql` (requieren la 017). La Function `e4-operar` no cambia.
 2. Levanta el servicio: `docker compose -f compose.etapa5.yml up -d --build` (red `costflow_e3`, clave `E3_INTERNAL_KEY`).
 3. En n8n importa `e5-1.json`, reemplaza `SUBDOMINIO` y `REGION` y asigna `CREDENCIAL_E4:internal` →
    `CostFlow E3 - Acceso interno` y `CREDENCIAL_E4:storage` → `CostFlow E3 - Nhost Storage`.

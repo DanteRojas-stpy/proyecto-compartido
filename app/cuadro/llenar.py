@@ -37,70 +37,111 @@ def numero(valor: Decimal):
 
 
 def plan(homologacion: dict, tipo_cambio: dict | None) -> dict:
-    """Decide qué va en cada celda y las comprobaciones. No toca el archivo."""
+    """Decide qué va en cada celda y las comprobaciones. No toca el archivo.
+
+    La plantilla tiene una fila de partida (todos los equipos) y hasta 7 bloques de proveedor. Un proveedor que cotiza
+    varios tipos (partidas de E4) ocupa un bloque por tipo: «PROVEEDOR (TIPO 1)», «PROVEEDOR (TIPO 2)».
+    """
     partidas = homologacion["partidas"]
-    if len(partidas) != 1:
-        raise CuadroNoGenerable(f"La plantilla tiene una sola fila de partida y la homologación tiene {len(partidas)}. "
-                                "Hace falta una plantilla con más filas.")
-    partida = partidas[0]
-    postores = {p["proveedor_id"]: p for p in homologacion["postores"]}
+    if not partidas:
+        raise CuadroNoGenerable("La homologación no tiene partidas que comparar.")
+    postores = homologacion["postores"]
     if not postores:
         raise CuadroNoGenerable("No hay ofertas finales para comparar.")
-    if len(postores) > len(BLOQUES):
-        raise CuadroNoGenerable(f"La plantilla admite {len(BLOQUES)} proveedores y hay {len(postores)}.")
     tc = None
     if tipo_cambio:
         tc = dec(tipo_cambio.get("valor"))
         if tc is None or tc <= 0:
             raise CuadroNoGenerable("El tipo de cambio no es un número positivo.")
-    avisos, comprobaciones = [], []
+    por_tipos = len(partidas) > 1
+    avisos, informativos, comprobaciones = [], [], []
     celdas: dict[str, object] = {}
-    metrado = dec(partida["metrado"])
-    celdas["I3"] = partida["descripcion"]
-    celdas["B13"], celdas["C13"] = partida["descripcion"], partida["unidad"]
-    celdas["D13"], celdas["E13"] = (numero(metrado) if metrado is not None else None), None  # el presupuesto meta no viene de E3
+    metrado = dec(partidas[0]["metrado"]) if not por_tipos else None
+    if por_tipos:
+        celdas["I3"] = homologacion["especialidad"]["nombre"]  # el título dice COMPARATIVO - <especialidad>; B13 conserva el texto de la plantilla
+    else:
+        celdas["I3"] = partidas[0]["descripcion"]
+        celdas["B13"], celdas["C13"] = partidas[0]["descripcion"], partidas[0]["unidad"]
+        celdas["D13"] = numero(metrado) if metrado is not None else None
+    celdas["E13"] = None  # el presupuesto meta no viene de E3
+    if por_tipos:
+        celdas["D13"] = None
     celdas["F5"] = numero(tc) if tc else 0
-    ofertas = {o["proveedor_id"]: o for o in partida["ofertas"]}
+
+    bloques = []  # (postor, tipo, partida, items)
+    for postor in sorted(postores, key=lambda p: p["nombre"]):
+        cotizadas = []
+        for numero_tipo, partida in enumerate(partidas, start=1):
+            oferta = next((o for o in partida["ofertas"] if o["proveedor_id"] == postor["proveedor_id"]), None)
+            if oferta and oferta["estado"] in ("cotizado", "global", "incluido_con_evidencia") and oferta["items"]:
+                cotizadas.append((numero_tipo, partida, oferta["items"]))
+        if not cotizadas:
+            informativos.append(f"{postor['nombre']}: no cotiza ninguna partida; no ocupa un bloque.")
+        for numero_tipo, partida, items in cotizadas:
+            bloques.append((postor, numero_tipo if len(cotizadas) > 1 else None, numero_tipo, partida, items))
+    if not bloques:
+        raise CuadroNoGenerable("Ningún proveedor cotizó las partidas.")
+    if len(bloques) > len(BLOQUES):
+        raise CuadroNoGenerable(f"La plantilla tiene {len(BLOQUES)} bloques de proveedor y se necesitan {len(bloques)} "
+                                "(un bloque por proveedor y tipo).")
+
     usa_dolares = False
-    for indice, (proveedor_id, postor) in enumerate(sorted(postores.items(), key=lambda kv: kv[1]["nombre"])):
-        n, cant, usd, pen, _total = BLOQUES[indice]
-        celdas[f"{n}6"] = postor["nombre"]
-        oferta = ofertas.get(proveedor_id)
-        items = oferta["items"] if oferta and oferta["estado"] in ("cotizado", "global", "incluido_con_evidencia") else []
-        if not items:
-            avisos.append(f"{postor['nombre']}: no cotiza la partida (estado {oferta['estado'] if oferta else 'sin oferta'}).")
-            celdas[f"{cant}13"], celdas[f"{usd}13"], celdas[f"{pen}13"] = 0, 0, 0
-        else:
-            parciales = [dec(i["original"]["parcial"]) for i in items]
-            if any(p is None for p in parciales):
-                raise CuadroNoGenerable(f"{postor['nombre']}: un ítem no tiene parcial; no se inventa el importe.")
+    for (postor, etiqueta_tipo, numero_tipo, partida, items), (n, cant, usd, pen, _total) in zip(bloques, BLOQUES):
+        celdas[f"{n}6"] = postor["nombre"] + (f" (TIPO {etiqueta_tipo})" if etiqueta_tipo else "")
+        moneda = postor["moneda"]
+        parciales = [dec(i["original"]["parcial"]) for i in items]
+        cantidades = [dec(i["original"]["cantidad"]) for i in items]
+        cantidad = sum(cantidades) if all(c is not None for c in cantidades) and sum(cantidades) > 0 else None
+        if cantidad is None:
+            cantidad = dec(partida["metrado"]) or Decimal(1)
+            avisos.append(f"{postor['nombre']}: E3 no trae la cantidad; se usó {numero(cantidad)} (el metrado de la partida o 1).")
+        unitario_item = dec(items[0]["original"]["precio_unitario"]) if len(items) == 1 else None
+        if moneda not in ("PEN", "USD"):
+            avisos.append(f"{postor['nombre']}: moneda {moneda or 'no identificada'}; la plantilla solo maneja PEN y USD, el bloque queda sin precios.")
+            comprobaciones.append({"proveedor": postor["nombre"], "tipo": numero_tipo, "cuadra": False})
+            celdas[f"{cant}13"], celdas[f"{usd}13"], celdas[f"{pen}13"] = numero(cantidad), 0, 0
+            if por_tipos:
+                celdas[f"{n}{FILA_CONSIDERACIONES}"] = f"Tipo {numero_tipo}: {partida['descripcion']}"
+            continue
+        if all(p is not None for p in parciales):
             suma = sum(parciales)
-            cantidad = dec(items[0]["original"]["cantidad"]) if len(items) == 1 else None
-            if cantidad is None:
-                cantidad = metrado if metrado else Decimal(1)
             unitario = suma / cantidad
-            moneda = postor["moneda"]
-            if moneda not in ("PEN", "USD"):
-                raise CuadroNoGenerable(f"{postor['nombre']}: moneda {moneda or 'desconocida'}; la plantilla solo maneja PEN y USD.")
-            celdas[f"{cant}13"] = numero(cantidad)
-            if moneda == "USD":
-                usa_dolares = True
-                celdas[f"{usd}13"] = numero(unitario)
-                if not tc:
-                    avisos.append(f"{postor['nombre']} cotiza en US$ y falta el tipo de cambio: las columnas en S/ quedan sin valor.")
-            else:
-                celdas[f"{usd}13"], celdas[f"{pen}13"] = 0, numero(unitario)
-            if len(items) > 1:
-                avisos.append(f"{postor['nombre']}: {len(items)} ítems agrupados en la partida; el precio unitario es la suma de parciales entre la cantidad.")
-            comprobaciones.append({"proveedor": postor["nombre"], "cantidad_por_unitario": float(cantidad * unitario), "suma_parciales": float(suma),
-                                   "cuadra": abs(cantidad * unitario - suma) <= TOLERANCIA})
+        elif unitario_item is not None:
+            unitario = unitario_item
+            suma = unitario * cantidad
+            avisos.append(f"{postor['nombre']}: el ítem no trae parcial; se usó precio unitario por cantidad.")
+        else:
+            avisos.append(f"{postor['nombre']}: faltan importes en la lectura de E3; el bloque queda sin precios (no se inventan).")
+            comprobaciones.append({"proveedor": postor["nombre"], "tipo": numero_tipo, "cuadra": False})
+            celdas[f"{cant}13"], celdas[f"{usd}13"], celdas[f"{pen}13"] = numero(cantidad), 0, 0
+            texto = [f"Tipo {numero_tipo}: {partida['descripcion']}"] if por_tipos else []
+            if texto:
+                celdas[f"{n}{FILA_CONSIDERACIONES}"] = chr(10).join(texto)
+            continue
+        celdas[f"{cant}13"] = numero(cantidad)
+        if moneda == "USD":
+            usa_dolares = True
+            celdas[f"{usd}13"] = numero(unitario)
+            if not tc:
+                avisos.append(f"{postor['nombre']} cotiza en US$ y falta el tipo de cambio: las columnas en S/ quedan sin valor.")
+        else:
+            celdas[f"{usd}13"], celdas[f"{pen}13"] = 0, numero(unitario)
+        if len(items) > 1:
+            avisos.append(f"{postor['nombre']}: {len(items)} ítems agrupados en la partida; el precio unitario es la suma de parciales entre la cantidad.")
+        comprobaciones.append({"proveedor": postor["nombre"], "tipo": numero_tipo, "cantidad_por_unitario": float(cantidad * unitario),
+                               "suma_parciales": float(suma), "cuadra": abs(cantidad * unitario - suma) <= TOLERANCIA})
         condiciones = postor["condiciones"]
         if condiciones["plazo_entrega"]:
             celdas[f"{n}{FILA_PLAZO}"] = str(condiciones["plazo_entrega"])
         if condiciones["condiciones_pago"]:
             celdas[f"{n}{FILA_PAGO}"] = str(condiciones["condiciones_pago"])
+        texto = []
+        if por_tipos:
+            texto.append(f"Tipo {numero_tipo}: {partida['descripcion']}")
         if condiciones["vigencia_oferta"]:
-            celdas[f"{n}{FILA_CONSIDERACIONES}"] = f"Vigencia de la oferta: {condiciones['vigencia_oferta']}"
+            texto.append(f"Vigencia de la oferta: {condiciones['vigencia_oferta']}")
+        if texto:
+            celdas[f"{n}{FILA_CONSIDERACIONES}"] = "\n".join(texto)
     if usa_dolares and not tc:
         comprobaciones.append({"proveedor": None, "tipo_cambio_presente": False, "cuadra": False})
     # Un pendiente que solo pide autorizar el tipo de cambio queda resuelto si el especialista lo indicó al generar.
@@ -108,8 +149,9 @@ def plan(homologacion: dict, tipo_cambio: dict | None) -> dict:
     if bloqueantes:
         avisos.append(f"La homologación tiene {len(bloqueantes)} pendientes que bloquean la comparación.")
     validado = all(c["cuadra"] for c in comprobaciones) and not avisos and not bloqueantes
-    return {"celdas": celdas, "avisos": avisos, "comprobaciones": comprobaciones, "validado": validado,
-            "pendientes_bloqueantes": len(bloqueantes), "tipo_cambio": tipo_cambio, "moneda_comparacion": homologacion["moneda_comparacion"]}
+    return {"celdas": celdas, "avisos": avisos, "informativos": informativos, "bloques": len(bloques), "comprobaciones": comprobaciones,
+            "validado": validado, "pendientes_bloqueantes": len(bloqueantes), "tipo_cambio": tipo_cambio,
+            "moneda_comparacion": homologacion["moneda_comparacion"]}
 
 
 def _celda(xml: str, ref: str, valor) -> str:
