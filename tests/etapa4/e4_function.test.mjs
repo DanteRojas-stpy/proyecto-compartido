@@ -131,3 +131,55 @@ test('descargar el cuadro de otro usuario se rechaza sin tocar Storage y un id r
   await handler(peticion({ token: 'jwt', cuerpo: { operacion: 'descargar_e5', datos: { cuadro_id: "x'; drop" } } }), mala);
   assert.equal(mala.codigo, 400);
 });
+
+function conHasuraYAviso(avisos) {
+  return async (url, opciones) => {
+    avisos.push([String(url), opciones]);
+    if (String(url).endsWith('/v1/user')) return new Response(JSON.stringify({ id: 'usuario-real' }), { status: 200 });
+    if (String(url).endsWith('/v2/query')) return respuestaDeHasura({ ok: true, http_code: 200 });
+    return new Response('{}', { status: 200 });
+  };
+}
+
+test('al encolar, avisa al webhook de n8n con la clave interna; sin configurar no llama a nadie más', async () => {
+  const avisos = [];
+  globalThis.fetch = conHasuraYAviso(avisos);
+  const pedido = (operacion) => peticion({ token: 'jwt', cuerpo: { operacion, datos: { solicitud_id: 's1' } } });
+
+  await handler(pedido('solicitar_e4'), respuesta());
+  assert.ok(!avisos.some(([u]) => u.includes('n8n')), 'sin variable no debe avisar');
+
+  process.env.N8N_AVISO_E4 = 'https://demo.app.n8n.cloud/webhook/e4-ejecutar';
+  process.env.N8N_AVISO_E5 = 'https://demo.app.n8n.cloud/webhook/e5-ejecutar';
+  const res = respuesta();
+  await handler(pedido('solicitar_e4'), res);
+  assert.equal(res.codigo, 200);
+  const aviso = avisos.find(([u]) => u === 'https://demo.app.n8n.cloud/webhook/e4-ejecutar');
+  assert.ok(aviso, 'avisó al webhook de E4');
+  assert.equal(aviso[1].headers['x-costflow-internal-key'], 'clave-interna-de-prueba');
+  await handler(pedido('solicitar_e5'), respuesta());
+  assert.ok(avisos.some(([u]) => u === 'https://demo.app.n8n.cloud/webhook/e5-ejecutar'));
+});
+
+test('si el aviso falla o la solicitud no se encoló, no cambia la respuesta ni se avisa', async () => {
+  process.env.N8N_AVISO_E4 = 'https://demo.app.n8n.cloud/webhook/e4-ejecutar';
+  const avisos = [];
+  globalThis.fetch = async (url, opciones) => {
+    avisos.push(String(url));
+    if (String(url).includes('n8n.cloud')) throw new Error('sin red');
+    return conHasuraYAviso([])(url, opciones);
+  };
+  const res = respuesta();
+  await handler(peticion({ token: 'jwt', cuerpo: { operacion: 'solicitar_e4', datos: { solicitud_id: 's1' } } }), res);
+  assert.equal(res.codigo, 200);
+  assert.equal(res.cuerpo.respuesta.ok, true);
+
+  avisos.length = 0;
+  globalThis.fetch = async (url) => {
+    avisos.push(String(url));
+    if (String(url).endsWith('/v1/user')) return new Response(JSON.stringify({ id: 'usuario-real' }), { status: 200 });
+    return respuestaDeHasura({ ok: false, http_code: 409, mensaje: 'Ya hay una homologación en curso' });
+  };
+  await handler(peticion({ token: 'jwt', cuerpo: { operacion: 'solicitar_e4', datos: { solicitud_id: 's1' } } }), respuesta());
+  assert.ok(!avisos.some((u) => u.includes('n8n.cloud')), 'no avisa si no se encoló');
+});

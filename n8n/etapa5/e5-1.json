@@ -52,6 +52,24 @@
       "notes": "CREDENCIAL_E4:internal"
     },
     {
+      "id": "c47d767a-a356-56cd-ad7f-0f3eb814da5b",
+      "name": "Aviso del botón",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "e5-ejecutar",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "position": [
+        440,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
       "id": "e6955f1f-a0b3-5303-a590-e270c832e866",
       "name": "¿Hay algún cuadro por generar?",
       "type": "n8n-nodes-base.if",
@@ -79,7 +97,7 @@
         "options": {}
       },
       "position": [
-        440,
+        660,
         0
       ]
     },
@@ -106,7 +124,7 @@
         }
       },
       "position": [
-        660,
+        880,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -120,7 +138,7 @@
         "jsCode": "// Sigue solo si Nhost entregó la entrada de este cuadro; si el intento venció, termina sin hacer nada.\nconst tomada = $('Tomar cuadro pendiente').first().json.respuesta;\nconst entrada = $json.respuesta;\nif (entrada?.resultado !== 'entrada') return [];\nconst base = { cuadro_id: tomada.cuadro_id, token: tomada.token, entrada };\nif (!entrada.plantilla?.storage_file_id) {\n  return [{ json: { ...base, ok: false, recuperable: false, error: 'La solicitud no tiene cargada la plantilla del cuadro comparativo.' } }];\n}\nreturn [{ json: { ...base, ok: true, storage_file_id: entrada.plantilla.storage_file_id } }];"
       },
       "position": [
-        880,
+        1100,
         0
       ]
     },
@@ -152,7 +170,7 @@
         "options": {}
       },
       "position": [
-        1100,
+        1320,
         0
       ]
     },
@@ -177,7 +195,7 @@
         }
       },
       "position": [
-        1320,
+        1540,
         0
       ],
       "notes": "CREDENCIAL_E4:storage"
@@ -191,7 +209,7 @@
         "jsCode": "// Une la plantilla descargada con la homologación y el tipo de cambio para el servicio de E5.\nconst ctx = $('Comprobar entrada').first().json;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst e = ctx.entrada;\nreturn [{ json: { cuadro_id: ctx.cuadro_id, token: ctx.token, codigo: e.solicitud?.codigo ?? 'solicitud', revision: e.revision,\n  peticion: { homologacion: e.homologacion, tipo_cambio: e.tipo_cambio ?? null, plantilla_b64: buffer.toString('base64') } } }];"
       },
       "position": [
-        1540,
+        1760,
         0
       ]
     },
@@ -219,7 +237,7 @@
         }
       },
       "position": [
-        1760,
+        1980,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -233,7 +251,7 @@
         "jsCode": "// El servicio devuelve el xlsx y su validación; un cuadro imposible de armar no se reintenta.\nconst ctx = $('Armar petición').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nif (!$json.ok || !$json.archivo_b64) {\n  return [{ json: { ...base, ok: false, recuperable: $json.recuperable !== false,\n    error: String($json.error ?? $json.detail ?? 'El servicio de E5 no devolvió el cuadro.').slice(0, 600) } }];\n}\nconst nombre = `cuadro-${ctx.codigo}-rev${ctx.revision}.xlsx`;\nconst binario = await this.helpers.prepareBinaryData(Buffer.from($json.archivo_b64, 'base64'), nombre,\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { ...base, ok: true, estado: $json.estado, validacion: $json.validacion, nombre_archivo: nombre,\n  metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: ctx.cuadro_id } }) }, binary: { data: binario } }];"
       },
       "position": [
-        1980,
+        2200,
         0
       ]
     },
@@ -265,7 +283,7 @@
         "options": {}
       },
       "position": [
-        2200,
+        2420,
         0
       ]
     },
@@ -309,7 +327,7 @@
         }
       },
       "position": [
-        2420,
+        2640,
         0
       ],
       "notes": "CREDENCIAL_E4:storage"
@@ -323,7 +341,7 @@
         "jsCode": "// Storage responde con el archivo creado; sin identificador, el intento falla y se reintenta.\nconst ctx = $('Evaluar cuadro').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nconst id = $json.processedFiles?.[0]?.id;\nif (!id) return [{ json: { ...base, ok: false, recuperable: true, error: 'Storage no guardó el cuadro: ' + JSON.stringify($json).slice(0, 300) } }];\nreturn [{ json: { ...base, ok: true, estado: ctx.estado, validacion: ctx.validacion, nombre_archivo: ctx.nombre_archivo, storage_file_id: id } }];"
       },
       "position": [
-        2640,
+        2860,
         0
       ]
     },
@@ -355,7 +373,7 @@
         "options": {}
       },
       "position": [
-        2860,
+        3080,
         0
       ]
     },
@@ -382,7 +400,7 @@
         }
       },
       "position": [
-        3080,
+        3300,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -410,7 +428,7 @@
         }
       },
       "position": [
-        3300,
+        3520,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -418,6 +436,17 @@
   ],
   "connections": {
     "Revisar la cola cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Tomar cuadro pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso del botón": {
       "main": [
         [
           {

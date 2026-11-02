@@ -52,6 +52,24 @@
       "notes": "CREDENCIAL_E4:internal"
     },
     {
+      "id": "9eb1860a-dd9a-595a-bddb-b4697e23b232",
+      "name": "Aviso del botón",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "e4-ejecutar",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "position": [
+        440,
+        0
+      ],
+      "notes": "CREDENCIAL_E4:internal"
+    },
+    {
       "id": "0c971fae-759e-548d-b8d7-b44440b6d62c",
       "name": "¿Hay algo que homologar?",
       "type": "n8n-nodes-base.if",
@@ -79,7 +97,7 @@
         "options": {}
       },
       "position": [
-        440,
+        660,
         0
       ]
     },
@@ -106,7 +124,7 @@
         }
       },
       "position": [
-        660,
+        880,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -120,7 +138,7 @@
         "jsCode": "// Sigue solo si Nhost entregó la entrada de esta homologación; si el intento venció, termina sin hacer nada.\nconst tomada = $('Tomar homologación pendiente').first().json.respuesta;\nconst entrada = $json.respuesta;\nif (entrada?.resultado !== 'entrada') return [];\nreturn [{ json: { ejecucion_id: tomada.ejecucion_id, token: tomada.token, paquete: entrada.paquete } }];"
       },
       "position": [
-        880,
+        1100,
         0
       ]
     },
@@ -148,7 +166,7 @@
         }
       },
       "position": [
-        1100,
+        1320,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -162,7 +180,7 @@
         "jsCode": "// El servicio de homologación debe devolver la petición lista para Claude.\nconst ctx = $('Comprobar entrada').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nif (!$json.cuerpo_claude) {\n  return [{ json: { ...base, ok: false, error: 'El servicio de homologación no preparó la petición: ' + String($json.detail ?? $json.error ?? 'sin detalle').slice(0, 300) } }];\n}\nreturn [{ json: { ...base, ok: true, cuerpo_claude: $json.cuerpo_claude, modelo: $json.modelo } }];"
       },
       "position": [
-        1320,
+        1540,
         0
       ]
     },
@@ -194,7 +212,7 @@
         "options": {}
       },
       "position": [
-        1540,
+        1760,
         0
       ]
     },
@@ -231,7 +249,7 @@
         }
       },
       "position": [
-        1760,
+        1980,
         0
       ],
       "notes": "CREDENCIAL_E4:claude"
@@ -245,7 +263,7 @@
         "jsCode": "// Convierte la respuesta de la API de Claude en texto utilizable o en un fallo con su motivo.\nconst ctx = $('Verificar petición').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nconst r = $json;\nconst fallo = (mensaje) => [{ json: { ...base, ok: false, error: mensaje } }];\nif (r.type === 'error' || r.error) return fallo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return fallo('Claude rechazó la petición por seguridad.');\nif (r.stop_reason !== 'end_turn') return fallo('Claude no terminó la respuesta (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('');\nreturn [{ json: { ...base, ok: true, texto, modelo: r.model ?? ctx.modelo,\n  tokens_entrada: r.usage?.input_tokens ?? null, tokens_salida: r.usage?.output_tokens ?? null } }];"
       },
       "position": [
-        1980,
+        2200,
         0
       ]
     },
@@ -277,7 +295,7 @@
         "options": {}
       },
       "position": [
-        2200,
+        2420,
         0
       ]
     },
@@ -305,7 +323,7 @@
         }
       },
       "position": [
-        2420,
+        2640,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -319,7 +337,7 @@
         "jsCode": "// El servicio valida la respuesta contra la entrada; si no cuadra, es un fallo reintentable.\nconst ctx = $('Interpretar respuesta de Claude').first().json;\nconst base = { ejecucion_id: ctx.ejecucion_id, token: ctx.token, paquete: ctx.paquete };\nif ($json.resultado !== 'construida') {\n  const errores = Array.isArray($json.errores) ? $json.errores.join('; ') : String($json.detail ?? $json.error ?? 'sin detalle');\n  return [{ json: { ...base, ok: false, error: 'La respuesta de Claude no pasó la validación: ' + errores.slice(0, 600) } }];\n}\nreturn [{ json: { ...base, ok: true, estado_revision: $json.estado_revision, resultado: $json.homologacion,\n  version_ids: $json.version_ids, huella: $json.huella, modelo: ctx.modelo, tokens_entrada: ctx.tokens_entrada, tokens_salida: ctx.tokens_salida } }];"
       },
       "position": [
-        2640,
+        2860,
         0
       ]
     },
@@ -351,7 +369,7 @@
         "options": {}
       },
       "position": [
-        2860,
+        3080,
         0
       ]
     },
@@ -378,7 +396,7 @@
         }
       },
       "position": [
-        3080,
+        3300,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -406,7 +424,7 @@
         }
       },
       "position": [
-        3300,
+        3520,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -414,6 +432,17 @@
   ],
   "connections": {
     "Revisar la cola cada minuto": {
+      "main": [
+        [
+          {
+            "node": "Tomar homologación pendiente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aviso del botón": {
       "main": [
         [
           {

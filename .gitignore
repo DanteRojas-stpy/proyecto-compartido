@@ -42,3 +42,5 @@ salidas/
 _site/
 # Excel con datos reales de empresas: no se suben
 ejemplos/*.xlsx
+n8n-nube/
+deploy/nube.env

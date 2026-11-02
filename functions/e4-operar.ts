@@ -6,6 +6,8 @@ import type { Request, Response } from 'express'
 const OPERACIONES_DEL_ESPECIALISTA = new Set(['solicitar_e4', 'solicitar_e5'])
 // El especialista descarga el Excel del cuadro a través de la Function: Storage solo lo lee la credencial administrativa.
 const DESCARGAR_CUADRO = 'descargar_e5'
+// Dirección del webhook de n8n que atiende cada cola (opcional). Si no está configurada, el flujo la revisa por sondeo.
+const AVISOS_DE_FLUJO: Record<string, string> = { solicitar_e4: 'N8N_AVISO_E4', solicitar_e5: 'N8N_AVISO_E5' }
 const OPERACIONES_INTERNAS = new Set([
   'tomar_e4',
   'entrada_e4',
@@ -72,6 +74,26 @@ const ORIGENES_PERMITIDOS = (process.env.CORS_ORIGINS ?? 'http://localhost:8000,
   .split(',')
   .map((origen) => origen.trim())
   .filter(Boolean)
+
+// Despierta el flujo de n8n sin esperar al sondeo. Un fallo no afecta a la solicitud: ya quedó en la cola.
+async function avisarFlujo(operacion: string): Promise<void> {
+  const variable = AVISOS_DE_FLUJO[operacion]
+  const url = variable ? (process.env[variable] ?? '').trim() : ''
+  const clave = process.env.E3_INTERNAL_KEY ?? ''
+  if (!url || !clave) return
+  try {
+    const destino = new URL(url)
+    if (destino.protocol !== 'https:' && destino.hostname !== 'localhost') return
+    await fetch(destino, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-costflow-internal-key': clave },
+      body: '{}',
+      signal: AbortSignal.timeout(5000),
+    })
+  } catch {
+    console.warn('No se pudo avisar al flujo de n8n; lo tomará el sondeo.')
+  }
+}
 
 function baseStorage(): string {
   return `${baseHasura().replace('.hasura.', '.storage.')}/v1/files`
@@ -176,11 +198,13 @@ export default async function handler(req: Request, res: Response) {
       console.error('e4_operar fue rechazado por Hasura', upstream.status)
       return res.status(502).json({ error: 'Nhost no pudo completar la operación de E4/E5.' })
     }
-    return res.status(200).json({ respuesta: respuestaRunSql(payload) })
+    const respuesta = respuestaRunSql(payload)
+    if (OPERACIONES_DEL_ESPECIALISTA.has(operacion) && (respuesta as { ok?: boolean })?.ok === true) await avisarFlujo(operacion)
+    return res.status(200).json({ respuesta })
   } catch {
     console.error('Fallo interno en e4-operar; revisa la configuración y disponibilidad de Hasura.')
     return res.status(500).json({ error: 'No fue posible completar la operación de E4/E5.' })
   }
 }
 
-export { DESCARGAR_CUADRO, OPERACIONES_DEL_ESPECIALISTA, OPERACIONES_INTERNAS, literal, respuestaRunSql, secretoValido }
+export { AVISOS_DE_FLUJO, DESCARGAR_CUADRO, OPERACIONES_DEL_ESPECIALISTA, OPERACIONES_INTERNAS, literal, respuestaRunSql, secretoValido }

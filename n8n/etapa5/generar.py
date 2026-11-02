@@ -64,6 +64,9 @@ def generate():
     # Las funciones de E4 apuntan a e4-operar; E5 comparte esa Function (operaciones *_e5).
     cola = flujo.node("Revisar la cola cada minuto", "scheduleTrigger", {"rule": {"interval": [{"field": "minutes", "minutesInterval": 1}]}}, 1.2)
     tomar = flujo.funcion("Tomar cuadro pendiente", "tomar_e5", "{}")
+    # El botón avisa por aquí para no depender del sondeo (en n8n Cloud cada ejecución cuenta); el sondeo queda como respaldo.
+    aviso = flujo.node("Aviso del botón", "webhook", {"httpMethod": "POST", "path": "e5-ejecutar", "authentication": "headerAuth",
+                                                    "responseMode": "onReceived", "options": {}}, 2, "internal")
     hay = flujo.node("¿Hay algún cuadro por generar?", "if", {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"},
         "conditions": [{"id": str(uuid.uuid5(uuid.NAMESPACE_URL, "costflowE5_1:hay")), "leftValue": "={{ $json.respuesta.resultado }}", "rightValue": "tomada",
                         "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "options": {}}, 2)
@@ -89,7 +92,7 @@ def generate():
         "{cuadro_id:$json.cuadro_id,token:$json.token,estado:$json.estado,nombre_archivo:$json.nombre_archivo,"
         "storage_file_id:$json.storage_file_id,validacion:$json.validacion}")
     fallo = flujo.funcion("Registrar fallo", "fallo_e5", "{cuadro_id:$json.cuadro_id,token:$json.token,error:$json.error,recuperable:$json.recuperable}")
-    flujo.link(cola, tomar); flujo.link(tomar, hay); flujo.link(hay, entrada, 0); flujo.link(entrada, comprobar); flujo.link(comprobar, con_plantilla)
+    flujo.link(cola, tomar); flujo.link(aviso, tomar); flujo.link(tomar, hay); flujo.link(hay, entrada, 0); flujo.link(entrada, comprobar); flujo.link(comprobar, con_plantilla)
     flujo.link(con_plantilla, descargar, 0); flujo.link(con_plantilla, fallo, 1); flujo.link(descargar, armar); flujo.link(armar, generar)
     flujo.link(generar, evaluar); flujo.link(evaluar, cuadro_ok); flujo.link(cuadro_ok, subir, 0); flujo.link(cuadro_ok, fallo, 1)
     flujo.link(subir, evaluar_subida); flujo.link(evaluar_subida, subida_ok); flujo.link(subida_ok, guardar, 0); flujo.link(subida_ok, fallo, 1)
