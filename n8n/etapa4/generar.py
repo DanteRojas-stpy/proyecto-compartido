@@ -95,6 +95,9 @@ def generate():
     flujo = Flow(1, "Homologación de cotizaciones finales")
     cola = flujo.node("Revisar la cola cada minuto", "scheduleTrigger", {"rule": {"interval": [{"field": "minutes", "minutesInterval": 1}]}}, 1.2)
     tomar = flujo.funcion("Tomar homologación pendiente", "tomar_e4", "{}")
+    # El botón avisa por aquí para no depender del sondeo (en n8n Cloud cada ejecución cuenta); el sondeo queda como respaldo.
+    aviso = flujo.node("Aviso del botón", "webhook", {"httpMethod": "POST", "path": "e4-ejecutar", "authentication": "headerAuth",
+                                                    "responseMode": "onReceived", "options": {}}, 2, "internal")
     hay = flujo.node("¿Hay algo que homologar?", "if", {"conditions": {"options": {"caseSensitive": True, "leftValue": "", "typeValidation": "strict"},
         "conditions": [{"id": str(uuid.uuid5(uuid.NAMESPACE_URL, "costflowE4_1:hay")), "leftValue": "={{ $json.respuesta.resultado }}", "rightValue": "tomada",
                         "operator": {"type": "string", "operation": "equals"}}], "combinator": "and"}, "options": {}}, 2)
@@ -118,7 +121,7 @@ def generate():
         "version_ids:$json.version_ids,huella:$json.huella,modelo:$json.modelo,tokens_entrada:$json.tokens_entrada,tokens_salida:$json.tokens_salida}")
     fallo = flujo.funcion("Registrar fallo", "fallo_e4",
                           "{ejecucion_id:$json.ejecucion_id,token:$json.token,error:$json.error,recuperable:true}")
-    flujo.link(cola, tomar); flujo.link(tomar, hay); flujo.link(hay, entrada, 0); flujo.link(entrada, comprobar); flujo.link(comprobar, preparar)
+    flujo.link(cola, tomar); flujo.link(aviso, tomar); flujo.link(tomar, hay); flujo.link(hay, entrada, 0); flujo.link(entrada, comprobar); flujo.link(comprobar, preparar)
     flujo.link(preparar, verificar); flujo.link(verificar, peticion_ok); flujo.link(peticion_ok, claude, 0); flujo.link(peticion_ok, fallo, 1)
     flujo.link(claude, interpretar); flujo.link(interpretar, respuesta_ok); flujo.link(respuesta_ok, construir, 0); flujo.link(respuesta_ok, fallo, 1)
     flujo.link(construir, evaluar); flujo.link(evaluar, resultado_ok); flujo.link(resultado_ok, guardar, 0); flujo.link(resultado_ok, fallo, 1)
