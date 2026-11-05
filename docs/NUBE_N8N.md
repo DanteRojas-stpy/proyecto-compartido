@@ -93,3 +93,25 @@ ejecuciones al mes. El programa lo baja por defecto a **5 minutos** para E3.1 y 
   Gemini y estados) no están en el programa: exporta e importa esos desde n8n si también deben ir a la nube.
 - No se probó contra una instancia real de n8n Cloud; las pruebas automáticas usan una API simulada. La primera subida
   conviene hacerla con un solo flujo activo a la vez.
+
+## Servidor sin depender de tu computadora (instalador de un paso)
+
+Para que E3, E4 y E5 funcionen aunque tu equipo esté apagado, los tres servicios van a un servidor en la nube.
+
+1. Crea un servidor **Ubuntu 22.04 o 24.04 con 4 GB de RAM** (por ejemplo, Hetzner CX22, DigitalOcean, Vultr u Oracle
+   Cloud «Always Free»). El lector de E3 usa OCR y embeddings y necesita memoria; con menos de 2 GB se queda corto.
+2. Entra por SSH y ejecuta:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/DanteRojas-stpy/proyecto-compartido/main/deploy/instalar-servidor.sh -o instalar.sh
+   sudo bash instalar.sh
+   ```
+
+   Pide la dirección de tu n8n Cloud, los datos de Nhost y la clave interna (se escribe escondida y se guarda solo en
+   `deploy/nube.env`, con permisos 600). Instala Docker, levanta los tres servicios con HTTPS y comprueba que respondan.
+3. No necesitas dominio: usa nombres `sslip.io` que apuntan a la IP del servidor (`e3.<ip>.sslip.io`, etc.) y obtienen
+   el certificado solos. Si tienes un dominio propio, edita `deploy/nube.env` y vuelve a levantar con `docker compose`.
+   Si Let's Encrypt limitara los certificados de `sslip.io` (es un dominio compartido), usa un dominio propio.
+4. Al final el instalador imprime el comando `python scripts/n8n_nube.py preparar ...` con las tres direcciones: genera los
+   siete flujos listos para importar en n8n Cloud.
+5. Para actualizar más adelante: `cd /opt/costflow && git pull && docker compose -f compose.nube.yml --env-file deploy/nube.env up -d --build`.
