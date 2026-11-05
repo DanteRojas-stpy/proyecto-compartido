@@ -1,0 +1,360 @@
+{
+  "name": "CostFlow - E3.2 Lectura OCR RAG y validación",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "4b5747b1-ee36-5edb-b362-95f70cdaf2ee",
+      "name": "Desde otra etapa",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-etapa3:8093/read",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 720000
+        }
+      },
+      "id": "3912d4aa-1015-51c6-8adf-85f15a394457",
+      "name": "Leer y verificar versión completa",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "procesamiento_completado",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "procesamiento_completado"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.resultado }}",
+                    "rightValue": "error_procesamiento",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "error_procesamiento"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "46c548fd-e8be-51a4-bf76-fdb0a69b5997",
+      "name": "Resultado de la lectura",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "costflowEtapa3_3",
+          "mode": "id"
+        },
+        "workflowInputs": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "id": "3a296535-dcfa-5516-bc6a-e49ea6085232",
+      "name": "Invocar E3.3",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "e3-interno-lector",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "81336104-ca01-5109-8097-cb464d9901e2",
+      "name": "Lector interno",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "webhookId": "144fea02-2cd5-54e1-be0e-90ec00d5810a",
+      "notes": "CREDENCIAL_E3:internal"
+    },
+    {
+      "parameters": {
+        "jsCode": "if(!/^claude-[a-zA-Z0-9.-]+$/.test($json.body.modelo??''))throw new Error('El modelo debe ser de Claude (claude-...)');return [{json:$json.body}];"
+      },
+      "id": "e302a0c9-56d3-59e1-bf7d-9e6f0df27216",
+      "name": "Preparar petición estructurada",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Traduce la petición del lector (formato interno del lector) al formato de la API de mensajes de Claude.\nconst { modelo, peticion } = $json;\nconst partes = (x) => (x?.parts ?? []).map((p) => p.text ?? '').join('\\n');\nconst sistema = partes(peticion.systemInstruction);\nconst contenido = (peticion.contents ?? []).map((c) => partes(c)).join('\\n');\nconst esquema = peticion.generationConfig?.responseJsonSchema ?? {};\nif (!contenido.trim()) throw new Error('La petición no trae contenido para leer');\nconst instruccion = sistema\n  + '\\n\\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '\n  + 'Sin texto adicional, sin comentarios y sin bloques de código:\\n' + JSON.stringify(esquema);\nconst cuerpo = {\n  model: modelo,\n  max_tokens: 16000,\n  system: instruccion,\n  messages: [{ role: 'user', content: contenido }],\n};\n// Extraer datos no necesita razonar a fondo: el esfuerzo bajo deja los tokens para el JSON (modelos 5.x).\nif (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };\nreturn [{ json: { modelo, cuerpo } }];"
+      },
+      "id": "58f83159-e632-551f-ba29-a5bd94b4c83c",
+      "name": "Convertir a Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.cuerpo) }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 170000
+        }
+      },
+      "id": "c1742b9b-7951-54bf-b813-23f6596e3193",
+      "name": "Claude Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1552,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:claude"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Devuelve la respuesta de Claude con la forma que espera el lector.\nconst r = $json;\nconst rechazo = (mensaje) => [{ json: { error: { message: mensaje } } }];\nif (r.type === 'error' || r.error) return rechazo('Claude rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\nif (r.stop_reason === 'refusal') return rechazo('Claude rechazó la petición por seguridad.');\nconst texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();\nlet limpio = texto.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\nconst ini = limpio.indexOf('{');\nconst fin = limpio.lastIndexOf('}');\nif (ini >= 0 && fin > ini) limpio = limpio.slice(ini, fin + 1);\nconst completo = r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence';\nif (!completo) return rechazo('Claude no devolvió una respuesta completa (' + (r.stop_reason ?? 'sin motivo') + '; salida: ' + (r.usage?.output_tokens ?? '?') + ' tokens).');\nreturn [{ json: {\n  candidates: [{ finishReason: 'STOP', content: { parts: [{ text: limpio }] } }],\n  usageMetadata: { promptTokenCount: r.usage?.input_tokens, candidatesTokenCount: r.usage?.output_tokens },\n  modelVersion: r.model,\n} }];"
+      },
+      "id": "a74f633c-812e-5d76-be1c-251ba1c57ba5",
+      "name": "Claude a formato del lector",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": "={{ $json.http_code || 200 }}"
+        }
+      },
+      "id": "0d407f1d-345f-5196-9608-3c5d0cdbed2c",
+      "name": "Devolver respuesta del lector",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        1984,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Desde otra etapa": {
+      "main": [
+        [
+          {
+            "node": "Leer y verificar versión completa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leer y verificar versión completa": {
+      "main": [
+        [
+          {
+            "node": "Resultado de la lectura",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de la lectura": {
+      "main": [
+        [
+          {
+            "node": "Invocar E3.3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invocar E3.3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lector interno": {
+      "main": [
+        [
+          {
+            "node": "Preparar petición estructurada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar petición estructurada": {
+      "main": [
+        [
+          {
+            "node": "Convertir a Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir a Claude": {
+      "main": [
+        [
+          {
+            "node": "Claude Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Messages": {
+      "main": [
+        [
+          {
+            "node": "Claude a formato del lector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude a formato del lector": {
+      "main": [
+        [
+          {
+            "node": "Devolver respuesta del lector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "nodeGroups": [],
+  "id": "costflowEtapa3_2",
+  "tags": []
+}
