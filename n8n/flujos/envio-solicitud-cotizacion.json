@@ -1,5 +1,5 @@
 {
-  "name": "CostFlow - Enviar solicitud de cotización",
+  "name": "CostFlow - E1.1 Envío de solicitud de cotización",
   "nodes": [
     {
       "parameters": {

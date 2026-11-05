@@ -26,6 +26,20 @@ negocio y conserva la trazabilidad.
 | `flujos/seguimiento-diario-proveedores.json` | Consolida estados y excluye proveedores vencidos | Todos los días a las 09:00, hora de Lima | Listo para configurar |
 | `flujos/actualizar-estados-solicitudes.json` | Cierra las solicitudes vencidas que no obtuvieron cotizaciones | Todos los días a las 09:15, hora de Lima | Listo para configurar |
 
+### Nomenclatura de los flujos
+
+Cada flujo se llama `CostFlow - E<etapa>.<número> <nombre>`:
+
+| Etapa | Qué cubre | Flujos |
+|---|---|---|
+| E1 | Datos de entrada: registro y envío de solicitudes | `E1.1 Envío de solicitud de cotización` |
+| E2 | Seguimiento de proveedores | `E2.1 Seguimiento diario de proveedores`, `E2.2 Análisis de respuestas de proveedores`, `E2.3 Actualización de estados de solicitudes` |
+| E3 | Lectura de cotizaciones | `E3.1` a `E3.5` (carpeta `etapa3`) |
+| E4 | Homologación | `E4.1` (carpeta `etapa4`) |
+| E5 | Cuadro comparativo | `E5.1` (carpeta `etapa5`) |
+
+Los archivos de esta carpeta conservan su nombre; el cambio es el nombre que muestra n8n al importarlos.
+
 ## Configurar el primer envío
 
 ### 1. Preparar Nhost
