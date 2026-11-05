@@ -1,5 +1,7 @@
 """Genera el flujo de E5 (cuadro comparativo) para n8n; nunca incluye valores de credenciales.
 
+Todo ocurre dentro de n8n, sin servicios aparte: la plantilla se abre con el nodo «Compression», un nodo de código
+(cuadro_core.js + llenar_plantilla.js, equivalente a app/cuadro/llenar.py) escribe las celdas y se vuelve a empaquetar.
 Reutiliza la clase Flow del generador de E4. Las credenciales se asignan por nombre al preparar n8n.
 """
 from __future__ import annotations
@@ -15,7 +17,7 @@ _e4.loader.exec_module(e4)
 
 IDS = {"1": "costflowE5_1"}
 STORAGE = "https://SUBDOMINIO.storage.REGION.nhost.run/v1/files"
-SERVICIO = "http://costflow-cuadro:8095"
+AQUI = Path(__file__).parent
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 COMPROBAR_ENTRADA = """// Sigue solo si Nhost entregó la entrada de este cuadro; si el intento venció, termina sin hacer nada.
@@ -28,25 +30,22 @@ if (!entrada.plantilla?.storage_file_id) {
 }
 return [{ json: { ...base, ok: true, storage_file_id: entrada.plantilla.storage_file_id } }];"""
 
-ARMAR_PETICION = """// Une la plantilla descargada con la homologación y el tipo de cambio para el servicio de E5.
-const ctx = $('Comprobar entrada').first().json;
-const buffer = await this.helpers.getBinaryDataBuffer(0, 'data');
-const e = ctx.entrada;
-return [{ json: { cuadro_id: ctx.cuadro_id, token: ctx.token, codigo: e.solicitud?.codigo ?? 'solicitud', revision: e.revision,
-  peticion: { homologacion: e.homologacion, tipo_cambio: e.tipo_cambio ?? null, plantilla_b64: buffer.toString('base64') } } }];"""
+# El código de las plantillas vive en archivos .js (probados con Node contra la versión en Python) y se inserta tal cual.
+LLENAR_PLANTILLA = (AQUI / "cuadro_core.js").read_text(encoding="utf-8") + chr(10) + (AQUI / "llenar_plantilla.js").read_text(encoding="utf-8")
+MARCAR_ZIP = (AQUI / "marcar_zip.js").read_text(encoding="utf-8")
 
-EVALUAR_CUADRO = """// El servicio devuelve el xlsx y su validación; un cuadro imposible de armar no se reintenta.
-const ctx = $('Armar petición').first().json;
-const base = { cuadro_id: ctx.cuadro_id, token: ctx.token };
-if (!$json.ok || !$json.archivo_b64) {
-  return [{ json: { ...base, ok: false, recuperable: $json.recuperable !== false,
-    error: String($json.error ?? $json.detail ?? 'El servicio de E5 no devolvió el cuadro.').slice(0, 600) } }];
-}
-const nombre = `cuadro-${ctx.codigo}-rev${ctx.revision}.xlsx`;
-const binario = await this.helpers.prepareBinaryData(Buffer.from($json.archivo_b64, 'base64'), nombre,
-  '%s');
-return [{ json: { ...base, ok: true, estado: $json.estado, validacion: $json.validacion, nombre_archivo: nombre,
-  metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: ctx.cuadro_id } }) }, binary: { data: binario } }];""" % XLSX
+EVALUAR_CUADRO = """// El zip ya está armado: se le pone nombre y se prepara lo que Storage y Nhost necesitan.
+const llenado = $('Llenar plantilla').first().json;
+const base = { cuadro_id: llenado.cuadro_id, token: llenado.token };
+const nombre = `cuadro-${llenado.codigo}-rev${llenado.revision}.xlsx`;
+const binario = $input.first().binary?.data;
+if (!binario) return [{ json: { ...base, ok: false, recuperable: true, error: 'No se pudo volver a empaquetar el cuadro.' } }];
+binario.fileName = nombre;
+binario.fileExtension = 'xlsx';
+binario.mimeType = '%s';
+return [{ json: { ...base, ok: true, estado: llenado.validacion.validado ? 'validado' : 'borrador', validacion: llenado.validacion,
+  nombre_archivo: nombre, metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: llenado.cuadro_id } }) },
+  binary: { data: binario } }];""" % XLSX
 
 EVALUAR_SUBIDA = """// Storage responde con el archivo creado; sin identificador, el intento falla y se reintenta.
 const ctx = $('Evaluar cuadro').first().json;
@@ -76,11 +75,13 @@ def generate():
     descargar = flujo.node("Descargar plantilla", "httpRequest", {"method": "GET", "url": "={{ '" + STORAGE + "/' + $json.storage_file_id }}",
         "authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth",
         "options": {"timeout": 120000, "response": {"response": {"responseFormat": "file", "outputPropertyName": "data"}}}}, 4.2, "storage")
-    armar = flujo.code("Armar petición", ARMAR_PETICION)
-    e4.SERVICIO = SERVICIO  # Flow.servicio lee esta constante al construir el nodo
-    generar = flujo.servicio("Generar cuadro", "/e5/generar", "$json.peticion", 120000)
+    marcar = flujo.code("Marcar plantilla como zip", MARCAR_ZIP)
+    descomprimir = flujo.node("Descomprimir plantilla", "compression", {"operation": "decompress", "binaryPropertyName": "data", "outputPrefix": "p_"}, 1.1)
+    llenar = flujo.code("Llenar plantilla", LLENAR_PLANTILLA)
+    llenada = flujo.si("¿Se llenó la plantilla?", "={{ $json.ok }}")
+    comprimir = flujo.node("Comprimir cuadro", "compression", {"operation": "compress", "binaryPropertyName": "={{ $json.propiedades }}",
+        "outputFormat": "zip", "fileName": "cuadro.xlsx", "binaryPropertyOutput": "data"}, 1.1)
     evaluar = flujo.code("Evaluar cuadro", EVALUAR_CUADRO)
-    cuadro_ok = flujo.si("¿Cuadro armado?", "={{ $json.ok }}")
     subir = flujo.node("Guardar cuadro en Storage", "httpRequest", {"method": "POST", "url": STORAGE, "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth", "sendBody": True, "contentType": "multipart-form-data", "bodyParameters": {"parameters": [
             {"name": "bucket-id", "value": "cotizaciones"}, {"name": "metadata[]", "value": "={{ $json.metadata }}"},
@@ -93,8 +94,9 @@ def generate():
         "storage_file_id:$json.storage_file_id,validacion:$json.validacion}")
     fallo = flujo.funcion("Registrar fallo", "fallo_e5", "{cuadro_id:$json.cuadro_id,token:$json.token,error:$json.error,recuperable:$json.recuperable}")
     flujo.link(cola, tomar); flujo.link(aviso, tomar); flujo.link(tomar, hay); flujo.link(hay, entrada, 0); flujo.link(entrada, comprobar); flujo.link(comprobar, con_plantilla)
-    flujo.link(con_plantilla, descargar, 0); flujo.link(con_plantilla, fallo, 1); flujo.link(descargar, armar); flujo.link(armar, generar)
-    flujo.link(generar, evaluar); flujo.link(evaluar, cuadro_ok); flujo.link(cuadro_ok, subir, 0); flujo.link(cuadro_ok, fallo, 1)
+    flujo.link(con_plantilla, descargar, 0); flujo.link(con_plantilla, fallo, 1); flujo.link(descargar, marcar); flujo.link(marcar, descomprimir)
+    flujo.link(descomprimir, llenar); flujo.link(llenar, llenada); flujo.link(llenada, comprimir, 0); flujo.link(llenada, fallo, 1)
+    flujo.link(comprimir, evaluar); flujo.link(evaluar, subir)
     flujo.link(subir, evaluar_subida); flujo.link(evaluar_subida, subida_ok); flujo.link(subida_ok, guardar, 0); flujo.link(subida_ok, fallo, 1)
     return [flujo.value]
 

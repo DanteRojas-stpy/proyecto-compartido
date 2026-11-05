@@ -201,12 +201,12 @@
       "notes": "CREDENCIAL_E4:storage"
     },
     {
-      "id": "7fd99a0b-97af-589f-81fb-ec351328b154",
-      "name": "Armar petición",
+      "id": "017a249e-43b2-5a1c-a7c7-ccabcee9e595",
+      "name": "Marcar plantilla como zip",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "// Une la plantilla descargada con la homologación y el tipo de cambio para el servicio de E5.\nconst ctx = $('Comprobar entrada').first().json;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst e = ctx.entrada;\nreturn [{ json: { cuadro_id: ctx.cuadro_id, token: ctx.token, codigo: e.solicitud?.codigo ?? 'solicitud', revision: e.revision,\n  peticion: { homologacion: e.homologacion, tipo_cambio: e.tipo_cambio ?? null, plantilla_b64: buffer.toString('base64') } } }];"
+        "jsCode": "// Un .xlsx es un zip, pero el nodo «Descomprimir» solo abre archivos cuya extensión es zip: se le cambia la etiqueta.\nconst item = $input.first();\nconst binario = item.binary?.data;\nif (!binario) throw new Error('No llegó la plantilla del cuadro.');\nbinario.fileName = 'plantilla.zip';\nbinario.fileExtension = 'zip';\nbinario.mimeType = 'application/zip';\nreturn [item];\n"
       },
       "position": [
         1760,
@@ -214,41 +214,27 @@
       ]
     },
     {
-      "id": "866c9e49-ee1d-5490-b5b6-b9c301a5ea33",
-      "name": "Generar cuadro",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "e8548aef-cf19-5e12-bd5c-3afd10609ac4",
+      "name": "Descomprimir plantilla",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
       "parameters": {
-        "method": "POST",
-        "url": "http://costflow-cuadro:8095/e5/generar",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify($json.peticion) }}",
-        "options": {
-          "timeout": 120000,
-          "response": {
-            "response": {
-              "neverError": true,
-              "responseFormat": "json"
-            }
-          }
-        }
+        "operation": "decompress",
+        "binaryPropertyName": "data",
+        "outputPrefix": "p_"
       },
       "position": [
         1980,
         0
-      ],
-      "notes": "CREDENCIAL_E4:internal"
+      ]
     },
     {
-      "id": "1b941427-0112-5b5f-b16d-5e90a2e0fc89",
-      "name": "Evaluar cuadro",
+      "id": "eab54926-c7cb-5b39-8928-36a9a2df59b4",
+      "name": "Llenar plantilla",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "// El servicio devuelve el xlsx y su validación; un cuadro imposible de armar no se reintenta.\nconst ctx = $('Armar petición').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nif (!$json.ok || !$json.archivo_b64) {\n  return [{ json: { ...base, ok: false, recuperable: $json.recuperable !== false,\n    error: String($json.error ?? $json.detail ?? 'El servicio de E5 no devolvió el cuadro.').slice(0, 600) } }];\n}\nconst nombre = `cuadro-${ctx.codigo}-rev${ctx.revision}.xlsx`;\nconst binario = await this.helpers.prepareBinaryData(Buffer.from($json.archivo_b64, 'base64'), nombre,\n  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');\nreturn [{ json: { ...base, ok: true, estado: $json.estado, validacion: $json.validacion, nombre_archivo: nombre,\n  metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: ctx.cuadro_id } }) }, binary: { data: binario } }];"
+        "jsCode": "// E5 en n8n: decide qué celdas de la plantilla se llenan con la homologación de E4 y las escribe en el XML de la hoja.\n// Es el equivalente exacto de app/cuadro/llenar.py (plan, _celda y los reemplazos de llenar), en JavaScript puro para\n// poder correr dentro de un nodo de código de n8n Cloud, que no admite librerías externas.\n// No usa modelo. Los números vienen de la homologación, que a su vez los copió de E3.\n\nconst HOJA = 'xl/worksheets/sheet1.xml';\n// [primera columna del bloque (nombre y texto), cantidad, P.U. US$, P.U. S/, parcial]\nconst BLOQUES = [['H', 'H', 'I', 'J', 'K'], ['L', 'L', 'M', 'N', 'O'], ['P', 'P', 'Q', 'R', 'S'], ['T', 'T', 'U', 'V', 'W'],\n  ['X', 'X', 'Y', 'Z', 'AA'], ['AB', 'AB', 'AC', 'AD', 'AE'], ['AF', 'AF', 'AG', 'AH', 'AI']];\nconst FILA_PLAZO = 30, FILA_PAGO = 33, FILA_CONSIDERACIONES = 36;\nconst TOLERANCIA = 0.01;\n\nclass CuadroNoGenerable extends Error {}\n\n// Los importes decimales se normalizan a 15 cifras significativas para que 36937.55 * 2 no deje ruido de coma flotante.\nconst limpio = (x) => Number(x.toPrecision(15));\nconst verdadero = (v) => v !== null && v !== undefined && v !== '' && v !== 0 && v !== false;\n\nfunction dec(valor) {\n  if (valor === null || valor === undefined || typeof valor === 'boolean') return null;\n  if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;\n  const texto = String(valor).trim();\n  if (!/^[+-]?(\\d+\\.?\\d*|\\.\\d+)([eE][+-]?\\d+)?$/.test(texto)) return null;\n  return Number(texto);\n}\n\nconst numero = (valor) => limpio(valor);\nconst suma = (lista) => limpio(lista.reduce((a, b) => a + b, 0));\n\nfunction plan(homologacion, tipoCambio) {\n  const partidas = homologacion.partidas;\n  if (!partidas || !partidas.length) throw new CuadroNoGenerable('La homologación no tiene partidas que comparar.');\n  const postores = homologacion.postores;\n  if (!postores || !postores.length) throw new CuadroNoGenerable('No hay ofertas finales para comparar.');\n  let tc = null;\n  if (verdadero(tipoCambio)) {\n    tc = dec(tipoCambio.valor);\n    if (tc === null || tc <= 0) throw new CuadroNoGenerable('El tipo de cambio no es un número positivo.');\n  }\n  const porTipos = partidas.length > 1;\n  const avisos = [], informativos = [], comprobaciones = [];\n  const celdas = {};\n  const metrado = !porTipos ? dec(partidas[0].metrado) : null;\n  if (porTipos) {\n    celdas.I3 = homologacion.especialidad.nombre; // el título dice COMPARATIVO - <especialidad>; B13 conserva el texto de la plantilla\n  } else {\n    celdas.I3 = partidas[0].descripcion;\n    celdas.B13 = partidas[0].descripcion;\n    celdas.C13 = partidas[0].unidad;\n    celdas.D13 = metrado !== null ? numero(metrado) : null;\n  }\n  celdas.E13 = null; // el presupuesto meta no viene de E3\n  if (porTipos) celdas.D13 = null;\n  celdas.F5 = tc ? numero(tc) : 0;\n\n  const bloques = []; // [postor, etiquetaTipo, numeroTipo, partida, items]\n  const ordenados = [...postores].sort((a, b) => (a.nombre < b.nombre ? -1 : a.nombre > b.nombre ? 1 : 0));\n  for (const postor of ordenados) {\n    const cotizadas = [];\n    partidas.forEach((partida, i) => {\n      const oferta = partida.ofertas.find((o) => o.proveedor_id === postor.proveedor_id);\n      if (oferta && ['cotizado', 'global', 'incluido_con_evidencia'].includes(oferta.estado) && oferta.items.length) {\n        cotizadas.push([i + 1, partida, oferta.items]);\n      }\n    });\n    if (!cotizadas.length) informativos.push(`${postor.nombre}: no cotiza ninguna partida; no ocupa un bloque.`);\n    for (const [numeroTipo, partida, items] of cotizadas) {\n      bloques.push([postor, cotizadas.length > 1 ? numeroTipo : null, numeroTipo, partida, items]);\n    }\n  }\n  if (!bloques.length) throw new CuadroNoGenerable('Ningún proveedor cotizó las partidas.');\n  if (bloques.length > BLOQUES.length) {\n    throw new CuadroNoGenerable(`La plantilla tiene ${BLOQUES.length} bloques de proveedor y se necesitan ${bloques.length} (un bloque por proveedor y tipo).`);\n  }\n\n  let usaDolares = false;\n  bloques.forEach(([postor, etiquetaTipo, numeroTipo, partida, items], indice) => {\n    const [n, cant, usd, pen] = BLOQUES[indice];\n    celdas[`${n}6`] = postor.nombre + (etiquetaTipo ? ` (TIPO ${etiquetaTipo})` : '');\n    const moneda = postor.moneda;\n    const parciales = items.map((i) => dec(i.original.parcial));\n    const cantidades = items.map((i) => dec(i.original.cantidad));\n    let cantidad = cantidades.every((c) => c !== null) && suma(cantidades) > 0 ? suma(cantidades) : null;\n    if (cantidad === null) {\n      cantidad = dec(partida.metrado) || 1;\n      avisos.push(`${postor.nombre}: E3 no trae la cantidad; se usó ${numero(cantidad)} (el metrado de la partida o 1).`);\n    }\n    const unitarioItem = items.length === 1 ? dec(items[0].original.precio_unitario) : null;\n    if (moneda !== 'PEN' && moneda !== 'USD') {\n      avisos.push(`${postor.nombre}: moneda ${moneda || 'no identificada'}; la plantilla solo maneja PEN y USD, el bloque queda sin precios.`);\n      comprobaciones.push({ proveedor: postor.nombre, tipo: numeroTipo, cuadra: false });\n      celdas[`${cant}13`] = numero(cantidad); celdas[`${usd}13`] = 0; celdas[`${pen}13`] = 0;\n      if (porTipos) celdas[`${n}${FILA_CONSIDERACIONES}`] = `Tipo ${numeroTipo}: ${partida.descripcion}`;\n      return;\n    }\n    let total, unitario;\n    if (parciales.every((p) => p !== null)) {\n      total = suma(parciales);\n      unitario = limpio(total / cantidad);\n    } else if (unitarioItem !== null) {\n      unitario = unitarioItem;\n      total = limpio(unitario * cantidad);\n      avisos.push(`${postor.nombre}: el ítem no trae parcial; se usó precio unitario por cantidad.`);\n    } else {\n      avisos.push(`${postor.nombre}: faltan importes en la lectura de E3; el bloque queda sin precios (no se inventan).`);\n      comprobaciones.push({ proveedor: postor.nombre, tipo: numeroTipo, cuadra: false });\n      celdas[`${cant}13`] = numero(cantidad); celdas[`${usd}13`] = 0; celdas[`${pen}13`] = 0;\n      if (porTipos) celdas[`${n}${FILA_CONSIDERACIONES}`] = `Tipo ${numeroTipo}: ${partida.descripcion}`;\n      return;\n    }\n    celdas[`${cant}13`] = numero(cantidad);\n    if (moneda === 'USD') {\n      usaDolares = true;\n      celdas[`${usd}13`] = numero(unitario);\n      if (!tc) avisos.push(`${postor.nombre} cotiza en US$ y falta el tipo de cambio: las columnas en S/ quedan sin valor.`);\n    } else {\n      celdas[`${usd}13`] = 0; celdas[`${pen}13`] = numero(unitario);\n    }\n    if (items.length > 1) {\n      avisos.push(`${postor.nombre}: ${items.length} ítems agrupados en la partida; el precio unitario es la suma de parciales entre la cantidad.`);\n    }\n    comprobaciones.push({ proveedor: postor.nombre, tipo: numeroTipo, cantidad_por_unitario: limpio(cantidad * unitario),\n      suma_parciales: limpio(total), cuadra: Math.abs(cantidad * unitario - total) <= TOLERANCIA });\n    const condiciones = postor.condiciones;\n    if (verdadero(condiciones.plazo_entrega)) celdas[`${n}${FILA_PLAZO}`] = String(condiciones.plazo_entrega);\n    if (verdadero(condiciones.condiciones_pago)) celdas[`${n}${FILA_PAGO}`] = String(condiciones.condiciones_pago);\n    const texto = [];\n    if (porTipos) texto.push(`Tipo ${numeroTipo}: ${partida.descripcion}`);\n    if (verdadero(condiciones.vigencia_oferta)) texto.push(`Vigencia de la oferta: ${condiciones.vigencia_oferta}`);\n    if (texto.length) celdas[`${n}${FILA_CONSIDERACIONES}`] = texto.join('\\n');\n  });\n  if (usaDolares && !tc) comprobaciones.push({ proveedor: null, tipo_cambio_presente: false, cuadra: false });\n  // Un pendiente que solo pide autorizar el tipo de cambio queda resuelto si el especialista lo indicó al generar.\n  const bloqueantes = homologacion.pendientes.filter((p) => p.bloquea_comparacion && !(tc && p.decision_requerida.includes('tipo de cambio')));\n  if (bloqueantes.length) avisos.push(`La homologación tiene ${bloqueantes.length} pendientes que bloquean la comparación.`);\n  const validado = comprobaciones.every((c) => c.cuadra) && !avisos.length && !bloqueantes.length;\n  return { celdas, avisos, informativos, bloques: bloques.length, comprobaciones, validado,\n    pendientes_bloqueantes: bloqueantes.length, tipo_cambio: tipoCambio ?? null, moneda_comparacion: homologacion.moneda_comparacion };\n}\n\nconst escapar = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nfunction celda(xml, ref, valor) {\n  const patron = new RegExp(`<c r=\"${ref}\"((?:\\\\s[^>]*?)?)(/>|>[\\\\s\\\\S]*?</c>)`);\n  const m = patron.exec(xml);\n  if (!m) throw new CuadroNoGenerable(`La plantilla no tiene la celda ${ref}; no es la plantilla esperada.`);\n  const estilo = /\\ss=\"(\\d+)\"/.exec(m[1]);\n  const s = estilo ? ` s=\"${estilo[1]}\"` : '';\n  let nuevo;\n  if (valor === null || valor === undefined) nuevo = `<c r=\"${ref}\"${s}/>`;\n  else if (typeof valor === 'string') nuevo = `<c r=\"${ref}\"${s} t=\"inlineStr\"><is><t xml:space=\"preserve\">${escapar(valor)}</t></is></c>`;\n  else nuevo = `<c r=\"${ref}\"${s}><v>${valor}</v></c>`;\n  return xml.slice(0, m.index) + nuevo + xml.slice(m.index + m[0].length);\n}\n\n// Escribe las celdas en la hoja, quita los valores calculados viejos (Excel recalcula al abrir).\nfunction llenarHoja(xml, cambios) {\n  let texto = xml;\n  for (const [ref, valor] of Object.entries(cambios)) texto = celda(texto, ref, valor);\n  texto = texto.replace(/(<f>[^<]*<\\/f>)<v>[^<]*<\\/v>/g, '$1');\n  return texto.replace(/(<c r=\"[A-Z]+\\d+\"[^>]*?) t=\"str\"(>\\s*<f>)/g, '$1$2');\n}\n\nconst llenarLibro = (xml) => xml.replace(/<calcPr[^>]*\\/>/, '<calcPr calcId=\"191028\" fullCalcOnLoad=\"1\"/>');\nconst llenarTipos = (xml) => xml.replace(/<Override[^>]*calcChain[^>]*\\/>/g, '');\nconst llenarRelaciones = (xml) => xml.replace(/<Relationship [^>]*calcChain[^>]*\\/>/g, '');\n\n// Rutas de los archivos de un zip, en el orden de su directorio central. Solo lee nombres (no descomprime nada).\n// El nodo «Descomprimir» de n8n entrega cada archivo sin su carpeta; con esta lista se le devuelve su ruta completa.\nfunction nombresDelZip(buffer) {\n  const v = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);\n  let fin = -1;\n  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i--) {\n    if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }\n  }\n  if (fin < 0) throw new CuadroNoGenerable('El archivo no es un .xlsx válido.');\n  const cantidad = v.getUint16(fin + 10, true);\n  let posicion = v.getUint32(fin + 16, true);\n  const nombres = [];\n  for (let i = 0; i < cantidad; i++) {\n    if (v.getUint32(posicion, true) !== 0x02014b50) throw new CuadroNoGenerable('El directorio del .xlsx está dañado.');\n    const largoNombre = v.getUint16(posicion + 28, true);\n    const largoExtra = v.getUint16(posicion + 30, true);\n    const largoComentario = v.getUint16(posicion + 32, true);\n    const nombre = buffer.toString('utf8', posicion + 46, posicion + 46 + largoNombre);\n    if (!nombre.endsWith('/')) nombres.push(nombre); // las carpetas no llegan como archivo\n    posicion += 46 + largoNombre + largoExtra + largoComentario;\n  }\n  return nombres;\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { plan, nombresDelZip, celda, llenarHoja, llenarLibro, llenarTipos, llenarRelaciones, CuadroNoGenerable, HOJA };\n}\n\n// --- Pegamento de n8n: usa las funciones de cuadro_core.js sobre los archivos que dejó el nodo «Descomprimir plantilla».\n// Cada archivo del .xlsx llega como un binario cuyo nombre (fileName) es su ruta dentro del zip.\nconst ctx = $('Comprobar entrada').first().json;\nconst entrada = ctx.entrada;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token, codigo: entrada.solicitud?.codigo ?? 'solicitud', revision: entrada.revision };\nconst item = $input.first();\nconst binarios = item.binary ?? {};\nconst clave = {};\nconst MIME_XML = 'application/xml';\ntry {\n  // El nodo «Descomprimir» pierde las carpetas: se recuperan de la lista de rutas del zip original (mismo orden).\n  const original = await this.helpers.getBinaryDataBuffer(0, $('Marcar plantilla como zip').first().binary.data);\n  const rutas = nombresDelZip(original);\n  const propiedades = Object.keys(binarios);\n  if (rutas.length !== propiedades.length) throw new CuadroNoGenerable('El archivo no parece la plantilla del cuadro comparativo.');\n  propiedades.forEach((propiedad, i) => {\n    if (rutas[i].split('/').pop() !== binarios[propiedad].fileName) throw new CuadroNoGenerable('El .xlsx se abrió en otro orden del esperado.');\n    binarios[propiedad].fileName = rutas[i];\n    clave[rutas[i]] = propiedad;\n  });\n  if (!clave[HOJA]) throw new CuadroNoGenerable('El archivo no parece la plantilla del cuadro comparativo.');\n  const resultado = plan(entrada.homologacion, entrada.tipo_cambio ?? null);\n  const leer = async (ruta) => (await this.helpers.getBinaryDataBuffer(0, clave[ruta])).toString('utf8');\n  const escribir = async (ruta, texto) => {\n    const nuevo = await this.helpers.prepareBinaryData(Buffer.from(texto, 'utf8'), ruta, MIME_XML);\n    nuevo.fileName = ruta; // prepareBinaryData recorta la carpeta; sin ella el zip quedaría plano\n    binarios[clave[ruta]] = nuevo;\n  };\n  await escribir(HOJA, llenarHoja(await leer(HOJA), resultado.celdas));\n  for (const [ruta, cambiar] of [['xl/workbook.xml', llenarLibro], ['[Content_Types].xml', llenarTipos], ['xl/_rels/workbook.xml.rels', llenarRelaciones]]) {\n    if (clave[ruta]) await escribir(ruta, cambiar(await leer(ruta)));\n  }\n  if (clave['xl/calcChain.xml']) delete binarios[clave['xl/calcChain.xml']]; // Excel lo reconstruye al recalcular\n  const { celdas, ...validacion } = resultado;\n  validacion.celdas_escritas = Object.keys(celdas).length;\n  // El nodo «Comprimir cuadro» recibe aquí la lista de archivos que debe volver a empaquetar.\n  return [{ json: { ...base, ok: true, validacion, propiedades: Object.keys(binarios).join(',') }, binary: binarios }];\n} catch (error) {\n  if (error instanceof CuadroNoGenerable) {\n    // Un cuadro imposible de armar no se reintenta: reintentar no lo arregla.\n    return [{ json: { ...base, ok: false, recuperable: false, error: String(error.message).slice(0, 600) } }];\n  }\n  throw error;\n}\n"
       },
       "position": [
         2200,
@@ -256,8 +242,8 @@
       ]
     },
     {
-      "id": "9c75f422-6b2f-5436-adc2-130aaf2c847b",
-      "name": "¿Cuadro armado?",
+      "id": "42316a04-b2ba-5741-9e0b-4d748f397178",
+      "name": "¿Se llenó la plantilla?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "parameters": {
@@ -269,7 +255,7 @@
           },
           "conditions": [
             {
-              "id": "bb447315-1570-5e58-8242-d782d9ea755f",
+              "id": "f2896ed9-99d5-51c9-a5ba-80e81db035d4",
               "leftValue": "={{ $json.ok }}",
               "rightValue": true,
               "operator": {
@@ -284,6 +270,36 @@
       },
       "position": [
         2420,
+        0
+      ]
+    },
+    {
+      "id": "bc4b0220-f907-5b1c-b971-b207f259b784",
+      "name": "Comprimir cuadro",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "parameters": {
+        "operation": "compress",
+        "binaryPropertyName": "={{ $json.propiedades }}",
+        "outputFormat": "zip",
+        "fileName": "cuadro.xlsx",
+        "binaryPropertyOutput": "data"
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "1b941427-0112-5b5f-b16d-5e90a2e0fc89",
+      "name": "Evaluar cuadro",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// El zip ya está armado: se le pone nombre y se prepara lo que Storage y Nhost necesitan.\nconst llenado = $('Llenar plantilla').first().json;\nconst base = { cuadro_id: llenado.cuadro_id, token: llenado.token };\nconst nombre = `cuadro-${llenado.codigo}-rev${llenado.revision}.xlsx`;\nconst binario = $input.first().binary?.data;\nif (!binario) return [{ json: { ...base, ok: false, recuperable: true, error: 'No se pudo volver a empaquetar el cuadro.' } }];\nbinario.fileName = nombre;\nbinario.fileExtension = 'xlsx';\nbinario.mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';\nreturn [{ json: { ...base, ok: true, estado: llenado.validacion.validado ? 'validado' : 'borrador', validacion: llenado.validacion,\n  nombre_archivo: nombre, metadata: JSON.stringify({ name: nombre, metadata: { tipo: 'cuadro_comparativo', cuadro_id: llenado.cuadro_id } }) },\n  binary: { data: binario } }];"
+      },
+      "position": [
+        2860,
         0
       ]
     },
@@ -327,7 +343,7 @@
         }
       },
       "position": [
-        2640,
+        3080,
         0
       ],
       "notes": "CREDENCIAL_E4:storage"
@@ -341,7 +357,7 @@
         "jsCode": "// Storage responde con el archivo creado; sin identificador, el intento falla y se reintenta.\nconst ctx = $('Evaluar cuadro').first().json;\nconst base = { cuadro_id: ctx.cuadro_id, token: ctx.token };\nconst id = $json.processedFiles?.[0]?.id;\nif (!id) return [{ json: { ...base, ok: false, recuperable: true, error: 'Storage no guardó el cuadro: ' + JSON.stringify($json).slice(0, 300) } }];\nreturn [{ json: { ...base, ok: true, estado: ctx.estado, validacion: ctx.validacion, nombre_archivo: ctx.nombre_archivo, storage_file_id: id } }];"
       },
       "position": [
-        2860,
+        3300,
         0
       ]
     },
@@ -373,7 +389,7 @@
         "options": {}
       },
       "position": [
-        3080,
+        3520,
         0
       ]
     },
@@ -400,7 +416,7 @@
         }
       },
       "position": [
-        3300,
+        3740,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -428,7 +444,7 @@
         }
       },
       "position": [
-        3520,
+        3960,
         0
       ],
       "notes": "CREDENCIAL_E4:internal"
@@ -523,25 +539,65 @@
       "main": [
         [
           {
-            "node": "Armar petición",
+            "node": "Marcar plantilla como zip",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Armar petición": {
+    "Marcar plantilla como zip": {
       "main": [
         [
           {
-            "node": "Generar cuadro",
+            "node": "Descomprimir plantilla",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Generar cuadro": {
+    "Descomprimir plantilla": {
+      "main": [
+        [
+          {
+            "node": "Llenar plantilla",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Llenar plantilla": {
+      "main": [
+        [
+          {
+            "node": "¿Se llenó la plantilla?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Se llenó la plantilla?": {
+      "main": [
+        [
+          {
+            "node": "Comprimir cuadro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprimir cuadro": {
       "main": [
         [
           {
@@ -556,25 +612,7 @@
       "main": [
         [
           {
-            "node": "¿Cuadro armado?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "¿Cuadro armado?": {
-      "main": [
-        [
-          {
             "node": "Guardar cuadro en Storage",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Registrar fallo",
             "type": "main",
             "index": 0
           }
