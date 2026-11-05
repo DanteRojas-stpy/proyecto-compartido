@@ -1,0 +1,69 @@
+{
+  "name": "CostFlow - E3.3 Notificaciones solo en frontend",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "de59dd8b-a77c-43b2-b167-e0a4249047d6",
+      "name": "Desde otra etapa",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://costflow-etapa3:8093/notify",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 720000
+        }
+      },
+      "id": "4d3107f1-9443-489a-a675-0a890dd33335",
+      "name": "Registrar notificación única en Nhost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        224,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Desde otra etapa": {
+      "main": [
+        [
+          {
+            "node": "Registrar notificación única en Nhost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "none",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": false,
+    "availableInMCP": false
+  },
+  "meta": {},
+  "nodeGroups": [],
+  "id": "costflowEtapa3_3",
+  "tags": []
+}
