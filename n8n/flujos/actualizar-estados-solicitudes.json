@@ -1,5 +1,5 @@
 {
-  "name": "CostFlow - Cerrar solicitudes sin proveedores",
+  "name": "CostFlow - E2.3 Actualización de estados de solicitudes",
   "nodes": [
     {
       "parameters": {
