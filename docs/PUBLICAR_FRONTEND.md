@@ -45,3 +45,11 @@ válido.
 
 Publicar las pantallas no certifica esas conexiones. La prueba de acceso y
 decisiones requiere una sesión real y datos de prueba autorizados.
+
+## Alternativa: GitHub Pages (sin cuentas nuevas)
+
+El flujo `Publicar frontend` también publica el paquete en GitHub Pages cada vez que se fusiona un cambio del frontend
+en `main` (o al ejecutarlo a mano desde la pestaña Actions → «Publicar frontend» → Run workflow). La dirección es
+`https://danterojas-stpy.github.io/proyecto-compartido/`. Usa los mismos identificadores públicos de Nhost y no necesita
+secretos. Para que el inicio de sesión y las acciones funcionen desde esa dirección, añade
+`https://danterojas-stpy.github.io` a `CORS_ORIGINS` de la Function (como se indica arriba para Netlify).
