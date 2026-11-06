@@ -1,5 +1,8 @@
 # Llevar E3, E4 y E5 a n8n en la nube
 
+> **E5 ya no necesita servidor:** el cuadro comparativo se arma dentro de n8n (nodos «Compression» y de código; ver
+> `n8n/etapa5/README.md`). Solo E3 (lector) y E4 (homologación) siguen necesitando un servicio con dirección pública.
+
 Esta guía mueve los flujos de n8n (hoy en tu Docker) a una instancia de n8n Cloud y los servicios de apoyo a un
 servidor con HTTPS. Nhost, el front y las migraciones **no cambian**.
 
@@ -12,7 +15,7 @@ Front ──► Function de Nhost ──► cola en Nhost
         n8n Cloud (flujos E3, E4, E5) ──► Claude, Gmail, Storage
                  │            ▲
                  ▼            │ (webhooks internos de E3)
-   Servidor con Docker (compose.nube.yml): lector E3 · homologación E4 · cuadro E5, detrás de HTTPS
+   Servidor con Docker (compose.nube.yml): lector E3 · homologación E4, detrás de HTTPS (E5 corre dentro de n8n y no necesita servidor)
 ```
 
 n8n Cloud no puede llegar a `http://costflow-etapa3:8093` y similares (son nombres internos de tu Docker). Por eso los
@@ -53,8 +56,7 @@ python scripts/n8n_nube.py subir \
   --n8n-url https://tuinstancia.app.n8n.cloud \
   --nhost-subdomain <subdominio-de-nhost> --nhost-region sa-east-1 \
   --servicio-e3-url https://e3.tudominio.com \
-  --servicio-e4-url https://e4.tudominio.com \
-  --servicio-e5-url https://e5.tudominio.com
+  --servicio-e4-url https://e4.tudominio.com
 ```
 Crea (o actualiza) los siete flujos en el orden correcto y **enlaza E3.1, E3.2, E3.3 y E3.5 entre sí** con los
 identificadores nuevos. Quedan **inactivos**. Si prefieres importar a mano, `preparar --salida n8n-nube` deja los JSON
