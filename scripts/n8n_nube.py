@@ -1,6 +1,6 @@
 """Prepara y sube los flujos de E3, E4 y E5 a una instancia de n8n (por ejemplo, n8n Cloud).
 
-Los JSON del repositorio apuntan a los servicios de E3 y E4 por su nombre dentro de Docker (E5 corre dentro de n8n y no necesita servicio) y a marcadores SUBDOMINIO/REGION.
+Los JSON del repositorio apuntan al servicio de E3 por su nombre dentro de Docker (E4 y E5 corren dentro de n8n y no necesitan servicio) y a marcadores SUBDOMINIO/REGION.
 Este programa los adapta a la dirección pública de cada servicio, ajusta la frecuencia de los sondeos (en la nube cada
 ejecución cuenta para la cuota) y, si se pide, los crea por la API de n8n enlazando los flujos que se invocan entre sí.
 
@@ -26,7 +26,6 @@ ORDEN = ["costflowEtapa3_3", "costflowEtapa3_2", "costflowEtapa3_1", "costflowEt
 CARPETAS = ["n8n/etapa3", "n8n/etapa4", "n8n/etapa5"]
 SERVICIOS_LOCALES = {
     "http://costflow-etapa3:8093": "servicio_e3",
-    "http://costflow-homologacion:8094": "servicio_e4",
 }
 # Estos flujos revisan una cola por sondeo; E4 y E5 además despiertan por webhook cuando se pulsa el botón.
 FLUJOS_DE_COLA_CON_AVISO = {"costflowE4_1", "costflowE5_1"}
@@ -70,7 +69,6 @@ def configuracion(args: argparse.Namespace, entorno: dict | None = None) -> dict
     cfg = {
         "subdominio": leer("nhost_subdomain"), "region": leer("nhost_region", "sa-east-1"),
         "servicio_e3": _https(leer("servicio_e3_url"), "SERVICIO_E3_URL"),
-        "servicio_e4": _https(leer("servicio_e4_url"), "SERVICIO_E4_URL"),
         "intervalo_e3": int(getattr(args, "intervalo_e3", 5)), "intervalo_cola": int(getattr(args, "intervalo_cola", 30)),
     }
     if not re.fullmatch(r"[a-z0-9]{10,30}", cfg["subdominio"]):
@@ -186,7 +184,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("accion", choices=["preparar", "subir"])
     ap.add_argument("--nhost-subdomain"), ap.add_argument("--nhost-region")
-    ap.add_argument("--servicio-e3-url"), ap.add_argument("--servicio-e4-url"), ap.add_argument("--servicio-e5-url", help="(ya no se usa: E5 corre dentro de n8n)")
+    ap.add_argument("--servicio-e3-url"), ap.add_argument("--servicio-e4-url", help="(ya no se usa: E4 corre dentro de n8n)"), ap.add_argument("--servicio-e5-url", help="(ya no se usa: E5 corre dentro de n8n)")
     ap.add_argument("--intervalo-e3", type=int, default=5, help="minutos entre sondeos de E3.1 y E3.5 (por defecto 5)")
     ap.add_argument("--intervalo-cola", type=int, default=30, help="minutos entre sondeos de respaldo de E4 y E5 (por defecto 30)")
     ap.add_argument("--n8n-url", help="dirección de la instancia, por ejemplo https://miempresa.app.n8n.cloud")

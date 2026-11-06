@@ -1,14 +1,35 @@
-"""Genera el flujo de E4 para n8n; nunca incluye valores de credenciales."""
+"""Genera el flujo de E4 para n8n; nunca incluye valores de credenciales.
+
+Todo ocurre dentro de n8n, sin servicio aparte: homologacion_core.js (equivalente a app/homologacion) corre en nodos de código.
+"""
 from __future__ import annotations
 
 import json
+import sys
 import uuid
 from pathlib import Path
 
 IDS = {"1": "costflowE4_1"}
 FUNCION = "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e4-operar"
-SERVICIO = "http://costflow-homologacion:8094"
+AQUI = Path(__file__).parent
+sys.path.insert(0, str(AQUI.parents[1]))  # para leer el contrato y el método desde app/homologacion
 CLAUDE = "https://api.anthropic.com/v1/messages"
+
+from app.homologacion import contrato  # noqa: E402
+
+MODELO = "claude-sonnet-5-5"
+
+
+def _js(archivo: str, **constantes: str) -> str:
+    """Código de un nodo: el núcleo (homologacion_core.js) más su pegamento, con las constantes de Python ya insertadas."""
+    pegamento = (AQUI / archivo).read_text(encoding="utf-8")
+    for nombre, valor in constantes.items():
+        pegamento = pegamento.replace(f"__{nombre}__", json.dumps(valor, ensure_ascii=False))
+    return (AQUI / "homologacion_core.js").read_text(encoding="utf-8") + chr(10) + pegamento
+
+
+PREPARAR_PETICION = _js("preparar_peticion.js", MODELO=MODELO, SYSTEM_PROMPT=contrato.system_prompt())
+CONSTRUIR_VALIDAR = _js("construir_validar.js", MODELO=MODELO, ESQUEMA=contrato.SALIDA)
 
 # Cada paso conserva el contexto (ejecucion, token y paquete) para poder registrar el fallo desde cualquier punto.
 COMPROBAR_ENTRADA = """// Sigue solo si Nhost entregó la entrada de esta homologación; si el intento venció, termina sin hacer nada.
@@ -104,7 +125,7 @@ def generate():
     entrada = flujo.funcion("Consultar entrada en Nhost", "entrada_e4",
                             "{ejecucion_id:$json.respuesta.ejecucion_id,token:$json.respuesta.token}")
     comprobar = flujo.code("Comprobar entrada", COMPROBAR_ENTRADA)
-    preparar = flujo.servicio("Preparar petición para Claude", "/e4/preparar", "{paquete:$json.paquete}")
+    preparar = flujo.code("Preparar petición para Claude", PREPARAR_PETICION)
     verificar = flujo.code("Verificar petición", VERIFICAR_PETICION)
     peticion_ok = flujo.si("¿Petición lista?", "={{ $json.ok }}")
     claude = flujo.node("Claude Messages", "httpRequest", {"method": "POST", "url": CLAUDE, "authentication": "genericCredentialType",
@@ -113,7 +134,7 @@ def generate():
         "options": {"timeout": 280000, "response": {"response": {"neverError": True, "responseFormat": "json"}}}}, 4.2, "claude")
     interpretar = flujo.code("Interpretar respuesta de Claude", INTERPRETAR_CLAUDE)
     respuesta_ok = flujo.si("¿Claude respondió bien?", "={{ $json.ok }}")
-    construir = flujo.servicio("Construir y validar", "/e4/construir", "{paquete:$json.paquete,texto:$json.texto,modelo:$json.modelo}", 120000)
+    construir = flujo.code("Construir y validar", CONSTRUIR_VALIDAR)
     evaluar = flujo.code("Evaluar resultado", EVALUAR_RESULTADO)
     resultado_ok = flujo.si("¿Pasó la validación?", "={{ $json.ok }}")
     guardar = flujo.funcion("Guardar homologación", "guardar_e4",
