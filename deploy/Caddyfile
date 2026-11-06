@@ -1,12 +1,4 @@
-# Proxy con HTTPS automático (Let's Encrypt) delante de los tres servicios. Las variables vienen de deploy/nube.env.
+# Proxy con HTTPS automático (Let's Encrypt) delante del lector de E3. La variable viene de deploy/nube.env.
 {$DOMINIO_E3} {
 	reverse_proxy etapa3:8093
-}
-
-{$DOMINIO_E4} {
-	reverse_proxy homologacion:8094
-}
-
-{$DOMINIO_E5} {
-	reverse_proxy cuadro:8095
 }

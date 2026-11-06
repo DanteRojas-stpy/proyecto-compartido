@@ -1,7 +1,8 @@
-# Los tres servicios de CostFlow (E3, E4 y E5) en un servidor con Docker, con HTTPS, para usarlos desde n8n Cloud.
+# El servicio de lectura de E3 de CostFlow con HTTPS, en un servidor con Docker, para usarlo desde n8n Cloud.
+# E4 y E5 corren dentro de n8n y no necesitan servidor.
 # Uso:  cp deploy/nube.env.example deploy/nube.env   (completar)  y luego
 #       docker compose -f compose.nube.yml --env-file deploy/nube.env up -d --build
-# Recomendado: 2 vCPU y 4 GB de RAM (el lector de E3 usa OCR y modelos de embeddings). Abrir solo los puertos 80 y 443.
+# Recomendado: 2 vCPU y 4 GB de RAM como mínimo (OCR y modelos de embeddings). Sirve en x86 y en ARM. Abrir solo los puertos 80 y 443.
 services:
   etapa3:
     build:
@@ -20,24 +21,7 @@ services:
       E3_CONTEXT_CHARS: 24000
     volumes:
       - etapa3_datos:/datos
-    mem_limit: 1800m
-  homologacion:
-    build:
-      context: .
-      dockerfile: app/homologacion/Dockerfile
-    restart: unless-stopped
-    environment:
-      E3_INTERNAL_KEY: ${E3_INTERNAL_KEY:?define E3_INTERNAL_KEY}
-      E4_MODELO: claude-sonnet-5-5
-    mem_limit: 512m
-  cuadro:
-    build:
-      context: .
-      dockerfile: app/cuadro/Dockerfile
-    restart: unless-stopped
-    environment:
-      E3_INTERNAL_KEY: ${E3_INTERNAL_KEY:?define E3_INTERNAL_KEY}
-    mem_limit: 256m
+    mem_limit: 3g
   caddy:
     image: caddy:2
     restart: unless-stopped
@@ -46,12 +30,10 @@ services:
       - "443:443"
     environment:
       DOMINIO_E3: ${DOMINIO_E3:?define DOMINIO_E3}
-      DOMINIO_E4: ${DOMINIO_E4:?define DOMINIO_E4}
-      DOMINIO_E5: ${DOMINIO_E5:?define DOMINIO_E5}
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_datos:/data
-    depends_on: [etapa3, homologacion, cuadro]
+    depends_on: [etapa3]
 volumes:
   etapa3_datos:
   caddy_datos:
