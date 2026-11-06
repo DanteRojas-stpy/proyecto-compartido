@@ -15,7 +15,7 @@ Front ──► Function de Nhost ──► cola en Nhost
         n8n Cloud (flujos E3, E4, E5) ──► Claude, Gmail, Storage
                  │            ▲
                  ▼            │ (webhooks internos de E3)
-   Servidor con Docker (compose.nube.yml): lector E3 · homologación E4, detrás de HTTPS (E5 corre dentro de n8n y no necesita servidor)
+   Servidor con Docker (compose.nube.yml): lector E3, detrás de HTTPS (E4 y E5 corren dentro de n8n y no necesitan servidor)
 ```
 
 n8n Cloud no puede llegar a `http://costflow-etapa3:8093` y similares (son nombres internos de tu Docker). Por eso los
@@ -55,8 +55,7 @@ export N8N_API_KEY=...                     # solo en tu terminal
 python scripts/n8n_nube.py subir \
   --n8n-url https://tuinstancia.app.n8n.cloud \
   --nhost-subdomain <subdominio-de-nhost> --nhost-region sa-east-1 \
-  --servicio-e3-url https://e3.tudominio.com \
-  --servicio-e4-url https://e4.tudominio.com
+  --servicio-e3-url https://e3.tudominio.com
 ```
 Crea (o actualiza) los siete flujos en el orden correcto y **enlaza E3.1, E3.2, E3.3 y E3.5 entre sí** con los
 identificadores nuevos. Quedan **inactivos**. Si prefieres importar a mano, `preparar --salida n8n-nube` deja los JSON

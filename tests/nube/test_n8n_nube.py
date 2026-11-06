@@ -35,9 +35,9 @@ def test_los_siete_flujos_se_adaptan_sin_dejar_marcadores_ni_direcciones_locales
     texto = json.dumps(flujos)
     for local in ("costflow-etapa3", "costflow-homologacion", "costflow-cuadro", "SUBDOMINIO", "REGION"):
         assert local not in texto, local
-    assert "https://e3.ejemplo.com/read" in texto and "https://e4.ejemplo.com/e4/preparar" in texto
-    # E5 corre dentro de n8n: no hay servicio que apuntar y su dirección ya no se usa.
-    assert "e5.ejemplo.com" not in texto and "/e5/generar" not in texto
+    assert "https://e3.ejemplo.com/read" in texto
+    # E4 y E5 corren dentro de n8n: no hay servicio que apuntar y sus direcciones ya no se usan.
+    assert "e4.ejemplo.com" not in texto and "e5.ejemplo.com" not in texto and "/e4/" not in texto and "/e5/generar" not in texto
     assert "abcdefghij1234567890.functions.sa-east-1.nhost.run" in texto
     assert all(f["active"] is False for f in flujos.values())
 
@@ -64,7 +64,7 @@ def test_no_se_llevan_credenciales_y_se_listan_las_que_hay_que_asignar():
 
 @pytest.mark.parametrize("cambio,mensaje", [
     ({"servicio_e3_url": "http://inseguro.com"}, "https"),
-    ({"servicio_e4_url": "https://x y.com"}, "SERVICIO_E4_URL"),
+    ({"servicio_e3_url": "https://x y.com"}, "SERVICIO_E3_URL"),
     ({"intervalo_cola": 0}, "intervalo_cola"),
     ({"nhost_subdomain": "Mal Subdominio"}, "NHOST_SUBDOMAIN"),
     ({"nhost_region": "mundo"}, "NHOST_REGION"),
@@ -147,7 +147,7 @@ def test_preparar_escribe_los_siete_json_sin_secretos(tmp_path, monkeypatch):
     assert "x-api-key" not in "".join(p.read_text(encoding="utf-8") for p in tmp_path.glob("*.json"))
 
 
-def test_la_direccion_del_servicio_de_e5_ya_no_es_necesaria():
-    entorno = {k: v for k, v in ENTORNO.items() if k != "SERVICIO_E5_URL"}
+def test_las_direcciones_de_los_servicios_de_e4_y_e5_ya_no_son_necesarias():
+    entorno = {k: v for k, v in ENTORNO.items() if k not in ("SERVICIO_E4_URL", "SERVICIO_E5_URL")}
     args = argparse.Namespace(intervalo_e3=5, intervalo_cola=30, **{k.lower(): None for k in ENTORNO})
-    assert "servicio_e5" not in nube.configuracion(args, entorno)
+    assert not {"servicio_e4", "servicio_e5"} & set(nube.configuracion(args, entorno))
