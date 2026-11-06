@@ -327,6 +327,39 @@ function extraerPdf(textosPorPagina, meta) {
   return { ...meta, fragmentos, paginas, hojas: [], uso_ocr: false, uso_rag: false, observaciones };
 }
 
+// Rutas de los archivos de un zip, en el orden de su directorio central (solo lee nombres). El nodo «Compression» de n8n entrega los
+// archivos sin su carpeta; con esta lista se le devuelve su ruta completa.
+function nombresDelZip(buffer) {
+  const v = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  let fin = -1;
+  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i--) if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }
+  if (fin < 0) throw new DocumentoInvalido('No se pudo abrir el XLSX.');
+  const cantidad = v.getUint16(fin + 10, true);
+  let posicion = v.getUint32(fin + 16, true);
+  const nombres = [];
+  for (let i = 0; i < cantidad; i++) {
+    if (v.getUint32(posicion, true) !== 0x02014b50) throw new DocumentoInvalido('No se pudo abrir el XLSX.');
+    const largoNombre = v.getUint16(posicion + 28, true), largoExtra = v.getUint16(posicion + 30, true), largoComentario = v.getUint16(posicion + 32, true);
+    const nombre = buffer.toString('utf8', posicion + 46, posicion + 46 + largoNombre);
+    if (!nombre.endsWith('/')) nombres.push(nombre);
+    posicion += 46 + largoNombre + largoExtra + largoComentario;
+  }
+  return nombres;
+}
+
+// Une los archivos que entrega «Compression» (sin carpeta) con sus rutas reales; comprueba que coincidan.
+function archivosDelXlsx(original, binarios) {
+  const rutas = nombresDelZip(original);
+  const claves = Object.keys(binarios);
+  if (rutas.length !== claves.length) throw new DocumentoInvalido('No se pudo abrir el XLSX.');
+  const salida = {};
+  claves.forEach((clave, i) => {
+    if (rutas[i].split('/').pop() !== binarios[clave].fileName) throw new DocumentoInvalido('No se pudo abrir el XLSX.');
+    salida[rutas[i]] = clave;
+  });
+  return salida; // ruta -> propiedad binaria
+}
+
 // ---- Tandas de contexto (rag.py sin búsqueda semántica) ------------------------------------------------------------
 function tandas(documentos, maximo = 24000) {
   const todos = new Map();
@@ -656,6 +689,6 @@ function combine(respuestas, documentos, version, nombreModelo, esquema, ahora =
 }
 
 if (typeof module !== 'undefined') {
-  module.exports = { sha1, sha256, stableId, pyJson, describe, fragmentar, leerCsv, extraerCsv, extraerXlsx, extraerPdf, tandas, requestClaude, parseRespuesta, validarEsquema,
+  module.exports = { sha1, sha256, stableId, pyJson, describe, fragmentar, leerCsv, extraerCsv, extraerXlsx, extraerPdf, nombresDelZip, archivosDelXlsx, tandas, requestClaude, parseRespuesta, validarEsquema,
     detectarConvencion, detectarMoneda, numeroDe, combine, DocumentoInvalido };
 }
