@@ -1,4 +1,4 @@
-# Importar los cinco flujos de E3
+﻿# Importar los cinco flujos de E3
 
 Los archivos `e3-1.json` a `e3-5.json` no contienen claves ni credenciales.
 Antes de publicarlos, completa estos pasos en orden.
@@ -34,7 +34,7 @@ Crea una credencial **Header Auth**:
 
 Importa los cinco JSON y, en todos los nodos con el aviso
 `CREDENCIAL_E3:internal`, selecciona esa credencial. Reemplaza `SUBDOMINIO` y
-`REGION` en los tres nodos que llaman a `e3-operar`.
+`REGION` en todos los nodos que llaman a `e3-operar`.
 
 Asigna además las credenciales existentes de Gmail, Claude y Nhost Storage en
 los nodos que muestran sus respectivos avisos.
@@ -47,8 +47,8 @@ el primer `}}` como fin anticipado y devolver `invalid syntax`/HTTP 500.
 
 La lectura de `e3-2.json` va siempre a la API de mensajes de Claude, con el modelo
 configurado en `e3_configuracion.modelo` (debe empezar con `claude-`; si no, el flujo
-lo rechaza). El servicio de `app/etapa3` envía su petición en un formato interno y
-n8n la traduce; el validador de E3 revisa el resultado.
+lo rechaza). El nodo `Armar tandas` construye la petición y el validador de E3
+(`Validar lectura`) revisa el resultado.
 
 Para usarlo:
 
@@ -72,12 +72,13 @@ El nodo no envía `temperature` ni `tool_choice`, que los modelos 5.x rechazan, 
 pide la salida como JSON dentro del texto. Si la respuesta no cumple el esquema,
 el validador de E3 la rechaza y la versión usa su reintento normal.
 
-## 3. Procesamiento OCR/RAG
+## 3. Lectura de documentos
 
-Los nodos que llaman a `http://costflow-etapa3:8093` necesitan el servicio de
-`app/etapa3` en la misma red Docker. Si n8n está alojado fuera de esa red, publica
-ese servicio en un backend HTTPS y cambia dichas URLs. No publiques el servicio
-sin `E3_INTERNAL_KEY`.
+Ya no hay servicio aparte: la lectura (PDF con texto, Excel y CSV) corre en nodos de n8n
+(ver [LECTOR_EN_N8N.md](LECTOR_EN_N8N.md)). No se usa OCR ni búsqueda semántica. Además de las
+credenciales de arriba, los nodos `Storage` y `Verificar sesión en Nhost` usan las URLs
+`https://SUBDOMINIO.storage.REGION.nhost.run/v1/files` y
+`https://SUBDOMINIO.auth.REGION.nhost.run/v1/user`: reemplaza también `SUBDOMINIO` y `REGION`.
 
 ## 4. Prueba mínima
 

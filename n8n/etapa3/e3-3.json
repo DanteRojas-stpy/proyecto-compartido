@@ -23,14 +23,20 @@
       "typeVersion": 4.2,
       "parameters": {
         "method": "POST",
-        "url": "http://costflow-etapa3:8093/notify",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ $json }}",
+        "jsonBody": "={{ JSON.stringify({operacion:'notificar',datos:{version_id:$json.version_id } }) }}",
         "options": {
-          "timeout": 720000
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
         }
       },
       "position": [

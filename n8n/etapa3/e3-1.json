@@ -40,6 +40,7 @@
           "timeout": 120000,
           "response": {
             "response": {
+              "neverError": true,
               "responseFormat": "json"
             }
           }
@@ -94,6 +95,7 @@
           "timeout": 120000,
           "response": {
             "response": {
+              "neverError": true,
               "responseFormat": "json"
             }
           }
@@ -183,12 +185,12 @@
       "onError": "continueRegularOutput"
     },
     {
-      "id": "597b7ced-3ea5-5b19-9c0d-0a926b732646",
-      "name": "Preparar todos los adjuntos",
+      "id": "b24b50d2-cc14-5182-9e15-41976f2ecff9",
+      "name": "Preparar documentos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "const result=[];\nfor(let index=0;index<$input.all().length;index++){\nconst item=$input.all()[index];const contexto=$('Resultado de recepción').itemMatching(index).json;\nconst archivos=[];for(const[key,b]of Object.entries(item.binary??{})){const bytes=await this.helpers.getBinaryDataBuffer(index,key);\narchivos.push({nombre_original:b.fileName??key,mime_type:b.mimeType??'application/octet-stream',contenido_base64:bytes.toString('base64')});}\nresult.push({json:{contexto,archivos,error:item.json.error??null},pairedItem:{item:index}});}return result;"
+        "jsCode": "// E3 en n8n: lector documental sin servicio aparte. Equivale a app/etapa3 (documents.py, rag.py y contract.py) en JavaScript puro,\n// para correr dentro de nodos de código de n8n Cloud (sin librerías externas).\n//  - huellas y UUID estables (SHA-256, SHA-1, uuid5) y JSON al estilo de Python, para que los identificadores sean los mismos;\n//  - fragmentos de texto, lectura de Excel (.xlsx) y CSV;\n//  - petición a Claude, lectura de su respuesta y validación independiente (combine): toda cita debe existir literalmente en el\n//    fragmento, y los importes deben coincidir con su texto original.\n// Cambio respecto a la versión con servicio: sin OCR ni embeddings. Los fragmentos se envían todos, por tandas, como ya ocurría\n// con los documentos sin búsqueda semántica.\n\nclass DocumentoInvalido extends Error {} // archivo ilegible o fuera de límites: no se reintenta\n\nconst limpio = (x) => Number(x.toPrecision(15));\nconst nulo = (v) => v === null || v === undefined;\nconst verdadero = (v) => !nulo(v) && v !== '' && v !== 0 && v !== false;\n\n// ---- Huellas -------------------------------------------------------------------------------------------------\nfunction sha1(buffer) {\n  const datos = Buffer.from(buffer);\n  const largo = datos.length;\n  const total = (((largo + 9 + 63) >> 6) << 6);\n  const bloque = Buffer.alloc(total);\n  datos.copy(bloque);\n  bloque[largo] = 0x80;\n  bloque.writeUInt32BE(Math.floor((largo * 8) / 0x100000000), total - 8);\n  bloque.writeUInt32BE((largo * 8) >>> 0, total - 4);\n  let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476, h4 = 0xc3d2e1f0;\n  const w = new Array(80);\n  const rotar = (x, n) => (x << n) | (x >>> (32 - n));\n  for (let o = 0; o < total; o += 64) {\n    for (let i = 0; i < 16; i++) w[i] = bloque.readUInt32BE(o + i * 4);\n    for (let i = 16; i < 80; i++) w[i] = rotar(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1) >>> 0;\n    let a = h0, b = h1, c = h2, d = h3, e = h4;\n    for (let i = 0; i < 80; i++) {\n      let f, k;\n      if (i < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }\n      else if (i < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }\n      else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }\n      else { f = b ^ c ^ d; k = 0xca62c1d6; }\n      const t = (rotar(a, 5) + f + e + k + w[i]) >>> 0;\n      e = d; d = c; c = rotar(b, 30) >>> 0; b = a; a = t;\n    }\n    h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0; h4 = (h4 + e) >>> 0;\n  }\n  const salida = Buffer.alloc(20);\n  [h0, h1, h2, h3, h4].forEach((h, i) => salida.writeUInt32BE(h, i * 4));\n  return salida;\n}\n\nfunction sha256(buffer) {\n  const K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be,\n    0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc,\n    0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,\n    0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585,\n    0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814,\n    0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];\n  const h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];\n  const datos = Buffer.from(buffer);\n  const largo = datos.length;\n  const total = (((largo + 9 + 63) >> 6) << 6);\n  const bloque = Buffer.alloc(total);\n  datos.copy(bloque);\n  bloque[largo] = 0x80;\n  bloque.writeUInt32BE(Math.floor((largo * 8) / 0x100000000), total - 8);\n  bloque.writeUInt32BE((largo * 8) >>> 0, total - 4);\n  const w = new Array(64);\n  const rotar = (x, n) => (x >>> n) | (x << (32 - n));\n  for (let o = 0; o < total; o += 64) {\n    for (let i = 0; i < 16; i++) w[i] = bloque.readUInt32BE(o + i * 4);\n    for (let i = 16; i < 64; i++) {\n      const s0 = rotar(w[i - 15], 7) ^ rotar(w[i - 15], 18) ^ (w[i - 15] >>> 3);\n      const s1 = rotar(w[i - 2], 17) ^ rotar(w[i - 2], 19) ^ (w[i - 2] >>> 10);\n      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;\n    }\n    let [a, b, c, d, e, f, g, hh] = h;\n    for (let i = 0; i < 64; i++) {\n      const t1 = (hh + (rotar(e, 6) ^ rotar(e, 11) ^ rotar(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) >>> 0;\n      const t2 = ((rotar(a, 2) ^ rotar(a, 13) ^ rotar(a, 22)) + ((a & b) ^ (a & c) ^ (b & c))) >>> 0;\n      hh = g; g = f; f = e; e = (d + t1) >>> 0; d = c; c = b; b = a; a = (t1 + t2) >>> 0;\n    }\n    h[0] = (h[0] + a) >>> 0; h[1] = (h[1] + b) >>> 0; h[2] = (h[2] + c) >>> 0; h[3] = (h[3] + d) >>> 0;\n    h[4] = (h[4] + e) >>> 0; h[5] = (h[5] + f) >>> 0; h[6] = (h[6] + g) >>> 0; h[7] = (h[7] + hh) >>> 0;\n  }\n  return h.map((x) => x.toString(16).padStart(8, '0')).join('');\n}\n\nconst NAMESPACE = Buffer.from('52bf8df4e06244c88e3c5be90c5c3d37', 'hex');\nfunction stableId(valor) {\n  const h = sha1(Buffer.concat([NAMESPACE, Buffer.from(valor, 'utf8')]));\n  h[6] = (h[6] & 0x0f) | 0x50;\n  h[8] = (h[8] & 0x3f) | 0x80;\n  const x = h.subarray(0, 16).toString('hex');\n  return `${x.slice(0, 8)}-${x.slice(8, 12)}-${x.slice(12, 16)}-${x.slice(16, 20)}-${x.slice(20)}`;\n}\n\n// json.dumps de Python: separadores «, » y «: », claves ordenadas si se pide y caracteres no ASCII escapados salvo ensure_ascii=False.\nfunction pyJson(valor, { ordenar = false, ascii = true } = {}) {\n  const cadena = (s) => {\n    const t = JSON.stringify(s);\n    return ascii ? t.replace(/[\\u0080-￿]/g, (c) => '\\\\u' + c.charCodeAt(0).toString(16).padStart(4, '0')) : t;\n  };\n  const ir = (v) => {\n    if (v === null || v === undefined) return 'null';\n    if (Array.isArray(v)) return '[' + v.map(ir).join(', ') + ']';\n    if (typeof v === 'object') {\n      const claves = ordenar ? Object.keys(v).sort() : Object.keys(v);\n      return '{' + claves.map((k) => cadena(k) + ': ' + ir(v[k])).join(', ') + '}';\n    }\n    if (typeof v === 'string') return cadena(v);\n    return String(v);\n  };\n  return ir(valor);\n}\nconst pyStr = (v) => (v === null || v === undefined ? 'None' : v === true ? 'True' : v === false ? 'False' : String(v));\n\n// ---- Fragmentos y documentos (documents.py) ---------------------------------------------------------------------\nfunction describe(buffer, nombre, mime, versionId, maximo = 50000000) {\n  if (!buffer.length || buffer.length > maximo) throw new DocumentoInvalido('Archivo vacío o mayor que el máximo de 50 MB.');\n  const huella = sha256(buffer);\n  return { documento_id: stableId(`${versionId}:${huella}`), storage_file_id: stableId(`archivo:${huella}`), sha256: huella,\n    nombre_original: String(nombre).split(/[\\\\/]/).pop(), mime_type: mime, tamano_bytes: buffer.length };\n}\n\nfunction fragmentar(texto, ubicacion, documentoId, serie, tamano = 400, solape = 60) {\n  if (!(solape >= 0 && solape < tamano)) throw new DocumentoInvalido('Configuración de fragmentos inválida.');\n  const trozos = [];\n  for (let inicio = 0; inicio < texto.length; inicio += tamano - solape) {\n    const valor = texto.slice(inicio, inicio + tamano).trim();\n    if (valor) {\n      const loc = { ...ubicacion, bloque: serie, caracter_inicio: inicio };\n      trozos.push({ id: stableId(`${documentoId}:${pyJson(loc, { ordenar: true })}:${valor}`), documento_id: documentoId, texto: valor, ubicacion: loc });\n    }\n    if (inicio + tamano >= texto.length) break;\n  }\n  return trozos;\n}\n\nconst celdaPy = (v) => {\n  if (v === null || v === undefined || typeof v === 'string' || typeof v === 'boolean') return v ?? null;\n  if (typeof v === 'number') {\n    if (!Number.isFinite(v)) throw new DocumentoInvalido('La hoja contiene un número no finito.');\n    return v;\n  }\n  return String(v);\n};\n\n// -- CSV\nfunction leerCsv(texto) {\n  const muestra = texto.slice(0, 8192);\n  let delimitador = ',';\n  let mejor = 0;\n  for (const d of [',', ';', '\\t', '|']) {\n    const conteos = muestra.split(/\\r?\\n/).filter((l) => l.length).slice(0, 20).map((l) => l.split(d).length - 1);\n    if (!conteos.length || conteos[0] === 0) continue;\n    const consistente = conteos.filter((c) => c === conteos[0]).length;\n    const puntaje = consistente * 1000 + conteos[0];\n    if (puntaje > mejor) { mejor = puntaje; delimitador = d; }\n  }\n  const filas = [];\n  let fila = [], campo = '', comillas = false, hayDatos = false;\n  for (let i = 0; i < texto.length; i++) {\n    const c = texto[i];\n    if (comillas) {\n      if (c === '\"') { if (texto[i + 1] === '\"') { campo += '\"'; i++; } else comillas = false; } else campo += c;\n    } else if (c === '\"') { comillas = true; hayDatos = true; }\n    else if (c === delimitador) { fila.push(campo); campo = ''; hayDatos = true; }\n    else if (c === '\\n' || c === '\\r') {\n      if (c === '\\r' && texto[i + 1] === '\\n') i++;\n      if (hayDatos || campo.length) { fila.push(campo); filas.push(fila); }\n      else filas.push([]); // csv.reader entrega [] para una línea vacía\n      fila = []; campo = ''; hayDatos = false;\n    } else { campo += c; hayDatos = true; }\n  }\n  if (hayDatos || campo.length) { fila.push(campo); filas.push(fila); }\n  return filas;\n}\n\n// -- XLSX (a partir de los archivos del zip, ya descomprimidos: { ruta: Buffer })\nconst FORMATOS_INCORPORADOS = { 0: 'General', 1: '0', 2: '0.00', 3: '#,##0', 4: '#,##0.00', 9: '0%', 10: '0.00%', 11: '0.00E+00', 12: '# ?/?', 13: '# ??/??',\n  14: 'mm-dd-yy', 15: 'd-mmm-yy', 16: 'd-mmm', 17: 'mmm-yy', 18: 'h:mm AM/PM', 19: 'h:mm:ss AM/PM', 20: 'h:mm', 21: 'h:mm:ss', 22: 'm/d/yy h:mm',\n  37: '#,##0 ;(#,##0)', 38: '#,##0 ;[Red](#,##0)', 39: '#,##0.00;(#,##0.00)', 40: '#,##0.00;[Red](#,##0.00)', 45: 'mm:ss', 46: '[h]:mm:ss',\n  47: 'mmss.0', 48: '##0.0E+0', 49: '@' };\n\nconst desescapar = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&apos;/g, \"'\").replace(/&#(\\d+);/g, (_, n) => String.fromCodePoint(Number(n)))\n  .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, '&');\nconst atributo = (texto, nombre) => { const m = new RegExp(`\\\\s${nombre}=\"([^\"]*)\"`).exec(texto); return m ? desescapar(m[1]) : null; };\nconst letrasAColumna = (letras) => [...letras].reduce((n, c) => n * 26 + c.charCodeAt(0) - 64, 0);\n\nfunction esFormatoFecha(codigo) {\n  if (!codigo || codigo === 'General') return false;\n  const limpioCodigo = codigo.replace(/\"[^\"]*\"|\\[[^\\]]*\\]|\\\\./g, '');\n  return /[dmyhs]/i.test(limpioCodigo) && !/^[#0,.?%@ ]*$/.test(limpioCodigo);\n}\n\nfunction fechaIso(serial) {\n  const dias = Math.floor(serial);\n  const segundos = Math.round((serial - dias) * 86400);\n  const ms = Date.UTC(1899, 11, 30) + dias * 86400000 + segundos * 1000;\n  return new Date(ms).toISOString().replace(/\\.\\d{3}Z$/, '');\n}\n\nfunction leerXlsx(archivos) {\n  const texto = (ruta) => (archivos[ruta] ? Buffer.from(archivos[ruta]).toString('utf8') : null);\n  const libro = texto('xl/workbook.xml');\n  if (!libro) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n  const relaciones = {};\n  for (const m of (texto('xl/_rels/workbook.xml.rels') ?? '').matchAll(/<Relationship\\b[^>]*>/g)) {\n    relaciones[atributo(m[0], 'Id')] = atributo(m[0], 'Target');\n  }\n  const compartidas = [];\n  for (const m of (texto('xl/sharedStrings.xml') ?? '').matchAll(/<si\\b[^>]*>([\\s\\S]*?)<\\/si>/g)) {\n    compartidas.push(desescapar([...m[1].matchAll(/<t\\b[^>]*>([\\s\\S]*?)<\\/t>/g)].map((t) => t[1]).join('')));\n  }\n  const estilos = texto('xl/styles.xml') ?? '';\n  const formatosPropios = {};\n  for (const m of estilos.matchAll(/<numFmt\\b[^>]*>/g)) formatosPropios[atributo(m[0], 'numFmtId')] = atributo(m[0], 'formatCode');\n  const cellXfs = (/<cellXfs\\b[^>]*>([\\s\\S]*?)<\\/cellXfs>/.exec(estilos) ?? [, ''])[1];\n  const formatoDeEstilo = [...cellXfs.matchAll(/<xf\\b[^>]*?(?:\\/>|>)/g)].map((m) => {\n    const id = atributo(m[0], 'numFmtId') ?? '0';\n    return formatosPropios[id] ?? FORMATOS_INCORPORADOS[id] ?? 'General';\n  });\n  const hojas = [];\n  for (const m of libro.matchAll(/<sheet\\b[^>]*>/g)) {\n    const destino = relaciones[m[0].match(/\\sr:id=\"([^\"]*)\"/)?.[1]];\n    hojas.push({ nombre: atributo(m[0], 'name'), oculta: (atributo(m[0], 'state') ?? 'visible') !== 'visible',\n      ruta: destino ? 'xl/' + destino.replace(/^\\/?(xl\\/)?/, '') : null });\n  }\n  const fragmentos = [], observaciones = [], hojasLeidas = [];\n  let celdas = 0;\n  return { hojas, texto, compartidas, formatoDeEstilo, fragmentos, observaciones, hojasLeidas, celdas, relaciones };\n}\n\nfunction extraerXlsx(archivos, meta) {\n  const documentoId = meta.documento_id;\n  const lectura = leerXlsx(archivos);\n  const fragmentos = [], observaciones = [], hojas = [];\n  let celdas = 0;\n  for (const hoja of lectura.hojas) {\n    const xml = hoja.ruta ? lectura.texto(hoja.ruta) : null;\n    if (xml === null) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n    let filasConDatos = 0;\n    for (const f of xml.matchAll(/<row\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/row>)/g)) {\n      const numeroFila = Number(atributo(f[1], 'r'));\n      const registros = [];\n      for (const c of (f[2] ?? '').matchAll(/<c\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/c>)/g)) {\n        celdas += 1;\n        if (celdas > 1000000) throw new DocumentoInvalido('El Excel supera un millón de celdas; no se guardó una lectura parcial.');\n        const cuerpo = c[2] ?? '';\n        const referencia = atributo(c[1], 'r');\n        const tipo = atributo(c[1], 't') ?? 'n';\n        const estilo = Number(atributo(c[1], 's') ?? 0);\n        const formula = /<f\\b[^>]*>([\\s\\S]*?)<\\/f>/.exec(cuerpo);\n        const formulaCompartida = /<f\\b[^>]*\\/>/.test(cuerpo);\n        const v = /<v\\b[^>]*>([\\s\\S]*?)<\\/v>/.exec(cuerpo);\n        let cruda = v ? desescapar(v[1]) : null;\n        let valor = null;\n        if (tipo === 'inlineStr') valor = desescapar([...cuerpo.matchAll(/<t\\b[^>]*>([\\s\\S]*?)<\\/t>/g)].map((t) => t[1]).join(''));\n        else if (cruda !== null) {\n          if (tipo === 's') valor = lectura.compartidas[Number(cruda)];\n          else if (tipo === 'str' || tipo === 'e') valor = cruda;\n          else if (tipo === 'b') valor = cruda === '1';\n          else {\n            const numero = Number(cruda);\n            valor = esFormatoFecha(lectura.formatoDeEstilo[estilo]) ? fechaIso(numero) : numero;\n          }\n        }\n        const tieneFormula = Boolean(formula) || formulaCompartida;\n        if (valor === null && !tieneFormula) continue;\n        const original = tieneFormula ? '=' + desescapar(formula ? formula[1] : '') : valor;\n        const registro = { celda: referencia, valor: celdaPy(valor), original: celdaPy(original), formato: lectura.formatoDeEstilo[estilo] ?? 'General' };\n        if (tieneFormula) {\n          registro.formula = original;\n          if (valor === null) {\n            observaciones.push({ tipo: 'formula_sin_resultado', descripcion: `La fórmula de ${hoja.nombre}!${referencia} no tiene resultado guardado.`,\n              severidad: 'media', requiere_aclaracion: true, documento_id: documentoId });\n          }\n        }\n        registros.push(registro);\n      }\n      if (registros.length) {\n        // Una fila no se divide para no romper la relación columna/valor.\n        fragmentos.push({ id: stableId(`${documentoId}:${hoja.nombre}:${numeroFila}`), documento_id: documentoId, texto: pyJson(registros, { ascii: false }),\n          ubicacion: { hoja: hoja.nombre, fila: numeroFila, columnas: registros.map((x) => x.celda), origen: 'xlsx' } });\n        filasConDatos += 1;\n      }\n    }\n    hojas.push({ hoja: hoja.nombre, procesada: true, filas_con_datos: filasConDatos, oculta: hoja.oculta });\n  }\n  if (!fragmentos.length) throw new DocumentoInvalido('El documento no tiene contenido utilizable.');\n  return { ...meta, fragmentos, paginas: [], hojas, uso_ocr: false, uso_rag: false, observaciones };\n}\n\nfunction extraerCsv(buffer, meta) {\n  const documentoId = meta.documento_id;\n  let texto;\n  try { texto = new TextDecoder('utf-8', { fatal: true }).decode(buffer).replace(/^﻿/, ''); } catch { texto = new TextDecoder('windows-1252').decode(buffer); }\n  const fragmentos = [];\n  let celdas = 0;\n  leerCsv(texto).forEach((fila, i) => {\n    celdas += fila.length;\n    if (celdas > 1000000) throw new DocumentoInvalido('El CSV supera un millón de celdas.');\n    fragmentos.push({ id: stableId(`${documentoId}:csv:${i + 1}`), documento_id: documentoId, texto: pyJson(fila, { ascii: false }),\n      ubicacion: { hoja: 'CSV', fila: i + 1, columnas: fila.map((_, k) => k + 1), origen: 'csv' } });\n  });\n  if (!fragmentos.length) throw new DocumentoInvalido('El documento no tiene contenido utilizable.');\n  return { ...meta, fragmentos, paginas: [], hojas: [{ hoja: 'CSV', procesada: true, filas_con_datos: fragmentos.length }], uso_ocr: false, uso_rag: false, observaciones: [] };\n}\n\n// -- PDF: el nodo «Extract From File» de n8n entrega el texto de cada página (sin OCR). Una página sin texto no se descarta en silencio:\n// queda una observación que pide revisar el original; si ninguna página tiene texto, el documento se rechaza.\nfunction extraerPdf(textosPorPagina, meta) {\n  const documentoId = meta.documento_id;\n  if (!textosPorPagina.length) throw new DocumentoInvalido('El PDF no tiene páginas.');\n  if (textosPorPagina.length > 300) throw new DocumentoInvalido('PDF protegido o con más de 300 páginas.');\n  const fragmentos = [], paginas = [], observaciones = [];\n  let conTexto = 0;\n  textosPorPagina.forEach((texto, i) => {\n    const pagina = i + 1;\n    const contenido = (texto ?? '').trim();\n    if (contenido.length < 40) {\n      observaciones.push({ tipo: 'pagina_sin_texto', descripcion: `La página ${pagina} casi no tiene texto (¿escaneada o solo imagen?). Este lector no hace OCR: revisa el documento original.`,\n        severidad: 'alta', requiere_aclaracion: true, documento_id: documentoId });\n    } else conTexto += 1;\n    if (contenido) fragmentos.push(...fragmentar(contenido, { pagina, origen: 'pdf_texto' }, documentoId, 0));\n    paginas.push({ pagina, procesada: true, uso_ocr: false });\n  });\n  if (!conTexto) throw new DocumentoInvalido('El PDF no tiene texto legible (¿escaneado?). Este lector no hace OCR; envía un PDF con texto.');\n  return { ...meta, fragmentos, paginas, hojas: [], uso_ocr: false, uso_rag: false, observaciones };\n}\n\n// Rutas de los archivos de un zip, en el orden de su directorio central (solo lee nombres). El nodo «Compression» de n8n entrega los\n// archivos sin su carpeta; con esta lista se le devuelve su ruta completa.\nfunction nombresDelZip(buffer) {\n  const v = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);\n  let fin = -1;\n  for (let i = buffer.length - 22; i >= Math.max(0, buffer.length - 65557); i--) if (v.getUint32(i, true) === 0x06054b50) { fin = i; break; }\n  if (fin < 0) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n  const cantidad = v.getUint16(fin + 10, true);\n  let posicion = v.getUint32(fin + 16, true);\n  const nombres = [];\n  for (let i = 0; i < cantidad; i++) {\n    if (v.getUint32(posicion, true) !== 0x02014b50) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n    const largoNombre = v.getUint16(posicion + 28, true), largoExtra = v.getUint16(posicion + 30, true), largoComentario = v.getUint16(posicion + 32, true);\n    const nombre = buffer.toString('utf8', posicion + 46, posicion + 46 + largoNombre);\n    if (!nombre.endsWith('/')) nombres.push(nombre);\n    posicion += 46 + largoNombre + largoExtra + largoComentario;\n  }\n  return nombres;\n}\n\n// Une los archivos que entrega «Compression» (sin carpeta) con sus rutas reales; comprueba que coincidan.\nfunction archivosDelXlsx(original, binarios) {\n  const rutas = nombresDelZip(original);\n  const claves = Object.keys(binarios);\n  if (rutas.length !== claves.length) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n  const salida = {};\n  claves.forEach((clave, i) => {\n    if (rutas[i].split('/').pop() !== binarios[clave].fileName) throw new DocumentoInvalido('No se pudo abrir el XLSX.');\n    salida[rutas[i]] = clave;\n  });\n  return salida; // ruta -> propiedad binaria\n}\n\n// ---- Tandas de contexto (rag.py sin búsqueda semántica) ------------------------------------------------------------\nfunction tandas(documentos, maximo = 24000) {\n  const todos = new Map();\n  for (const d of documentos) for (const f of d.fragmentos) todos.set(f.id, f);\n  const lotes = [];\n  let lote = [], usado = 0;\n  for (const fragmento of todos.values()) {\n    if (fragmento.texto.length > maximo) throw new Error('Una fila supera el contexto máximo; no se recortó silenciosamente.');\n    if (lote.length && usado + fragmento.texto.length > maximo) { lotes.push(lote); lote = []; usado = 0; }\n    const { embedding, ...sinVector } = fragmento;\n    lote.push(sinVector);\n    usado += fragmento.texto.length;\n  }\n  if (lote.length) lotes.push(lote);\n  return lotes;\n}\n\n// ---- Petición a Claude y lectura de su respuesta (contract.py + traducción de n8n) ----------------------------------\nfunction requestClaude(fragmentos, documentos, modelo, system, esquema) {\n  const contenido = JSON.stringify({ documentos: documentos.map((d) => ({ documento_id: d.documento_id, nombre: d.nombre_original })), fragmentos });\n  const cuerpo = { model: modelo, max_tokens: 16000,\n    system: system + '\\n\\nResponde únicamente con un objeto JSON válido que cumpla exactamente este esquema JSON. '\n      + 'Sin texto adicional, sin comentarios y sin bloques de código:\\n' + JSON.stringify(esquema),\n    messages: [{ role: 'user', content: contenido }] };\n  // Extraer datos no necesita razonar a fondo: el esfuerzo bajo deja los tokens para el JSON (modelos 5.x).\n  if (/^claude-(opus|sonnet|haiku)-5/.test(modelo)) cuerpo.output_config = { effort: 'low' };\n  return cuerpo;\n}\n\nfunction validarEsquema(esquema, valor, ruta = '$') {\n  const tipos = Array.isArray(esquema.type) ? esquema.type : esquema.type ? [esquema.type] : null;\n  const tipoDe = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v === 'number' ? 'number' : typeof v);\n  if (tipos && !tipos.includes(tipoDe(valor))) throw new Error(`${ruta}: se esperaba ${tipos.join(' o ')}`);\n  if (esquema.enum && !esquema.enum.includes(valor)) throw new Error(`${ruta}: ${JSON.stringify(valor)} no es uno de ${esquema.enum.join(', ')}`);\n  if (typeof valor === 'number') {\n    if (esquema.minimum !== undefined && valor < esquema.minimum) throw new Error(`${ruta}: menor que ${esquema.minimum}`);\n    if (esquema.maximum !== undefined && valor > esquema.maximum) throw new Error(`${ruta}: mayor que ${esquema.maximum}`);\n  }\n  if (esquema.properties && valor && typeof valor === 'object' && !Array.isArray(valor)) {\n    for (const k of esquema.required ?? []) if (!(k in valor)) throw new Error(`${ruta}: falta «${k}»`);\n    if (esquema.additionalProperties === false) for (const k of Object.keys(valor)) if (!(k in esquema.properties)) throw new Error(`${ruta}: «${k}» no está permitido`);\n    for (const [k, sub] of Object.entries(esquema.properties)) if (k in valor) validarEsquema(sub, valor[k], `${ruta}.${k}`);\n  }\n  if (esquema.items && Array.isArray(valor)) valor.forEach((x, i) => validarEsquema(esquema.items, x, `${ruta}[${i}]`));\n}\n\nfunction parseRespuesta(r, esquema) {\n  if (r.type === 'error' || r.error) throw new Error('El modelo rechazó la petición: ' + (r.error?.message ?? 'error sin detalle'));\n  if (r.stop_reason === 'refusal') throw new Error('El modelo rechazó la petición por seguridad.');\n  if (!(r.stop_reason === 'end_turn' || r.stop_reason === 'stop_sequence')) {\n    throw new Error(`El modelo no devolvió una respuesta completa (${r.stop_reason ?? 'sin motivo'}; salida: ${r.usage?.output_tokens ?? '?'} tokens).`);\n  }\n  let texto = (r.content ?? []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();\n  texto = texto.replace(/^```(?:json)?\\s*/i, '').replace(/\\s*```$/, '');\n  const ini = texto.indexOf('{'), fin = texto.lastIndexOf('}');\n  if (ini >= 0 && fin > ini) texto = texto.slice(ini, fin + 1);\n  const datos = JSON.parse(texto);\n  validarEsquema(esquema, datos);\n  return datos;\n}\n\n// ---- Validación independiente (contract.py) -------------------------------------------------------------------------\nconst COMERCIALES = ['moneda', 'subtotal', 'impuestos', 'total', 'plazo_entrega', 'condiciones_pago', 'vigencia_oferta'];\nconst NUMERICOS = new Set(['subtotal', 'impuestos', 'total', 'cantidad', 'precio_unitario', 'parcial', 'valor_numerico']);\nconst CAMPOS_ITEM = ['descripcion', 'cantidad', 'unidad', 'precio_unitario', 'parcial'];\nconst UNIDADES = { und: 'unidad', 'und.': 'unidad', un: 'unidad', unidad: 'unidad', unidades: 'unidad', kg: 'kg', kilogramo: 'kg', kilogramos: 'kg', m: 'm',\n  metro: 'm', metros: 'm', m2: 'm2', 'm²': 'm2', m3: 'm3', 'm³': 'm3', mm: 'mm', cm: 'cm', l: 'l', litro: 'l', kw: 'kW', w: 'W', 'm/s': 'm/s', mes: 'mes', 'día': 'dia', dia: 'dia' };\nconst ALIAS_MONEDA = { 'us$': 'USD', 's/': 'PEN', 's/.': 'PEN', '€': 'EUR', 'dólares americanos': 'USD', 'dolares americanos': 'USD', 'dólares': 'USD', dolares: 'USD',\n  soles: 'PEN', 'nuevos soles': 'PEN' };\nconst normalizarUnidad = (u) => UNIDADES[(u ?? '').toLowerCase().trim()] ?? null;\n\nfunction detectarConvencion(textos) {\n  const junto = textos.join(' ');\n  const us = (junto.match(/\\d{1,3}(?:,\\d{3})+\\.\\d{1,2}(?!\\d)/g) ?? []).length;\n  const eu = (junto.match(/\\d{1,3}(?:\\.\\d{3})+,\\d{1,2}(?!\\d)/g) ?? []).length;\n  if (us && !eu) return 'us';\n  if (eu && !us) return 'eu';\n  return null;\n}\n\nfunction detectarMoneda(textos) {\n  const t = textos.join(' ').toLowerCase();\n  const usd = /d[oó]lares?\\s+(?:americanos?|estadounidenses?)|\\busd\\b|\\bus\\s?\\$/.test(t);\n  const pen = /nuevos?\\s+soles|\\bsoles\\b|\\bpen\\b|(?<![a-z])s\\/\\.?(?=\\s*\\d)/.test(t);\n  if (usd && !pen) return 'USD';\n  if (pen && !usd) return 'PEN';\n  return null;\n}\n\nfunction numeroDe(original, convencion = null) {\n  if (original === null || original === undefined) return null;\n  const sinPorcentaje = original.replace(/\\d+(?:[.,]\\d+)?\\s*%/g, ' '); // el porcentaje del impuesto no es el importe\n  const fichas = sinPorcentaje.match(/-?\\d[\\d.,]*\\d|-?\\d/g) ?? [];\n  if (fichas.length !== 1) return null;\n  let texto = fichas[0];\n  if (texto.includes(',') && texto.includes('.')) {\n    const [decimal, miles] = texto.lastIndexOf(',') > texto.lastIndexOf('.') ? [',', '.'] : ['.', ','];\n    texto = texto.split(miles).join('').replace(decimal, '.');\n  } else if (texto.includes(',') || texto.includes('.')) {\n    const marca = texto.includes(',') ? ',' : '.';\n    const grupos = texto.split(marca);\n    const esMiles = (marca === ',' && convencion === 'us') || (marca === '.' && convencion === 'eu');\n    if (grupos.length > 2) {\n      if (!(esMiles && grupos.slice(1).every((g) => g.length === 3))) return null;\n      texto = grupos.join('');\n    } else if (grupos[1].length === 3) {\n      if (!esMiles) return null; // 1,234 y 1.234 son ambiguos sin la convención del documento.\n      texto = grupos.join('');\n    } else texto = texto.replace(marca, '.');\n  }\n  const n = Number(texto);\n  return Number.isFinite(n) ? n : null;\n}\n\nconst copiaProfunda = (v) => JSON.parse(JSON.stringify(v));\nconst subcadena = (parte, todo) => todo.includes(parte);\n\nfunction combine(respuestas, documentos, version, nombreModelo, esquema, ahora = null) {\n  const fragmentos = new Map();\n  for (const d of documentos) for (const f of d.fragmentos) fragmentos.set(f.id, f);\n  const docIds = new Set(documentos.map((d) => d.documento_id));\n  const observaciones = [], evidencias = [], items = [], tecnicas = [], comerciales = [], inferencias = [];\n  const tipos = {};\n  const prioridad = { otro_documento: 0, anexo_proveedor: 1, ficha_tecnica_proveedor: 2, cotizacion_proveedor: 3 };\n  const versionId = version.id;\n  const textos = Object.fromEntries(documentos.map((d) => [d.documento_id, d.fragmentos.map((f) => f.texto)]));\n  const convenciones = Object.fromEntries(Object.entries(textos).map(([k, t]) => [k, detectarConvencion(t)]));\n  const monedas = Object.fromEntries(Object.entries(textos).map(([k, t]) => [k, detectarMoneda(t)]));\n\n  const observar = (tipo, descripcion, severidad = 'media', aclarar = true, doc = null, refs = null) => observaciones.push({\n    tipo, descripcion, severidad, requiere_aclaracion: aclarar, documento_id: doc, evidencia_ids: refs ?? [] });\n\n  respuestas.forEach((datos, lote) => {\n    validarEsquema(esquema, datos);\n    const mapa = {}, evidenciaLote = {};\n    for (const fuente of datos.evidencias) {\n      const fragmento = fragmentos.get(fuente.fragmento_id);\n      if (fuente.id in mapa || !fragmento || fragmento.documento_id !== fuente.documento_id) throw new Error('El modelo devolvió una referencia de evidencia inválida.');\n      if (!fuente.texto_fuente.trim() || !subcadena(fuente.texto_fuente, fragmento.texto)) throw new Error('La cita de evidencia no existe en el fragmento indicado.');\n      const clave = stableId(`${versionId}:evidencia:${lote}:${fuente.id}`);\n      mapa[fuente.id] = clave;\n      const registro = { ...fuente, id: clave, ubicacion: fragmento.ubicacion, confianza: Math.min(fuente.confianza, fragmento.ubicacion.confianza ?? 1) };\n      evidencias.push(registro);\n      evidenciaLote[clave] = registro;\n    }\n    const refs = (registro) => {\n      if (registro.evidencia_ids.some((x) => !(x in mapa))) throw new Error('Un valor refiere a evidencia que no existe en su lote.');\n      const resultado = registro.evidencia_ids.map((x) => mapa[x]);\n      if (resultado.some((x) => evidenciaLote[x].documento_id !== registro.documento_id)) throw new Error('Se mezcló evidencia de documentos diferentes.');\n      return resultado;\n    };\n    const validarValores = (valores, originales, referencias, doc) => {\n      const cita = referencias.map((x) => evidenciaLote[x].texto_fuente).join(' ');\n      for (const [campo, valor] of Object.entries(valores)) {\n        if (valor === null) continue;\n        const original = originales[campo];\n        if (!referencias.length || nulo(original) || !original.trim() || !subcadena(original, cita)) throw new Error(`El campo ${campo} no tiene texto original verificable.`);\n        if (NUMERICOS.has(campo)) {\n          const escapado = original.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&');\n          if (!new RegExp('(?<![\\\\d.,])' + escapado + '(?![\\\\d.,])').test(cita)) throw new Error(`El texto numérico de ${campo} no es un valor completo de la fuente.`);\n          const leido = numeroDe(original, convenciones[doc]);\n          if (leido === null) {\n            valores[campo] = null;\n            observar('numero_ambiguo', `El campo ${campo} tiene un número o unidad que necesita confirmación: ${original}`, 'media', true, doc, referencias);\n          } else if (leido !== Number(valor)) throw new Error(`El número de ${campo} no coincide con el original.`);\n        }\n      }\n    };\n\n    for (let entrada of datos.comerciales) {\n      if (!docIds.has(entrada.documento_id)) throw new Error('Datos comerciales de otra versión.');\n      entrada = copiaProfunda(entrada);\n      entrada.evidencia_ids = refs(entrada);\n      validarValores(entrada.valores, entrada.originales, entrada.evidencia_ids, entrada.documento_id);\n      const moneda = entrada.valores.moneda;\n      const monedaOriginal = entrada.originales.moneda;\n      const clave = (monedaOriginal ?? '').trim();\n      const resuelta = ALIAS_MONEDA[clave.toLowerCase()] ?? clave.toUpperCase();\n      // \"$\" solo no identifica la moneda; sí lo hace si el mismo documento la nombra de forma explícita.\n      const porContexto = clave === '$' && monedas[entrada.documento_id] === moneda;\n      if (moneda !== null && (!/^[A-Z]{3}$/.test(moneda) || (resuelta !== moneda && !porContexto))) {\n        // Una moneda dudosa no invalida el resto de la lectura: se deja vacía y se pide confirmación.\n        entrada.valores.moneda = null;\n        observar('moneda_ambigua', `La moneda no tiene una identificación explícita inequívoca: ${monedaOriginal}`, 'media', true, entrada.documento_id, entrada.evidencia_ids);\n      }\n      comerciales.push(entrada);\n    }\n    for (let entrada of datos.items) {\n      if (!docIds.has(entrada.documento_id)) throw new Error('Ítem de otra versión.');\n      entrada = copiaProfunda(entrada);\n      entrada.evidencia_ids = refs(entrada);\n      const valores = Object.fromEntries(CAMPOS_ITEM.map((x) => [x, entrada[x]]));\n      validarValores(valores, entrada.originales, entrada.evidencia_ids, entrada.documento_id);\n      Object.assign(entrada, valores);\n      const normalizada = normalizarUnidad(entrada.unidad);\n      if (entrada.unidad_normalizada && normalizada === null) observar('unidad_no_normalizada', 'Se conservó la unidad original; requiere revisión para E4.', 'baja', false, entrada.documento_id);\n      entrada.unidad_normalizada = normalizada;\n      if (['cantidad', 'precio_unitario', 'parcial'].some((x) => entrada[x] !== null && entrada[x] < 0)) {\n        observar('valor_negativo', 'La propuesta contiene cantidades o importes negativos.', 'alta', true, entrada.documento_id);\n      }\n      const anclas = [...new Set(entrada.evidencia_ids.map((x) => pyJson(Object.fromEntries(['pagina', 'bloque', 'hoja', 'fila'].map((k) => [k, evidenciaLote[x].ubicacion[k] ?? null])), { ordenar: true })))].sort();\n      const identidad = [entrada.documento_id, entrada.referencia_item, entrada.originales, anclas];\n      entrada.id = stableId(`${versionId}:item:${pyJson(identidad, { ordenar: true, ascii: false })}`);\n      items.push(entrada);\n    }\n    for (let entrada of datos.especificaciones_tecnicas) {\n      if (!docIds.has(entrada.documento_id)) throw new Error('Especificación de otra versión.');\n      entrada = { ...entrada };\n      entrada.evidencia_ids = refs(entrada);\n      if (entrada.valor_original !== null) {\n        const citas = entrada.evidencia_ids.map((x) => evidenciaLote[x].texto_fuente).join(' ');\n        if (!entrada.evidencia_ids.length || !subcadena(entrada.valor_original, citas)) throw new Error('Especificación sin evidencia verificable.');\n      }\n      if (entrada.valor_numerico !== null) {\n        const m = /^\\s*(-?\\d[\\d.,]*)\\s*[^\\d]*$/.exec(entrada.valor_original ?? '');\n        const leido = m ? numeroDe(m[1], convenciones[entrada.documento_id]) : null;\n        if (leido === null) {\n          entrada.valor_numerico = null;\n          // Un valor compuesto (1300x1250, 220 V 60 Hz) no tiene una sola cifra: se conserva el texto y es solo informativo.\n          observar('numero_tecnico_ambiguo', 'Se conservó la especificación original sin inferir su valor numérico.', 'baja', false, entrada.documento_id, entrada.evidencia_ids);\n        } else if (leido !== Number(entrada.valor_numerico)) throw new Error('El número de la especificación no coincide con el original.');\n      }\n      entrada.unidad_normalizada = normalizarUnidad(entrada.unidad_original);\n      entrada.id = stableId(`${versionId}:tecnica:${entrada.documento_id}:${entrada.campo}:${pyStr(entrada.referencia_item)}:${pyStr(entrada.valor_original)}`);\n      tecnicas.push(entrada);\n    }\n    for (const entrada of datos.documentos) {\n      if (!docIds.has(entrada.documento_id)) throw new Error('Clasificación documental ajena a la versión.');\n      const previo = tipos[entrada.documento_id] ?? 'otro_documento';\n      if (prioridad[entrada.tipo_documental] >= prioridad[previo]) tipos[entrada.documento_id] = entrada.tipo_documental;\n    }\n    for (const entrada of datos.observaciones) {\n      if (entrada.documento_id !== null && !docIds.has(entrada.documento_id)) throw new Error('Observación de otra versión.');\n      if (entrada.evidencia_ids.some((x) => !(x in mapa))) throw new Error('Observación sin evidencia existente.');\n      // OCR correcto no es una incidencia.\n      if (['uso_ocr', 'ocr_aplicado', 'ocr_correcto'].includes(entrada.tipo.toLowerCase())) continue;\n      observaciones.push({ ...entrada, evidencia_ids: entrada.evidencia_ids.map((x) => mapa[x]) });\n    }\n    inferencias.push(...datos.inferencias);\n  });\n  if (Object.keys(tipos).length !== docIds.size || [...docIds].some((d) => !(d in tipos))) throw new Error('El modelo no clasificó todos los documentos.');\n\n  const unicos = new Map();\n  for (const entrada of items) {\n    if (unicos.has(entrada.id)) {\n      const previo = unicos.get(entrada.id);\n      previo.evidencia_ids = [...new Set([...previo.evidencia_ids, ...entrada.evidencia_ids])];\n    } else unicos.set(entrada.id, entrada);\n  }\n  let items2 = [...unicos.values()];\n  const firma = (t) => (t ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');\n  const conImporte = new Set(items2.filter((x) => ['cantidad', 'precio_unitario', 'parcial'].some((f) => x[f] !== null)));\n  const repetidos = new Set(items2.filter((x) => !conImporte.has(x) && firma(x.descripcion) && [...conImporte].some((y) => y.documento_id === x.documento_id\n    && (firma(y.descripcion).includes(firma(x.descripcion)) || firma(x.descripcion).includes(firma(y.descripcion))))).map((x) => x.id));\n  items2 = items2.filter((x) => !repetidos.has(x.id));\n  const tecnicas2 = [...new Map(tecnicas.map((x) => [x.id, x])).values()];\n  for (const [docId, tipo] of Object.entries(tipos)) {\n    const significativo = items2.concat(tecnicas2).some((x) => x.documento_id === docId)\n      || comerciales.some((c) => c.documento_id === docId && Object.values(c.valores).some((v) => v !== null));\n    if (['cotizacion_proveedor', 'ficha_tecnica_proveedor'].includes(tipo) && !significativo) throw new Error('La respuesta clasificó un documento pero no recuperó ninguno de sus datos.');\n  }\n  const combinado = {};\n  for (const campo of COMERCIALES) {\n    const hallados = new Set(comerciales.filter((c) => c.valores[campo] !== null).map((c) => JSON.stringify(c.valores[campo])));\n    combinado[campo] = hallados.size === 1 ? JSON.parse([...hallados][0]) : null;\n    if (hallados.size > 1) observar('valores_por_documento', `El campo ${campo} tiene valores distintos entre documentos; se conservaron por separado sin sumarlos ni elegir uno.`);\n    else if (!hallados.size) observar('dato_no_encontrado', `No se encontró ${campo} explícito en la propuesta.`);\n  }\n  // Coherencia aritmética: verifica, nunca rellena importes que no estén escritos.\n  for (const entrada of items2) {\n    const [q, precio, parcial] = [entrada.cantidad, entrada.precio_unitario, entrada.parcial];\n    if ([q, precio, parcial].every((x) => x !== null) && Math.abs(limpio(q * precio) - parcial) > 0.02) {\n      observar('incoherencia_parcial', 'Cantidad por precio unitario no coincide con el parcial indicado.', 'alta', true, entrada.documento_id, entrada.evidencia_ids);\n    }\n    for (const campo of ['cantidad', 'unidad', 'precio_unitario', 'parcial']) {\n      if (entrada[campo] === null) {\n        // Que falte la unidad es informativo: no pide aclaración. Cantidad, precio y parcial sí.\n        const [severidad, aclarar] = campo === 'unidad' ? ['baja', false] : ['media', true];\n        observar('campo_item_faltante', `Un ítem no indica ${campo}; E4 lo recibirá vacío.`, severidad, aclarar, entrada.documento_id);\n      }\n    }\n  }\n  for (const entrada of comerciales) {\n    const [sub, imp, total] = ['subtotal', 'impuestos', 'total'].map((x) => entrada.valores[x]);\n    if ([sub, imp, total].every((x) => x !== null) && Math.abs(limpio(sub + imp) - total) > 0.02) {\n      observar('incoherencia_total', 'Subtotal más impuestos no coincide con el total indicado.', 'alta', true, entrada.documento_id);\n    }\n    const mismoDoc = items2.filter((x) => x.documento_id === entrada.documento_id);\n    if (sub !== null && mismoDoc.length && mismoDoc.every((x) => x.parcial !== null)) {\n      if (Math.abs(limpio(mismoDoc.reduce((a, x) => a + x.parcial, 0)) - sub) > 0.02) {\n        observar('incoherencia_subtotal', 'La suma de parciales leídos no coincide con el subtotal. Comprueba descuentos, cargos o ítems faltantes.', 'alta', true, entrada.documento_id);\n      }\n    }\n  }\n  // Solo compara especificaciones de la MISMA referencia explícita de equipo.\n  const vistos = new Map();\n  for (const entrada of tecnicas2) {\n    if (!entrada.referencia_item || entrada.valor_original === null) continue;\n    const clave = pyJson([entrada.referencia_item.toLowerCase(), entrada.campo.toLowerCase()]);\n    const valor = entrada.valor_original.toLowerCase().trim();\n    if (vistos.has(clave) && vistos.get(clave) !== valor) {\n      observar('contradiccion_tecnica', `La referencia ${entrada.referencia_item} tiene valores contradictorios para ${entrada.campo}.`, 'alta', true, entrada.documento_id, entrada.evidencia_ids);\n    }\n    vistos.set(clave, valor);\n  }\n  for (const documento of documentos) {\n    if (!documento.paginas.every((p) => p.procesada) || !documento.hojas.every((s) => s.procesada)) throw new Error('Cobertura de páginas u hojas incompleta.');\n    observaciones.push(...documento.observaciones.map((o) => ({ ...o, evidencia_ids: [] })));\n  }\n  const obsUnicas = new Map();\n  for (const observacion of observaciones) {\n    const clave = stableId(`${versionId}:obs:${pyJson(observacion, { ordenar: true })}`);\n    obsUnicas.set(clave, { ...observacion, observacion_id: clave, estado: 'pendiente' });\n  }\n  const lista = [...obsUnicas.values()];\n  return {\n    version_id: versionId, correo_id: version.correo_id, solicitud_id: version.solicitud_id, proveedor_id: version.proveedor_id,\n    numero_version: version.version, es_final: version.es_final, estado_procesamiento: lista.length ? 'completado_con_observaciones' : 'completado',\n    documentos: documentos.map((d) => ({ documento_id: d.documento_id, correo_id: version.correo_id, version_id: versionId, nombre_original: d.nombre_original,\n      nombres_originales: d.nombres_originales ?? [d.nombre_original], mime_type: d.mime_type, sha256: d.sha256, storage_file_id: d.storage_file_id,\n      tamano_bytes: d.tamano_bytes, tipo_documental: tipos[d.documento_id], paginas: d.paginas, hojas: d.hojas, estado_lectura: 'completado' })),\n    datos_comerciales: combinado, datos_comerciales_documentos: comerciales, items: items2, especificaciones_tecnicas: tecnicas2, evidencias,\n    observaciones: lista, inferencias,\n    procesamiento: { modelo: nombreModelo, uso_ocr: documentos.some((d) => d.uso_ocr), uso_rag: documentos.some((d) => d.uso_rag),\n      procesado_at: ahora ?? new Date().toISOString().replace('Z', '+00:00'), cobertura_completa: true, fragmentos_procesados: fragmentos.size },\n  };\n}\n\nif (typeof module !== 'undefined') {\n  module.exports = { sha1, sha256, stableId, pyJson, describe, fragmentar, leerCsv, extraerCsv, extraerXlsx, extraerPdf, nombresDelZip, archivosDelXlsx, tandas, requestClaude, parseRespuesta, validarEsquema,\n    detectarConvencion, detectarMoneda, numeroDe, combine, DocumentoInvalido };\n}\n\n// --- E3.1 · «Preparar documentos»: huella y deduplicación de los adjuntos del correo (antes lo hacía el servicio en /receive).\n// Entrada: el resultado de recepción (contexto de la versión) y el correo recuperado de Gmail, con sus adjuntos como binarios.\n// Salida: un ítem por archivo distinto (con su binario), o un solo ítem con `fallo` si Gmail no entregó nada utilizable.\nconst salida = [];\nconst items = $input.all();\nfor (let indice = 0; indice < items.length; indice++) {\n  const item = items[indice];\n  const contexto = $('Resultado de recepción').itemMatching(indice).json;\n  const base = { contexto, version_id: contexto.version_id, token: contexto.token };\n  const fallo = (tipo, mensaje, recuperable) => salida.push({ json: { ...base, fallo: { tipo, mensaje: String(mensaje).slice(0, 2000), recuperable } }, pairedItem: { item: indice } });\n  if (item.json.error) { fallo('RuntimeError', 'Gmail no entregó el mensaje y sus adjuntos: ' + String(item.json.error).slice(0, 1000), true); continue; }\n  const claves = Object.keys(item.binary ?? {});\n  if (!claves.length) { fallo('RuntimeError', 'Gmail no devolvió adjuntos descargables.', true); continue; }\n  const unicos = new Map();\n  try {\n    for (const clave of claves) {\n      const b = item.binary[clave];\n      const buffer = await this.helpers.getBinaryDataBuffer(indice, clave);\n      const meta = describe(buffer, b.fileName ?? clave, b.mimeType ?? 'application/octet-stream', contexto.version_id);\n      if (unicos.has(meta.sha256)) { unicos.get(meta.sha256).meta.nombres_originales.push(meta.nombre_original); continue; }\n      meta.nombres_originales = [meta.nombre_original];\n      unicos.set(meta.sha256, { meta, binario: b });\n    }\n  } catch (error) {\n    fallo(error.constructor.name, error.message, !(error instanceof DocumentoInvalido));\n    continue;\n  }\n  for (const { meta, binario } of unicos.values()) salida.push({ json: { ...base, meta }, binary: { data: binario }, pairedItem: { item: indice } });\n}\nreturn salida;\n"
       },
       "position": [
         1760,
@@ -196,27 +198,468 @@
       ]
     },
     {
-      "id": "e052ce3a-8498-57c4-a23b-5891b986fd4e",
-      "name": "Guardar archivos y vincular versión",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
+      "id": "c55dbdb8-cdce-5d88-b7e5-800a620f7696",
+      "name": "¿Hay documentos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
       "parameters": {
-        "method": "POST",
-        "url": "http://costflow-etapa3:8093/receive",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json }}",
-        "options": {
-          "timeout": 720000
-        }
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9ad6bd03-0e6c-51bc-8c3e-40f81d1e10cf",
+              "leftValue": "={{ $json.fallo === undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
       "position": [
         1980,
         0
+      ]
+    },
+    {
+      "id": "4e70c08d-1e4d-505a-bdf9-4d9654154f9f",
+      "name": "Comprobar archivo en Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "HEAD",
+        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/' + $json.meta.storage_file_id + '?e3_revision=' + Date.now() + '-' + Math.random().toString(36).slice(2) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          }
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Cache-Control",
+              "value": "no-cache"
+            },
+            {
+              "name": "Pragma",
+              "value": "no-cache"
+            }
+          ]
+        }
+      },
+      "position": [
+        2200,
+        0
       ],
-      "notes": "CREDENCIAL_E3:internal"
+      "notes": "CREDENCIAL_E3:storage"
+    },
+    {
+      "id": "0eec3149-e7f0-544e-bfb0-7c6f510aeee5",
+      "name": "Marcar existencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.1 · «Marcar existencia»: Storage respondió a la comprobación (HEAD) de cada archivo.\n// 200 = ya está guardado; 404 = hay que subirlo; cualquier otra respuesta no permite decidir (fallo reintentable, como en el servicio).\nreturn $input.all().map((item, indice) => {\n  const estado = item.json.statusCode;\n  return { json: { accion: estado === 200 ? 'existe' : estado === 404 ? 'subir' : 'no_decidible', estado_head: estado ?? null }, pairedItem: { item: indice } };\n});\n"
+      },
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "id": "609e469d-7800-5ccd-aa15-a42d551eefd8",
+      "name": "Merge de existencia",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "id": "34b72b21-340c-553a-b070-1d0f99899197",
+      "name": "¿Qué hacer con el archivo?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "existe",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "existe"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "subir",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "subir"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.accion }}",
+                    "rightValue": "no_decidible",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "no_decidible"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "id": "9daed9b2-c2bf-5696-bd6f-281c35358980",
+      "name": "Archivo ya guardado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $input.all().map((i,k)=>({json:{...i.json,confirmado:true,motivo:null},pairedItem:{item:k}}));"
+      },
+      "position": [
+        3080,
+        0
+      ]
+    },
+    {
+      "id": "9da2588f-df07-534b-87be-a9d3776f5b34",
+      "name": "Guardar original en Storage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.storage.REGION.nhost.run/v1/files",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 180000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "bucket-id",
+              "value": "cotizaciones"
+            },
+            {
+              "name": "metadata[]",
+              "value": "={{ JSON.stringify({id:$json.meta.storage_file_id,name:$json.meta.nombre_original,metadata:{tipo:'documento_e3',sha256:$json.meta.sha256} }) }}"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "file[]",
+              "inputDataFieldName": "data"
+            }
+          ]
+        }
+      },
+      "position": [
+        3300,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:storage"
+    },
+    {
+      "id": "a4d82a7d-08c0-5a9c-9173-281b23f42669",
+      "name": "Confirmar subida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.1 · «Confirmar subida»: Storage responde con los archivos creados; el identificador debe ser el estable que se pidió.\n// Si no lo confirma (por ejemplo, otro correo guardó el mismo archivo a la vez), el archivo queda sin confirmar y el intento se\n// reintenta: en el siguiente la comprobación lo encontrará.\nreturn $input.all().map((item, indice) => {\n  const contexto = $('Merge de existencia').itemMatching(indice).json;\n  const guardado = (item.json.processedFiles ?? []).some((x) => x.id === contexto.meta.storage_file_id);\n  return { json: { ...contexto, confirmado: guardado, motivo: guardado ? null : 'Storage no confirmó el archivo guardado.' }, pairedItem: { item: indice } };\n});\n"
+      },
+      "position": [
+        3520,
+        0
+      ]
+    },
+    {
+      "id": "0cfbe53f-e547-5856-bf20-a17ef3075439",
+      "name": "Storage no permitió comprobar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "return $input.all().map((i,k)=>({json:{...i.json,confirmado:false,motivo:'Storage no permitió comprobar el archivo.'},pairedItem:{item:k}}));"
+      },
+      "position": [
+        3740,
+        0
+      ]
+    },
+    {
+      "id": "b5f104c5-c231-5740-8101-6b2ac2613e03",
+      "name": "Unir existentes y subidos",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "parameters": {
+        "mode": "append"
+      },
+      "position": [
+        3960,
+        0
+      ]
+    },
+    {
+      "id": "40ef8451-7bd6-5fc7-b7ed-ab0d7b0f226b",
+      "name": "Unir con no decidibles",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "parameters": {
+        "mode": "append"
+      },
+      "position": [
+        4180,
+        0
+      ]
+    },
+    {
+      "id": "c238ae59-3c5b-5afa-bcd3-1779f53e0278",
+      "name": "Reunir documentos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.1 · «Reunir documentos»: junta los archivos ya guardados en Storage en una sola lista para registrarlos en la versión.\n// Si alguno no se pudo confirmar no se registra nada parcial: queda un `fallo` reintentable.\nconst items = $input.all();\nconst primero = items[0].json;\nconst base = { contexto: primero.contexto, version_id: primero.version_id, token: primero.token };\nconst sin = items.find((i) => i.json.confirmado !== true);\nif (sin) return [{ json: { ...base, fallo: { tipo: 'RuntimeError', mensaje: sin.json.motivo ?? 'Storage no confirmó el archivo guardado.', recuperable: true } } }];\nreturn [{ json: { ...base, documentos: items.map((i) => i.json.meta) } }];\n"
+      },
+      "position": [
+        4400,
+        0
+      ]
+    },
+    {
+      "id": "dd3dea63-1e69-564a-89e3-53a24992a049",
+      "name": "¿Documentos confirmados?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "283b7d6f-eff7-5c71-8be5-dadc1e59ad89",
+              "leftValue": "={{ $json.fallo === undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        4620,
+        0
+      ]
+    },
+    {
+      "id": "3017bec9-4e2a-584c-ad67-6422540b8459",
+      "name": "Registrar documentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'registrar_documentos',datos:{version_id:$json.version_id,token:$json.token,documentos:$json.documentos } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        4840,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "948647c1-64d6-5a8d-b8e5-1f8ce4d77cf8",
+      "name": "Resultado del registro (normal)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nconst c = $('Reunir documentos').first().json;\nif (r.respuesta && typeof r.respuesta === 'object') return [{ json: r.respuesta }];\nreturn [{ json: { version_id: c.version_id, token: c.token, fallo: { tipo: 'RuntimeError', mensaje: 'Nhost no registró los documentos: ' + JSON.stringify(r).slice(0, 300), recuperable: true } } }];"
+      },
+      "position": [
+        5060,
+        0
+      ]
+    },
+    {
+      "id": "cefe2ac1-f9ae-5701-8092-3db8a9676629",
+      "name": "¿Registro sin error?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "9590933b-63a0-5faa-b0d3-649671aa4782",
+              "leftValue": "={{ $json.fallo === undefined }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        5280,
+        0
+      ]
+    },
+    {
+      "id": "688da0d3-23c6-5ace-88ab-d753a0af5712",
+      "name": "Registrar fallo de recepción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'fallo',datos:{version_id:$json.version_id,token:$json.token,fase:'recepcion',recuperable:$json.fallo.recuperable,error:{tipo:$json.fallo.tipo,mensaje:$json.fallo.mensaje} } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        5500,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "0aeecd13-5008-5665-9d48-a2e5a6e6039c",
+      "name": "Resultado del fallo (recepción)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "const r=$input.first().json;return [{json:(r.respuesta&&typeof r.respuesta==='object')?r.respuesta:{resultado:'error_procesamiento'}}];"
+      },
+      "position": [
+        5720,
+        0
+      ]
     },
     {
       "id": "40b466e7-3869-5c32-a7b7-b9faf4d5a418",
@@ -279,7 +722,7 @@
         }
       },
       "position": [
-        2200,
+        5940,
         0
       ]
     },
@@ -307,7 +750,7 @@
         }
       },
       "position": [
-        2420,
+        6160,
         0
       ]
     },
@@ -335,7 +778,7 @@
         }
       },
       "position": [
-        2640,
+        6380,
         0
       ]
     }
@@ -422,25 +865,252 @@
       "main": [
         [
           {
-            "node": "Preparar todos los adjuntos",
+            "node": "Preparar documentos",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Preparar todos los adjuntos": {
+    "Preparar documentos": {
       "main": [
         [
           {
-            "node": "Guardar archivos y vincular versión",
+            "node": "¿Hay documentos?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Guardar archivos y vincular versión": {
+    "¿Hay documentos?": {
+      "main": [
+        [
+          {
+            "node": "Comprobar archivo en Storage",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge de existencia",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo de recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Comprobar archivo en Storage": {
+      "main": [
+        [
+          {
+            "node": "Marcar existencia",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar existencia": {
+      "main": [
+        [
+          {
+            "node": "Merge de existencia",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge de existencia": {
+      "main": [
+        [
+          {
+            "node": "¿Qué hacer con el archivo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Qué hacer con el archivo?": {
+      "main": [
+        [
+          {
+            "node": "Archivo ya guardado",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Guardar original en Storage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Storage no permitió comprobar",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar original en Storage": {
+      "main": [
+        [
+          {
+            "node": "Confirmar subida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Archivo ya guardado": {
+      "main": [
+        [
+          {
+            "node": "Unir existentes y subidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirmar subida": {
+      "main": [
+        [
+          {
+            "node": "Unir existentes y subidos",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir existentes y subidos": {
+      "main": [
+        [
+          {
+            "node": "Unir con no decidibles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Storage no permitió comprobar": {
+      "main": [
+        [
+          {
+            "node": "Unir con no decidibles",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Unir con no decidibles": {
+      "main": [
+        [
+          {
+            "node": "Reunir documentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reunir documentos": {
+      "main": [
+        [
+          {
+            "node": "¿Documentos confirmados?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Documentos confirmados?": {
+      "main": [
+        [
+          {
+            "node": "Registrar documentos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo de recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar documentos": {
+      "main": [
+        [
+          {
+            "node": "Resultado del registro (normal)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado del registro (normal)": {
+      "main": [
+        [
+          {
+            "node": "¿Registro sin error?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Registro sin error?": {
+      "main": [
+        [
+          {
+            "node": "Resultado del registro",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar fallo de recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar fallo de recepción": {
+      "main": [
+        [
+          {
+            "node": "Resultado del fallo (recepción)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado del fallo (recepción)": {
       "main": [
         [
           {

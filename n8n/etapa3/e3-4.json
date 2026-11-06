@@ -27,7 +27,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "parameters": {
-        "jsCode": "const r=$json;const origen=String(r.headers?.origin??'');\nconst origenes=['http://127.0.0.1:8001','http://localhost:8001'];\nif(origen&&!origenes.includes(origen))return [{json:{ok:false,http_code:403,mensaje:'Origen de frontend no autorizado.'}}];\nif(!/^Bearer\\s+\\S+$/i.test(String(r.headers?.authorization??'')))return [{json:{ok:false,http_code:401,mensaje:'Inicia sesión en Nhost.'}}];\nif(!r.body||typeof r.body!=='object'||Array.isArray(r.body))return [{json:{ok:false,http_code:400,mensaje:'Envía una decisión en JSON.'}}];\nreturn [{json:{ok:true,body:r.body,authorization:r.headers.authorization}}];"
+        "jsCode": "// --- E3.4/E3.5 · «Preparar decisión»: valida el origen, la sesión y la forma de la petición del frontend. La identidad real la verifica Nhost Auth.\nconst r = $json;\nconst origen = String(r.headers?.origin ?? '');\nconst origenes = ['http://127.0.0.1:8001', 'http://localhost:8001'];\nif (origen && !origenes.includes(origen)) return [{ json: { ok: false, http_code: 403, mensaje: 'Origen de frontend no autorizado.' } }];\nif (!/^Bearer\\s+\\S+$/i.test(String(r.headers?.authorization ?? ''))) return [{ json: { ok: false, http_code: 401, mensaje: 'Inicia sesión en Nhost.' } }];\nif (!r.body || typeof r.body !== 'object' || Array.isArray(r.body)) return [{ json: { ok: false, http_code: 400, mensaje: 'Envía una decisión en JSON.' } }];\nreturn [{ json: { ok: true, body: r.body, authorization: r.headers.authorization } }];\n"
       },
       "position": [
         220,
@@ -37,40 +37,30 @@
     {
       "id": "bc92d148-793a-5cb2-9d13-27ced29f4989",
       "name": "¿Decisión preparada?",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 3.2,
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
       "parameters": {
-        "rules": {
-          "values": [
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
             {
-              "conditions": {
-                "options": {
-                  "caseSensitive": true,
-                  "leftValue": "",
-                  "typeValidation": "strict",
-                  "version": 2
-                },
-                "conditions": [
-                  {
-                    "leftValue": "={{ $json.ok }}",
-                    "rightValue": true,
-                    "operator": {
-                      "type": "boolean",
-                      "operation": "true",
-                      "singleValue": true
-                    }
-                  }
-                ],
-                "combinator": "and"
-              },
-              "renameOutput": true,
-              "outputKey": "true"
+              "id": "6baf0b3c-f4bb-5c22-9625-4f6dbc4e3874",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
-          ]
+          ],
+          "combinator": "and"
         },
-        "options": {
-          "fallbackOutput": "extra"
-        }
+        "options": {}
       },
       "position": [
         440,
@@ -78,20 +68,23 @@
       ]
     },
     {
-      "id": "9ae1fb41-2f60-5380-90ff-3a3dc3f74632",
-      "name": "Verificar sesión y registrar decisión",
+      "id": "fa05c9f5-4a5b-55f4-8fa6-1b9dbc7483d6",
+      "name": "Verificar sesión en Nhost",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "parameters": {
-        "method": "POST",
-        "url": "http://costflow-etapa3:8093/action",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={{ $json.body }}",
+        "method": "GET",
+        "url": "https://SUBDOMINIO.auth.REGION.nhost.run/v1/user",
+        "authentication": "none",
         "options": {
-          "timeout": 720000
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
         },
         "sendHeaders": true,
         "headerParameters": {
@@ -106,8 +99,244 @@
       "position": [
         660,
         0
+      ]
+    },
+    {
+      "id": "0a55f3fb-ae8d-5f4f-ac84-88cceac729c8",
+      "name": "Evaluar sesión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.4/E3.5 · «Evaluar sesión»: Nhost Auth respondió por el token del especialista. La identidad del cuerpo nunca se usa para autorizar ni auditar.\nconst preparado = $('Preparar decisión').first().json;\nconst respuesta = $input.first().json;\nconst rechazo = (codigo, mensaje) => [{ json: { ok: false, http_code: codigo, mensaje } }];\nif (respuesta.statusCode !== 200) {\n  return rechazo([400, 401, 403].includes(respuesta.statusCode) ? 401 : 503, 'La sesión venció o no pudo verificarse. Vuelve a ingresar.');\n}\nconst usuario = respuesta.body ?? {};\nif (usuario.isAnonymous || ![...(usuario.roles ?? []), usuario.defaultRole].includes('user')) return rechazo(403, 'La cuenta no tiene el rol requerido.');\nconst uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;\nconst { usuario_id, accessToken, refreshToken, ...datos } = preparado.body;\nif (!uuid.test(String(usuario.id)) || (datos.accion === 'ver_documento' && !uuid.test(String(datos.documento_id)))) {\n  return rechazo(400, 'La petición contiene un identificador o dato inválido.');\n}\nreturn [{ json: { ok: true, usuario_id: String(usuario.id).toLowerCase(), accion: datos.accion, datos } }];\n"
+      },
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "id": "c2750b9d-9293-55d9-8a06-e1f9bf9d4403",
+      "name": "¿Sesión válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "17819d52-e61d-56b5-8aee-fe8332f10331",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "id": "41e5b6d3-65dc-5815-b8ec-9f84154ee2ad",
+      "name": "¿Pide un documento?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "520ba614-9e94-5fa9-bab7-f88b91b4dfc4",
+              "leftValue": "={{ $json.accion === 'ver_documento' }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "id": "b6eb9c22-74f9-5976-bef3-4e0e881e13b2",
+      "name": "Registrar decisión",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'decision',datos:{usuario_id_verificado:$json.usuario_id,accion:$json.datos } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1540,
+        0
       ],
-      "notes": "CREDENCIAL_E3:internal"
+      "notes": "CREDENCIAL_E3:internal",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "3dd9db41-6db8-5157-bc25-fe10e9bccc59",
+      "name": "Resultado de la decisión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.4/E3.5 · «Resultado de la decisión»: lo que respondió la Function e3-operar, o un aviso reintentable si no respondió.\nconst r = $input.first().json;\nif (r.respuesta && typeof r.respuesta === 'object') return [{ json: r.respuesta }];\nreturn [{ json: { ok: false, http_code: 503, mensaje: 'No se pudo verificar o registrar la decisión. Reintenta con el mismo accion_id.' } }];\n"
+      },
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "id": "52a47dbf-0ca2-5107-8db9-67609dcc3b51",
+      "name": "Consultar acceso al documento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://SUBDOMINIO.functions.REGION.nhost.run/v1/e3-operar",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({operacion:'documento_accesible',datos:{usuario_id_verificado:$json.usuario_id,documento_id:$json.datos.documento_id } }) }}",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "position": [
+        1980,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:internal",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "id": "59db078a-c046-57da-9f2e-53faeb347379",
+      "name": "Documento permitido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.4 · «Documento permitido»: ¿la cuenta puede ver este documento?\nconst r = $input.first().json.respuesta;\nif (!r || !r.storage_file_id) return [{ json: { ok: false, http_code: 404, mensaje: 'Documento no disponible para esta cuenta.' } }];\nreturn [{ json: { ok: true, storage_file_id: r.storage_file_id, nombre_original: r.nombre_original, mime_type: r.mime_type } }];\n"
+      },
+      "position": [
+        2200,
+        0
+      ]
+    },
+    {
+      "id": "258cddd4-115a-5edf-ac83-4ee15221bd54",
+      "name": "¿Puede verlo?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "69cbc8db-8fd7-5883-ae57-475d7f4a2aec",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "id": "f6281881-ec46-52ba-a360-45ac6ddd080f",
+      "name": "Recuperar documento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://SUBDOMINIO.storage.REGION.nhost.run/v1/files/' + $json.storage_file_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {
+          "timeout": 120000,
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          }
+        }
+      },
+      "position": [
+        2640,
+        0
+      ],
+      "notes": "CREDENCIAL_E3:storage"
+    },
+    {
+      "id": "d03cefdb-3a7a-5556-8864-97ca85e0ab90",
+      "name": "Entregar documento",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// --- E3.4 · «Entregar documento»: el original, en base64, para que el frontend lo muestre.\nconst permiso = $('Documento permitido').first().json;\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nreturn [{ json: { ok: true, http_code: 200, nombre: permiso.nombre_original, mime_type: permiso.mime_type, contenido_base64: buffer.toString('base64') } }];\n"
+      },
+      "position": [
+        2860,
+        0
+      ]
     },
     {
       "id": "32c46bbd-0d5b-54e6-a807-0c125b85dc41",
@@ -138,7 +367,7 @@
         }
       },
       "position": [
-        880,
+        3080,
         0
       ]
     }
@@ -170,7 +399,7 @@
       "main": [
         [
           {
-            "node": "Verificar sesión y registrar decisión",
+            "node": "Verificar sesión en Nhost",
             "type": "main",
             "index": 0
           }
@@ -184,7 +413,138 @@
         ]
       ]
     },
-    "Verificar sesión y registrar decisión": {
+    "Verificar sesión en Nhost": {
+      "main": [
+        [
+          {
+            "node": "Evaluar sesión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Evaluar sesión": {
+      "main": [
+        [
+          {
+            "node": "¿Sesión válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Sesión válida?": {
+      "main": [
+        [
+          {
+            "node": "¿Pide un documento?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Pide un documento?": {
+      "main": [
+        [
+          {
+            "node": "Consultar acceso al documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Registrar decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar decisión": {
+      "main": [
+        [
+          {
+            "node": "Resultado de la decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resultado de la decisión": {
+      "main": [
+        [
+          {
+            "node": "Responder decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar acceso al documento": {
+      "main": [
+        [
+          {
+            "node": "Documento permitido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Documento permitido": {
+      "main": [
+        [
+          {
+            "node": "¿Puede verlo?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Puede verlo?": {
+      "main": [
+        [
+          {
+            "node": "Recuperar documento",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder decisión",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recuperar documento": {
+      "main": [
+        [
+          {
+            "node": "Entregar documento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entregar documento": {
       "main": [
         [
           {
